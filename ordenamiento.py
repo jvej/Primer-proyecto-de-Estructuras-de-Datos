@@ -1,5 +1,7 @@
-UMBRAL_PEQUENO = 16     
-PORCENTAJE_CASI = 0.10   
+UMBRAL_PEQUENO = 32     
+UMBRAL_COSTOSO = 8     
+SALTO = 8               
+PORCENTAJE_CASI = 0.02    
 
 
 def _va_despues(a, b, descendente):
@@ -81,25 +83,28 @@ def ordenar_merge(datos, clave=None, descendente=False):
 
 #Selector automático
 
-def _porcentaje_desordenado(pares, descendente):
-    """Fracción de pares vecinos que están fuera de orden. Una sola pasada."""
-    if len(pares) < 2:
+def _porcentaje_desordenado_lejos(pares, descendente):
+    """Fracción de pares a distancia SALTO que están fuera de orden."""
+    total = len(pares) - SALTO
+    if total <= 0:
         return 0.0
     malos = 0
-    for i in range(len(pares) - 1):
-        if _va_despues(pares[i][0], pares[i + 1][0], descendente):
+    for i in range(total):
+        if _va_despues(pares[i][0], pares[i + SALTO][0], descendente):
             malos += 1
-    return malos / (len(pares) - 1)
+    return malos / total
 
 
 def elegir_algoritmo(pares, descendente, comparacion_costosa=False):
-    """Devuelve 'insercion' o 'merge' según propiedades medibles de los datos."""
     n = len(pares)
-    if n <= UMBRAL_PEQUENO:
+    umbral = UMBRAL_PEQUENO
+    if comparacion_costosa:
+        umbral = UMBRAL_COSTOSO
+    if n <= umbral:
         return "insercion"
-    if _porcentaje_desordenado(pares, descendente) <= PORCENTAJE_CASI:
+    if _porcentaje_desordenado_lejos(pares, descendente) <= PORCENTAJE_CASI:
         return "insercion"
-    return "merge"   
+    return "merge"
 
 
 def ordenar(datos, clave=None, descendente=False, comparacion_costosa=False):
