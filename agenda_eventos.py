@@ -31,13 +31,25 @@ class AgendaEventos:
         """O(1): no hay que recorrer la agenda para cancelar un evento futuro."""
         evento.cancelar()
 
-    def reprogramar(self, evento: Evento, nuevo_tiempo: int) -> Evento:
-        """Cambia el tiempo de un evento ya agendado, con nueva secuencia.
+    def reprogramar_por_cambio_velocidad(
+        self,
+        evento: Evento,
+        tiempo_actual: int,
+        velocidad_anterior: int,
+        velocidad_nueva: int,
+    ) -> Evento:
+        """Reescala el tiempo restante de una acción ya programada (§2.3).
 
-        En vez de reubicar el nodo en el heap (requeriría índices de
-        posición), se cancela el viejo y se agenda uno nuevo. Cumple la
-        misma complejidad pedida con mucho menos código.
+        restante_nuevo = max(1, (tiempo_siguiente - t) * velocidad_anterior // velocidad_nueva)
+        tiempo_siguiente = t + restante_nuevo
+
+        Una aceleración acerca la próxima acción; una ralentización la aleja.
+        Siempre asigna un número de secuencia nuevo, como exige el enunciado.
         """
+        restante = evento.tiempo_siguiente - tiempo_actual
+        restante_nuevo = max(1, restante * velocidad_anterior // velocidad_nueva)
+        nuevo_tiempo = tiempo_actual + restante_nuevo
+
         evento.cancelar()
         reagendado = Evento(
             tiempo_siguiente=nuevo_tiempo,

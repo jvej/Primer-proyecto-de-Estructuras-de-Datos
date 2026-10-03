@@ -24,3 +24,4 @@ class Actor:
 @dataclass
 class Enemigo(Actor):
     comportamiento: str = "guardian"  # "guardian" | "errante" | "rastreador"
+    id_instancia: str = ""  # ej. "e-201"; único dentro de la cripta (§3.3)
