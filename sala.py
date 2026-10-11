@@ -1,46 +1,71 @@
-"""Sala: salidas y rastro del jugador (§2.1, §2.9, §4.7)."""
+"""Sala y Salida: el mapa de la cripta (§2.1) y el rastro del jugador (§2.9, §4.7)."""
 
-from dataclasses import dataclass, field
 from typing import List, Optional
 
 DIRECCIONES = ("N", "S", "E", "O")
-OPUESTA = {"N": "S", "S": "N", "E": "O", "O": "E"}
+OPUESTAS = (1, 0, 3, 2)   # OPUESTAS[i] = índice de la dirección contraria a DIRECCIONES[i]
+LIMITE_RASTRO = 400       # §2.9: un rastro de 400 unidades o más ya no sirve
 
 
-@dataclass
+class Salida:
+    """Una puerta entre dos salas. Ambas salas comparten este mismo objeto,
+    así abrirla o cerrarla desde un lado la cambia para los dos."""
+
+    def __init__(self, sala_a: "Sala", sala_b: "Sala", estado: str = "abierta",
+                 llave: Optional[str] = None, cierre_automatico: Optional[int] = None) -> None:
+        self.sala_a = sala_a
+        self.sala_b = sala_b
+        self.estado = estado                        # "abierta" | "cerrada"
+        self.llave = llave                          # id de la llave que la abre, o None
+        self.cierre_automatico = cierre_automatico  # unidades tras abrirse, o None
+        self.evento_cierre = None                   # cierre programado, si lo hay (§2.10)
+
+    def esta_abierta(self) -> bool:
+        return self.estado == "abierta"
+
+    def otro_lado(self, sala: "Sala") -> "Sala":
+        return self.sala_b if sala is self.sala_a else self.sala_a
+
+
 class Sala:
-    id: int
-    # listas paralelas a DIRECCIONES (no dict): salidas[i] es el estado
-    # ("abierta" | "cerrada" | None) y vecino[i] la sala conectada en esa dirección.
-    salidas: List[Optional[str]] = field(default_factory=lambda: [None, None, None, None])
-    vecino: List[Optional["Sala"]] = field(default_factory=lambda: [None, None, None, None])
-    actores: List["Actor"] = field(default_factory=list)
-    ultimo_instante_jugador: Optional[int] = None
+    def __init__(self, id: int) -> None:
+        self.id = id
+        # lista paralela a DIRECCIONES (sin dict): Salida o None
+        self.salidas: List[Optional[Salida]] = [None, None, None, None]
+        self.actores: list = []
+        self.ultimo_instante_jugador: Optional[int] = None
 
-    def estado_salida(self, direccion: str) -> Optional[str]:
-        return self.salidas[DIRECCIONES.index(direccion)]
-
-    def fijar_salida(self, direccion: str, estado: Optional[str]) -> None:
-        self.salidas[DIRECCIONES.index(direccion)] = estado
-
-    def conectar(self, direccion: str, otra: "Sala", estado: str = "abierta") -> None:
-        """Conecta esta sala con otra en ambos sentidos (§2.1: cada salida conecta exactamente dos salas)."""
+    def conectar(self, direccion: str, otra: "Sala", estado: str = "abierta",
+                 llave: Optional[str] = None, cierre_automatico: Optional[int] = None) -> Salida:
+        """Crea UNA salida y la pone en ambas salas (§2.1: conecta exactamente dos)."""
         i = DIRECCIONES.index(direccion)
-        self.salidas[i] = estado
-        self.vecino[i] = otra
-        j = DIRECCIONES.index(OPUESTA[direccion])
-        otra.salidas[j] = estado
-        otra.vecino[j] = self
+        salida = Salida(self, otra, estado, llave, cierre_automatico)
+        self.salidas[i] = salida
+        otra.salidas[OPUESTAS[i]] = salida
+        return salida
+
+    def vecino(self, i: int) -> Optional["Sala"]:
+        salida = self.salidas[i]
+        if salida is None:
+            return None
+        return salida.otro_lado(self)
 
     def marcar_visita_jugador(self, tiempo_actual: int) -> None:
         self.ultimo_instante_jugador = tiempo_actual
 
-    def rastro_fresco(self, tiempo_actual: int, limite: int = 400) -> bool:
+    def rastro_fresco(self, tiempo_actual: int, limite: int = LIMITE_RASTRO) -> bool:
+        """La caducidad se detecta al consultar: O(1), sin eventos ni limpiezas (§4.7)."""
         if self.ultimo_instante_jugador is None:
             return False
         return (tiempo_actual - self.ultimo_instante_jugador) < limite
 
     def num_salidas(self) -> int:
-        # El costo de decisión de un rastreador debe depender de esto,
-        # no del tamaño de la cripta — por eso existe este metodo.
-        return sum(1 for s in self.salidas if s is not None)
+        # El costo de decisión de un rastreador depende de esto, no del tamaño de la cripta.
+        total = 0
+        for salida in self.salidas:
+            if salida is not None:
+                total += 1
+        return total
+
+    def __repr__(self) -> str:
+        return f"Sala({self.id})"

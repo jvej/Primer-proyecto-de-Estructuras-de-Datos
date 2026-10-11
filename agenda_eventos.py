@@ -43,22 +43,26 @@ class AgendaEventos:
         restante_nuevo = max(1, (tiempo_siguiente - t) * velocidad_anterior // velocidad_nueva)
         tiempo_siguiente = t + restante_nuevo
 
-        Una aceleración acerca la próxima acción; una ralentización la aleja.
-        Siempre asigna un número de secuencia nuevo, como exige el enunciado.
+        Cancela el evento viejo y agenda uno nuevo con número de secuencia nuevo.
+        Si el evento viejo era el turno pendiente de su actor, el actor pasa a
+        apuntar al nuevo, para que una cancelación posterior (muerte) lo alcance.
         """
         restante = evento.tiempo_siguiente - tiempo_actual
         restante_nuevo = max(1, restante * velocidad_anterior // velocidad_nueva)
-        nuevo_tiempo = tiempo_actual + restante_nuevo
 
         evento.cancelar()
         reagendado = Evento(
-            tiempo_siguiente=nuevo_tiempo,
+            tiempo_siguiente=tiempo_actual + restante_nuevo,
             secuencia=self.nueva_secuencia(),
             actor=evento.actor,
-            accion=evento.accion,
+            accion=evento.accion,   # seguro: la acción lee el reloj al ejecutarse
             descripcion=evento.descripcion,
         )
         self.agendar(reagendado)
+
+        actor = evento.actor
+        if actor is not None and getattr(actor, "evento_pendiente", None) is evento:
+            actor.evento_pendiente = reagendado
         return reagendado
 
     def siguiente(self) -> Optional[Evento]:
