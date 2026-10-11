@@ -1,7 +1,7 @@
 """Registro de cambios invertibles (§2.11, §4.6).
 
 No guarda copias del estado: guarda, por cada cambio, la función que lo deshace.
-Los cambios de una acción del jugador (y de todo lo que ocurre hasta su siguiente
+Los cambios de una acción del jugador (y de lo que ocurre hasta su siguiente
 decisión) forman un grupo. Se conservan los últimos 5 grupos.
 """
 
