@@ -10,6 +10,8 @@ class Esqueleto:
         self.ids = []                 # posición -> id de sala
         self.vecinos = []             # posición -> lista de ids vecinos (orden N, S, E, O)
         self._indice = TablaHash()    # str(id) -> posición
+        self.nombres = []             # posición -> nombre de la sala
+        self.salidas = []             # posición -> JSON crudo de sus salidas (lo lee el Mapa del motor)
 
     def agregar_pagina(self, cuerpo):
         """cuerpo: JSON de GET /criptas/<id>/salas?pagina=n"""
@@ -21,12 +23,18 @@ class Esqueleto:
             self._indice.insertar(str(sala["id"]), len(self.ids))
             self.ids.append(sala["id"])
             self.vecinos.append(vecinos)
+            self.nombres.append(sala.get("nombre", ""))
+            self.salidas.append(sala["salidas"])
 
     def existe(self, id_sala):
         return self._indice.contiene(str(id_sala))
 
     def cantidad(self):
         return len(self.ids)
+
+    def posicion(self, id_sala):
+        """Posición de la sala en las listas paralelas (None si no existe)."""
+        return self._indice.buscar(str(id_sala))
 
     def vecinos_de(self, id_sala):
         return self.vecinos[self._indice.buscar(str(id_sala))]

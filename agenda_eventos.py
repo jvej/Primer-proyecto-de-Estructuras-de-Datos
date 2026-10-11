@@ -3,6 +3,8 @@
 list sí se permite como almacenamiento contiguo (§7); lo que no se permite
 es heapq ni dict. La cancelación es perezosa: marcar un evento inválido es
 O(1), y el descarte real pasa cuando ese evento llega a la cima del heap.
+
+Si recibe un Registro, anota cómo deshacer cada cambio de la agenda (§4.6).
 """
 
 from typing import List, Optional
@@ -11,25 +13,33 @@ from evento import Evento
 
 
 class AgendaEventos:
-    def __init__(self) -> None:
+    def __init__(self, registro=None) -> None:
         self._heap: List[Evento] = []
         self._siguiente_secuencia = 0
+        self.registro = registro
 
     def __len__(self) -> int:
         return len(self._heap)
 
+    def _inverso(self, deshacer) -> None:
+        if self.registro is not None:
+            self.registro.inverso(deshacer)
+
     def nueva_secuencia(self) -> int:
-        """Entrega números de secuencia crecientes para desempatar eventos."""
+        """Números de secuencia crecientes para desempatar; nunca retroceden."""
         self._siguiente_secuencia += 1
         return self._siguiente_secuencia
 
     def agendar(self, evento: Evento) -> None:
         self._heap.append(evento)
         self._subir(len(self._heap) - 1)
+        self._inverso(lambda: setattr(evento, "valido", False))   # deshacer = invalidarlo
 
     def cancelar(self, evento: Evento) -> None:
         """O(1): no hay que recorrer la agenda para cancelar un evento futuro."""
-        evento.cancelar()
+        if evento.valido:
+            evento.valido = False
+            self._inverso(lambda: setattr(evento, "valido", True))
 
     def reprogramar_por_cambio_velocidad(
         self,
@@ -50,7 +60,7 @@ class AgendaEventos:
         restante = evento.tiempo_siguiente - tiempo_actual
         restante_nuevo = max(1, restante * velocidad_anterior // velocidad_nueva)
 
-        evento.cancelar()
+        self.cancelar(evento)
         reagendado = Evento(
             tiempo_siguiente=tiempo_actual + restante_nuevo,
             secuencia=self.nueva_secuencia(),
@@ -62,13 +72,17 @@ class AgendaEventos:
 
         actor = evento.actor
         if actor is not None and getattr(actor, "evento_pendiente", None) is evento:
-            actor.evento_pendiente = reagendado
+            if self.registro is not None:
+                self.registro.cambiar(actor, "evento_pendiente", reagendado)
+            else:
+                actor.evento_pendiente = reagendado
         return reagendado
 
     def siguiente(self) -> Optional[Evento]:
         """Extrae y devuelve el próximo evento válido, o None si no queda ninguno."""
         while self._heap:
             evento = self._extraer_minimo()
+            self._inverso(lambda e=evento: self.agendar(e))       # deshacer = volver a meterlo
             if evento.valido:
                 return evento
         return None

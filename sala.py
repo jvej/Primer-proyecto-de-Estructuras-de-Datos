@@ -28,12 +28,16 @@ class Salida:
 
 
 class Sala:
-    def __init__(self, id: int) -> None:
+    def __init__(self, id: int, nombre: str = "") -> None:
         self.id = id
+        self.nombre = nombre
         # lista paralela a DIRECCIONES (sin dict): Salida o None
         self.salidas: List[Optional[Salida]] = [None, None, None, None]
-        self.actores: list = []
+        self.actores: list = []      # jugador y enemigos presentes (dormidos o activos)
+        self.objetos: list = []      # objetos en el suelo
+        self.trampas: list = []
         self.ultimo_instante_jugador: Optional[int] = None
+        self.incorporada = False     # ya se creó su contenido en el modelo
 
     def conectar(self, direccion: str, otra: "Sala", estado: str = "abierta",
                  llave: Optional[str] = None, cierre_automatico: Optional[int] = None) -> Salida:
