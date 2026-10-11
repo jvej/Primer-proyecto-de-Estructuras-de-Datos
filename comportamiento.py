@@ -1,64 +1,66 @@
 """Comportamiento de enemigos (§2.8): guardián, errante, rastreador."""
 
-import random
-
-from actor import Actor, Enemigo
 from combate import calcular_dano
 from sala import DIRECCIONES, Sala
 
 
-def resolver_turno_enemigo(
-    enemigo: Enemigo, jugador: Actor, azar: random.Random, tiempo_actual: int
-) -> str:
+def resolver_turno(partida, enemigo, ahora) -> None:
     """Decide y ejecuta la acción del turno de un enemigo.
 
     No programa el siguiente evento: el costo es 100 en los tres casos
-    (atacar, mover, esperar), eso lo hace el motor (§2.8, última línea).
-    Devuelve una descripción corta para la bitácora en pantalla (§4.8).
+    (atacar, mover, esperar), eso lo hace motor_enemigos (§2.8).
     """
-    if jugador.sala is enemigo.sala:
-        return _atacar(enemigo, jugador, azar)
-
-    if enemigo.comportamiento == "guardian":
-        return f"{enemigo.nombre} espera (guardián)"
+    if partida.jugador.sala is enemigo.sala:
+        _atacar(partida, enemigo)
     elif enemigo.comportamiento == "errante":
-        return _errante(enemigo, azar)
+        _errante(partida, enemigo)
     elif enemigo.comportamiento == "rastreador":
-        return _rastreador(enemigo, tiempo_actual)
-    return f"{enemigo.nombre} espera (comportamiento desconocido)"
+        _rastreador(partida, enemigo, ahora)
+    # guardián (o desconocido): espera
 
 
-def _atacar(enemigo: Enemigo, jugador: Actor, azar: random.Random) -> str:
-    dano = calcular_dano(enemigo, jugador, azar)
-    jugador.recibir_dano(dano)
-    return f"{enemigo.nombre} ataca y hace {dano} de daño (vida jugador: {jugador.vida})"
+def _atacar(partida, enemigo) -> None:
+    dano = calcular_dano(enemigo, partida.jugador, partida.azar)
+    partida.bitacora.agregar(f"{enemigo.etiqueta()} te ataca y te hace {dano} de daño.")
+    partida.danar(partida.jugador, dano)
 
 
-def _salidas_abiertas_transitables(sala: Sala):
-    return [i for i, estado in enumerate(sala.salidas) if estado == "abierta" and sala.vecino[i] is not None]
+def _salidas_abiertas(sala: Sala):
+    """Índices de las salidas por las que un enemigo puede pasar (los enemigos no abren puertas)."""
+    indices = []
+    for i in range(len(sala.salidas)):
+        salida = sala.salidas[i]
+        if salida is not None and salida.esta_abierta():
+            indices.append(i)
+    return indices
 
 
-def _errante(enemigo: Enemigo, azar: random.Random) -> str:
-    opciones = _salidas_abiertas_transitables(enemigo.sala)
-    if not opciones:
-        return f"{enemigo.nombre} espera (errante sin salidas)"
-    i = opciones[azar.randint(0, len(opciones) - 1)]
-    destino = enemigo.sala.vecino[i]
-    enemigo.sala = destino
-    return f"{enemigo.nombre} se mueve al azar hacia {destino.id} ({DIRECCIONES[i]})"
+def _ir_a(partida, enemigo, destino) -> None:
+    partida._mover_actor(enemigo, destino)
+    if destino is partida.jugador.sala:
+        partida.bitacora.agregar(f"{enemigo.etiqueta()} entra a la sala.")
 
 
-def _rastreador(enemigo: Enemigo, tiempo_actual: int) -> str:
-    candidatos = []
-    for i in _salidas_abiertas_transitables(enemigo.sala):
-        vecino = enemigo.sala.vecino[i]
-        if vecino.rastro_fresco(tiempo_actual):
-            candidatos.append(vecino)
+def _errante(partida, enemigo) -> None:
+    opciones = _salidas_abiertas(enemigo.sala)
+    if len(opciones) == 0:
+        return
+    i = opciones[partida.azar.randint(0, len(opciones) - 1)]
+    _ir_a(partida, enemigo, enemigo.sala.vecino(i))
 
-    if not candidatos:
-        return f"{enemigo.nombre} espera (sin rastro fresco cerca)"
 
-    # Rastro más reciente primero; empate exacto -> menor id de sala (§2.9).
-    mejor = min(candidatos, key=lambda s: (-s.ultimo_instante_jugador, s.id))
-    enemigo.sala = mejor
-    return f"{enemigo.nombre} sigue el rastro hacia {mejor.id}"
+def _rastreador(partida, enemigo, ahora) -> None:
+    """Examina solo las salas vecinas: costo proporcional a las salidas (§4.7)."""
+    mejor = None
+    for i in _salidas_abiertas(enemigo.sala):
+        vecino = enemigo.sala.vecino(i)
+        if not vecino.rastro_fresco(ahora):
+            continue
+        # Rastro más reciente; en empate exacto, menor id de sala (§2.9).
+        if (mejor is None
+                or vecino.ultimo_instante_jugador > mejor.ultimo_instante_jugador
+                or (vecino.ultimo_instante_jugador == mejor.ultimo_instante_jugador
+                    and vecino.id < mejor.id)):
+            mejor = vecino
+    if mejor is not None:
+        _ir_a(partida, enemigo, mejor)

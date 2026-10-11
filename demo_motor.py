@@ -1,45 +1,35 @@
-import random
+"""Partida de demostración del motor, sobre una cripta simulada (sin red): python demo_motor.py"""
 
-from actor import Actor, Enemigo
-from activacion import activar_enemigos
-from agenda_eventos import AgendaEventos
-from bucle_principal import Reloj, correr
-from movimiento import mover_jugador
-from sala import Sala
-
-agenda = AgendaEventos()
-reloj = Reloj()
-azar = random.Random(42)  # semilla fija: reproducible (§2.6)
-bitacora = []
-
-# --- Mapa de prueba: tres salas en línea, A - B - C ---
-sala_a = Sala(id=1)
-sala_b = Sala(id=2)
-sala_c = Sala(id=3)
-sala_a.conectar("N", sala_b)
-sala_b.conectar("N", sala_c)
-
-jugador = Actor(nombre="Jugador", vida=30, ataque=6, defensa=2, velocidad=100, sala=sala_a)
-sala_a.marcar_visita_jugador(0)  # la sala inicial recibe rastro en t=0 (§2.9)
-
-rastreadora = Enemigo(
-    nombre="Rata gigante", vida=12, ataque=5, defensa=1, velocidad=150,
-    comportamiento="rastreador", id_instancia="e-201", sala=sala_c,
-)
-
-# El jugador se mueve A -> B; B recibe rastro fresco en t=0.
-print(mover_jugador(jugador, "N", tiempo_actual=0))
-
-# En el juego real esto pasa cuando el jugador entra a la sala de la rata;
-# aquí la activamos directo para poder probar el comportamiento aislado.
-activar_enemigos(agenda, [rastreadora], reloj_actual=0, jugador=jugador, azar=azar, bitacora=bitacora)
+from cripta_de_prueba import armar, entrada, esqueleto_linea
 
 
-def partida_activa():
-    return jugador.esta_vivo() and len(bitacora) < 4  # límite arbitrario, solo para la demo
+def main():
+    salas = esqueleto_linea(4, [(1, 2, {"cerrada": True, "llave": "itm_llave_bronce", "cierre_automatico": 300}),
+                                (3, 4, {"cerrada": True, "llave": "itm_llave_negra"})])
+    contenido = [entrada(1, objetos=["itm_llave_bronce", "itm_daga"]),
+                 entrada(2, enemigos=[("e-201", "ent_rata", 12)], objetos=["itm_llave_negra"]),
+                 entrada(3, trampas=[("t-31", "trp_dardos")])]
+    esc = armar(salas, contenido, semilla=42)
+    p = esc.partida
+
+    p.recoger(0)                 # llave de bronce
+    p.recoger(0)                 # daga
+    p.equipar(esc.inventario.objetos()[1])
+    p.abrir("N")
+    p.mover("N")                 # entra a la sala 2: se activa la rata
+    while p.enemigos_en_sala() and p.estado == "jugando":
+        p.atacar(0)
+    p.recoger(0)                 # llave negra
+    p.mover("N")
+    p.abrir("N")
+    p.mover("N")                 # sala de salida
+
+    for mensaje in esc.mensajes():
+        print(mensaje)
+    print("\nEstado: %s | acciones: %d | derrotados: %d | tiempo final: %d | vida: %d/%d"
+          % (p.estado, p.acciones, p.derrotados, p.reloj.tiempo_actual, p.jugador.vida, p.jugador.vida_max))
+    esc.cerrar()
 
 
-correr(agenda, reloj, partida_activa)
-
-for linea in bitacora:
-    print(linea)
+if __name__ == "__main__":
+    main()
