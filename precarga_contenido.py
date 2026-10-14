@@ -1,7 +1,7 @@
 from errores import ErrorCripta, ErrorDatosNoDisponibles, ErrorPresupuesto, ErrorRed
 from fuente_datos import TAM_LOTE_MAX
 from resolutor_catalogo import ids_de_contenido
-from tabla_hash import TablaHash
+from lista_ordenada import ListaOrdenada
 
 
 class _Solicitud:
@@ -27,9 +27,9 @@ class PrecargaContenido:
         self.profundidad = profundidad
         self.reserva = reserva
         self.tam_lote = min(tam_lote, TAM_LOTE_MAX)
-        self._contenidos = TablaHash()      # str(id) -> entrada de contenido incorporada
-        self._solicitadas = TablaHash()     # str(id) -> True (pedida, en vuelo o incorporada)
-        self._solicitud_de = TablaHash()    # str(id) -> _Solicitud
+        self._contenidos = ListaOrdenada()      # str(id) -> entrada de contenido incorporada
+        self._solicitadas = ListaOrdenada()     # str(id) -> True (pedida, en vuelo o incorporada)
+        self._solicitud_de = ListaOrdenada()    # str(id) -> _Solicitud
         self._solicitudes = []              # en orden de envío
         self._siguiente = 0                 # próxima solicitud por incorporar
         self.errores = []                   # fallos de precarga especulativa

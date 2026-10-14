@@ -1,6 +1,6 @@
 from errores import ErrorRed
 from cola_fifo import ColaFIFO
-from tabla_hash import TablaHash
+from lista_ordenada import ListaOrdenada
 
 DIRECCIONES = ("N", "S", "E", "O")
 
@@ -9,7 +9,7 @@ class Esqueleto:
     def __init__(self):
         self.ids = []                 # posición -> id de sala
         self.vecinos = []             # posición -> lista de ids vecinos (orden N, S, E, O)
-        self._indice = TablaHash()    # str(id) -> posición
+        self._indice = ListaOrdenada()    # str(id) -> posición
         self.nombres = []             # posición -> nombre de la sala
         self.salidas = []             # posición -> JSON crudo de sus salidas (lo lee el Mapa del motor)
 

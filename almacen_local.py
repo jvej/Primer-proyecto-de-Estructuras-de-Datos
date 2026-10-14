@@ -1,4 +1,4 @@
-from tabla_hash import TablaHash
+from lista_ordenada import ListaOrdenada
 
 
 class AlmacenLocal:
@@ -16,7 +16,7 @@ class AlmacenLocalMemoria(AlmacenLocal):
     """Implementación simple (sin tope ni disco) para pruebas y para trabajar sin la caché."""
 
     def __init__(self):
-        self._tabla = TablaHash()
+        self._tabla = ListaOrdenada()
 
     def disponible(self, id_ficha):
         return self._tabla.contiene(id_ficha)

@@ -1,6 +1,6 @@
 from errores import ErrorPresupuesto, ErrorRed
 from fuente_datos import TAM_LOTE_MAX
-from tabla_hash import TablaHash
+from lista_ordenada import ListaOrdenada
 
 
 def id_de_referencia(elemento):
@@ -16,7 +16,7 @@ def id_de_referencia(elemento):
 
 def ids_de_contenido(entrada):
     ids = []
-    vistos = TablaHash()
+    vistos = ListaOrdenada()
     for campo in ("enemigos", "objetos", "trampas"):
         if campo in entrada:
             for elemento in entrada[campo]:
@@ -35,7 +35,7 @@ class ResolutorCatalogo:
         self.presupuesto = presupuesto
         self.tam_lote = min(tam_lote, TAM_LOTE_MAX)
         self.pendientes = []            # ids por enviar, en orden de descubrimiento
-        self._marcados = TablaHash()    # ids pendientes o en vuelo (evita pedir dos veces)
+        self._marcados = ListaOrdenada()    # ids pendientes o en vuelo (evita pedir dos veces)
         self._en_vuelo = []             # [tarea, ids] en orden de envío
         self._siguiente = 0
         self.solicitudes_enviadas = 0
@@ -68,7 +68,7 @@ class ResolutorCatalogo:
         for id_ in grupo:
             self._marcados.eliminar(id_)
         cuerpo = tarea.resultado_o_error()
-        recibidos = TablaHash()
+        recibidos = ListaOrdenada()
         for ficha in cuerpo["entidades"]:
             self.local.guardar(ficha["id"], ficha)
             recibidos.insertar(ficha["id"], True)

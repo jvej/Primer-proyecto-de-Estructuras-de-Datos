@@ -1,4 +1,4 @@
-from tabla_hash import TablaHash
+from lista_ordenada import ListaOrdenada
 
 class Nodo:
     def __init__(self, id_ficha, ficha):
@@ -10,7 +10,7 @@ class Nodo:
 
 class Cache:
     def __init__(self, tope=25, en_uso=None, usar_lru=True):
-        self.tabla = TablaHash()  
+        self.tabla = ListaOrdenada()  
         self.tope = tope
         self.en_uso = en_uso      
         self.usar_lru = usar_lru   
