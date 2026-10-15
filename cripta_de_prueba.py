@@ -1,8 +1,7 @@
 """Cripta sintética para probar el motor sin red, con la misma forma que las respuestas de la
 API (§3.3), pasando por el cliente real: ejecutor, presupuesto, resolutor, precarga y esqueleto.
 
-InventarioDePrueba es una lista simple que cumple el contrato que usa Partida;
-Axel lo reemplaza con su estructura de §4.5.
+El inventario es el de §4.5 (inventario.py, lista doblemente enlazada).
 """
 
 from almacen_local import AlmacenLocalMemoria
@@ -10,7 +9,9 @@ from bitacora_pantalla import BitacoraPantalla
 from ejecutor_red import EjecutorRed
 from esqueleto import descargar_esqueleto
 from fuente_datos import FuenteDatos
+from inventario import Inventario
 from objetos import Objeto
+from ordenamiento import ordenar
 from partida import Partida
 from precarga_contenido import PrecargaContenido
 from presupuesto_red import PresupuestoRed
@@ -107,32 +108,6 @@ class FuenteSimulada(FuenteDatos):
         return {"entidades": fichas}
 
 
-class InventarioDePrueba:
-    def __init__(self, capacidad):
-        self.capacidad = capacidad
-        self._lista = []
-
-    def lleno(self):
-        return len(self._lista) >= self.capacidad
-
-    def objetos(self):
-        return list(self._lista)
-
-    def agregar(self, objeto):
-        self._lista.append(objeto)
-
-    def agregar_al_frente(self, objeto):
-        self._lista.insert(0, objeto)
-
-    def quitar(self, objeto):
-        posicion = self._lista.index(objeto)
-        del self._lista[posicion]
-        return posicion
-
-    def restaurar(self, objeto, posicion):
-        self._lista.insert(posicion, objeto)
-
-
 class Escenario:
     def __init__(self, partida, ejecutor, fuente, inventario, bitacora, presupuesto):
         self.partida = partida
@@ -168,7 +143,7 @@ def armar(salas, contenido=(), datos=None, semilla=1, capacidad=3, limite=None, 
     resolutor = ResolutorCatalogo(fuente, ejecutor, local, presupuesto)
     esqueleto = descargar_esqueleto(fuente, datos_cripta["id"])
     precarga = PrecargaContenido(fuente, datos_cripta["id"], esqueleto, ejecutor, presupuesto, resolutor)
-    inventario = InventarioDePrueba(capacidad)
+    inventario = Inventario(capacidad, ordenar)
     bitacora = BitacoraPantalla(capacidad_bitacora)
     partida = Partida(datos_cripta, esqueleto, precarga, resolutor, inventario, bitacora, semilla)
     partida.iniciar()
