@@ -14,11 +14,10 @@ decisión del jugador. Ese tramo completo es un "ciclo" (§5.2) y es lo que revi
 Una acción rechazada no cobra tiempo ni cambia nada (Apéndice B) y devuelve False.
 """
 
-import random
-
 import efectos
 from actor import Enemigo, Jugador
 from agenda_eventos import AgendaEventos
+from azar import AzarReversible
 from combate import calcular_dano
 from costos import (COSTO_ABRIR_PUERTA, COSTO_ACTIVACION, COSTO_ATACAR, COSTO_ESPERAR,
                     COSTO_MOVER, COSTO_RECOGER_SOLTAR, COSTO_USAR_EQUIPAR, costo_accion)
@@ -42,13 +41,16 @@ class Partida:
         self.reloj = Reloj()
         self.registro = Registro()
         self.agenda = AgendaEventos(self.registro)
-        self.azar = random.Random(semilla)     # única fuente de azar del modelo (§2.6)
+        # única fuente de azar del modelo (§2.6); el retroceso también restaura su estado (§2.11)
+        self.azar = AzarReversible(semilla, self.registro)
         self.semilla = semilla
         self.mapa = Mapa(esqueleto)
         self.precarga = precarga
         self.resolutor = resolutor
         self.inventario = inventario
         self.bitacora = bitacora
+        self.id_cripta = datos.get("id", "")
+        self.version_cripta = datos.get("version", "")
         self.sala_inicial_id = datos["sala_inicial"]
         self.sala_salida_id = datos["sala_salida"]
         self.llave_salida = datos["llave_salida"]
@@ -455,10 +457,13 @@ class Partida:
         for objeto in self.inventario.objetos():
             if objeto.id == id_ficha:
                 return True
-        for objeto in self.jugador.sala.objetos:
+        sala = self.jugador.sala
+        if sala is None:                 # carga inicial: el jugador aún no está en ninguna sala
+            return False
+        for objeto in sala.objetos:
             if objeto.id == id_ficha:
                 return True
-        for trampa in self.jugador.sala.trampas:
+        for trampa in sala.trampas:
             if trampa.id == id_ficha:
                 return True
         return False

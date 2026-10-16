@@ -156,6 +156,25 @@ class Inventario:
             i += 1
         raise ObjetoNoEstaEnInventario("el objeto no está en el inventario")
 
+    def clave_de(self, objeto):
+        """Etiqueta de orden del nodo del objeto (ver lista_doble.py): fija de por vida y
+        única. O(1) si es el objeto que el cursor señala. Identifica al objeto en el log
+        de replay sin depender de su posición (§4.5)."""
+        nodo = self._nodo_de(objeto)
+        if nodo is None:
+            raise ObjetoNoEstaEnInventario("el objeto no está en el inventario")
+        return nodo.clave
+
+    def objeto_por_clave(self, clave):
+        """Inversa de clave_de(). O(1) si es el del cursor (el caso de la interfaz); si no,
+        recorre la lista (al reproducir un log, n <= inventario_max). None si no está."""
+        if self._cursor is not None and self._cursor.clave == clave:
+            return self._cursor.valor
+        for nodo in self._lista.nodos():
+            if nodo.clave == clave:
+                return nodo.valor
+        return None
+
     def contar_clase(self, clase):
         """Cuántos objetos de esa clase hay (ej. 'pergamino_retroceso')."""
         total = 0

@@ -1,3 +1,10 @@
+"""Bench del guardado (§4.10): binario de formato propio vs el MISMO estado en JSON.
+
+Usa el formato actual (versión 2): además de las salas, el bloque general trae la
+cripta, sus versiones, el jugador y la lista de órdenes jugadas (con eso se reconstruye
+la partida al cargar, ver persistencia_partida.py). Se simula una partida en la que el
+jugador hizo unas 3 órdenes por sala conocida.
+"""
 import json
 import os
 import time
@@ -9,8 +16,11 @@ RUTA_JSON = "bench_partida.json"
 
 
 def armar_partida(n):
-    p = PartidaGuardada(1250, 42, 27, 3)
+    p = PartidaGuardada(1250, 42, 27, 3, "cripta-bench", "v1", "cat-bench-1", "Jugador")
     p.inventario = ["itm_daga", "itm_llave_negra"]
+    tipos = ("mover N", "recoger 0", "atacar 0", "esperar", "equipar 1", "pergamino")
+    for i in range(3 * n):
+        p.ordenes.append(tipos[i % len(tipos)])
     for i in range(n):
         s = SalaGuardada(i + 1, rastro=i)
         if i % 3 == 0:
@@ -27,7 +37,8 @@ def a_json(p):
     salas = []
     for s in p.salas:
         salas.append([s.id, s.rastro, s.enemigos, s.objetos, s.puertas])
-    return [p.reloj, p.semilla, p.vida, p.sala_actual, p.inventario, salas]
+    return [p.reloj, p.semilla, p.vida, p.sala_actual, p.inventario, p.id_cripta,
+            p.version_cripta, p.version_catalogo, p.nombre, p.ordenes, salas]
 
 
 def mediana(valores):
@@ -45,6 +56,7 @@ def medir(funcion, repeticiones=7):
 
 
 def comparar():
+    print("Mismo estado en ambos formatos: salas + bloque general con 3 órdenes por sala.")
     print("salas | bin (KB) | json (KB) | cargar bin (ms) | cargar json (ms) | 1 sala bin (ms) | 1 sala json (ms)")
     for n in [20, 200, 1000, 5000]:
         p = armar_partida(n)

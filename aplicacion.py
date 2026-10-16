@@ -91,10 +91,17 @@ class Aplicacion:
         self.log = None
         self.ordenes = []              # órdenes aceptadas de la partida actual (para guardar)
         self.partidas_creadas = 0
+        self._presupuesto_listo = False   # ya se reinició para la próxima partida
         os.makedirs(carpeta, exist_ok=True)
 
     # ------------------------------------------------------------ datos
     def listar_criptas(self):
+        # §5.1: la lista de criptas se pide ANTES de crear la partida siguiente, así que
+        # su solicitud debe contar en el presupuesto de esa partida: se reinicia aquí y
+        # no después (si se reiniciara en _armar, esta solicitud se perdería).
+        if self.partidas_creadas > 0 and not self._presupuesto_listo:
+            self.presupuesto.reiniciar()
+            self._presupuesto_listo = True
         respuesta = self.fuente.listar_criptas()
         if isinstance(respuesta, dict):
             return respuesta.get("criptas", [])
@@ -157,8 +164,10 @@ class Aplicacion:
         return partida
 
     def _armar(self, id_cripta, semilla, ordenes_previas, exigir_versiones, partida_nueva):
-        if partida_nueva and self.partidas_creadas > 0:
+        if partida_nueva and self.partidas_creadas > 0 and not self._presupuesto_listo:
             self.presupuesto.reiniciar()
+        if partida_nueva:
+            self._presupuesto_listo = False
         self.partidas_creadas += 1
 
         datos = self.fuente.datos_cripta(id_cripta)
@@ -244,6 +253,8 @@ class Aplicacion:
     def reporte(self):
         cache = self.local.cache if self.local is not None else None
         texto = "--- Red y caché ---\n" + self.presupuesto.reporte(cache)
+        if cache is not None and cache.desbordes > 0:
+            texto += "\nVeces que la caché pasó su tope (todas las fichas en uso): %d" % cache.desbordes
         if self.precarga is not None:
             texto += "\n" + self.precarga.estadisticas()
         return texto

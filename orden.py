@@ -10,7 +10,9 @@ Los argumentos son siempre datos serializables:
     ATACAR .................. posición (desde 0) en la lista de enemigos de la sala
     RECOGER ................. posición (desde 0) en la lista de objetos del suelo
     USAR, EQUIPAR, SOLTAR ... posición (desde 0) en el orden real del inventario;
-                              None = "el objeto que el cursor está viendo"
+                              None = "el objeto que el cursor está viendo";
+                              "@<clave>" = ese objeto identificado por la etiqueta fija de
+                              su nodo (así se resuelve "el del cursor" en O(1), §4.5)
     INV_ORDENAR ............. criterio "peso" | "valor" | "nombre" (extra: descendente)
 """
 
@@ -85,10 +87,27 @@ class Orden:
             if partes[1] not in ("N", "S", "E", "O"):
                 raise ValueError("dirección no válida: %r" % linea)
             return Orden(tipo, partes[1])
+        if tipo in CON_OBJETO and es_clave(partes[1]):
+            return Orden(tipo, partes[1])
         if not partes[1].isdigit():
             raise ValueError("posición no válida: %r" % linea)
         return Orden(tipo, int(partes[1]))
 
 
+def es_clave(argumento):
+    """True si el argumento es "@<entero>" (objeto del inventario por su etiqueta fija)."""
+    if not isinstance(argumento, str) or len(argumento) < 2 or argumento[0] != "@":
+        return False
+    numero = argumento[1:]
+    if numero[0] == "-":
+        numero = numero[1:]
+    return numero.isdigit()
+
+
+def clave_de_argumento(argumento):
+    return int(argumento[1:])
+
+
 SIN_ARGUMENTO = (ESPERAR, PERGAMINO)
 CON_DIRECCION = (MOVER, ABRIR)
+CON_OBJETO = (USAR, EQUIPAR, SOLTAR)

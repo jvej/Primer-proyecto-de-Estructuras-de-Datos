@@ -26,7 +26,8 @@ puntaje, cerrar el log, reporte de red) y su texto se muestra como aviso.
 from errores import ErrorCripta
 from orden import (ABRIR, AYUDA, ATACAR, CARGAR, EQUIPAR, ESPERAR, GUARDAR, INV_ANTERIOR,
                    INV_INICIO, INV_ORDENAR, INV_SIGUIENTE, INVENTARIO, MOVER, Orden,
-                   ORDENES_DE_PARTIDA, PERGAMINO, PUNTAJES, RECOGER, SALIR, SOLTAR, USAR)
+                   ORDENES_DE_PARTIDA, PERGAMINO, PUNTAJES, RECOGER, SALIR, SOLTAR, USAR,
+                   clave_de_argumento, es_clave)
 from sala import DIRECCIONES
 
 
@@ -79,10 +80,15 @@ class Controlador:
         elif tipo == USAR or tipo == EQUIPAR or tipo == SOLTAR:
             inventario = self.partida.inventario
             if orden.argumento is None:
+                # "El que se está viendo" se identifica por la etiqueta fija de su nodo, en
+                # O(1) y sin calcular su posición: así soltar/usar/equipar desde el cursor
+                # no depende de dónde esté el objeto (§4.5). La etiqueta va al log.
                 actual = inventario.objeto_actual()
                 if actual is None:
                     return self._rechazar("El inventario está vacío.")
-                return Orden(tipo, inventario.indice_de(actual))
+                return Orden(tipo, "@%d" % inventario.clave_de(actual))
+            if es_clave(orden.argumento):
+                return Orden(tipo, orden.argumento)
             if not isinstance(orden.argumento, int) or not 0 <= orden.argumento < len(inventario):
                 return self._rechazar("No tienes ese objeto.")
         return Orden(tipo, orden.argumento, orden.extra)
@@ -102,7 +108,13 @@ class Controlador:
             return partida.recoger(orden.argumento)
         if tipo == PERGAMINO:
             return partida.usar_pergamino()
-        objeto = partida.inventario.objeto_en(orden.argumento)
+        if es_clave(orden.argumento):
+            objeto = partida.inventario.objeto_por_clave(clave_de_argumento(orden.argumento))
+            if objeto is None:
+                self._rechazar("No tienes ese objeto.")
+                return False
+        else:
+            objeto = partida.inventario.objeto_en(orden.argumento)   # número elegido por el usuario
         if tipo == USAR:
             return partida.usar(objeto)
         if tipo == EQUIPAR:

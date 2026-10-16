@@ -2,7 +2,7 @@ import struct
 from ordenamiento import ordenar
 
 MARCA = b"CRPT"
-VERSION_FORMATO = 1
+VERSION_FORMATO = 3      # 2: cripta, versiones, jugador y órdenes; 3: + solicitudes de red gastadas
 ENCABEZADO = "<4sHIQI"   
 ENTRADA = "<IQI"          
 TAM_ENCABEZADO = struct.calcsize(ENCABEZADO)
@@ -21,13 +21,21 @@ class SalaGuardada:
         self.puertas = []      
 
 class PartidaGuardada:
-    def __init__(self, reloj, semilla, vida, sala_actual):
+    def __init__(self, reloj, semilla, vida, sala_actual, id_cripta="", version_cripta="",
+                 version_catalogo="", nombre=""):
         self.reloj = reloj
         self.semilla = semilla
         self.vida = vida
         self.sala_actual = sala_actual
-        self.inventario = []  
-        self.salas = []       
+        self.inventario = []
+        self.salas = []
+        # Para reconstruir la partida exacta (agenda incluida) re-simulando (ver persistencia_partida.py)
+        self.id_cripta = id_cripta
+        self.version_cripta = version_cripta
+        self.version_catalogo = version_catalogo
+        self.nombre = nombre
+        self.ordenes = []     # órdenes de partida en texto ("mover N", "recoger 0", ...)
+        self.solicitudes = 0  # solicitudes de red ya gastadas por esta partida (§5.1)
 
 
 def _texto(s):
@@ -84,6 +92,12 @@ def _empaquetar_general(partida):
     b += struct.pack("<H", len(partida.inventario))
     for o in partida.inventario:
         b += _texto(o)
+    b += _texto(partida.id_cripta) + _texto(partida.version_cripta)
+    b += _texto(partida.version_catalogo) + _texto(partida.nombre)
+    b += struct.pack("<I", len(partida.ordenes))
+    for orden in partida.ordenes:
+        b += _texto(orden)
+    b += struct.pack("<I", partida.solicitudes)
     return b
 
 
@@ -96,6 +110,16 @@ def _desempaquetar_general(datos):
     for i in range(n):
         objeto, pos = _leer_texto(datos, pos)
         partida.inventario.append(objeto)
+    partida.id_cripta, pos = _leer_texto(datos, pos)
+    partida.version_cripta, pos = _leer_texto(datos, pos)
+    partida.version_catalogo, pos = _leer_texto(datos, pos)
+    partida.nombre, pos = _leer_texto(datos, pos)
+    n_ordenes = struct.unpack_from("<I", datos, pos)[0]
+    pos += 4
+    for i in range(n_ordenes):
+        orden, pos = _leer_texto(datos, pos)
+        partida.ordenes.append(orden)
+    partida.solicitudes = struct.unpack_from("<I", datos, pos)[0]
     return partida
 
 
