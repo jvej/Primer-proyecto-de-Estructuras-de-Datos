@@ -19,9 +19,12 @@ class PresupuestoRed:
             self.limite = limite
 
     def reiniciar(self):
-        """Nueva partida: el presupuesto es por partida (§5.1). El límite lo fija
-        después la partida nueva con fijar_limite()."""
+        """Nueva partida: el presupuesto es por partida (§5.1). Se borra también el límite
+        de la partida anterior: hasta que la nueva lo fije con fijar_limite() (al leer sus
+        datos generales) no hay tope conocido, así el límite de la cripta anterior no
+        frena las primeras solicitudes de la nueva."""
         with self._cerrojo:
+            self.limite = None
             self.realizadas = 0
             self.reservadas = 0
             self._credito = 0

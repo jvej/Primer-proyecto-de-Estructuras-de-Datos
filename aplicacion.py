@@ -131,7 +131,7 @@ class Aplicacion:
 
     # ------------------------------------------------------------ partida
     def crear_partida(self, id_cripta, semilla=None, ordenes_previas=None, exigir_versiones=None,
-                      partida_nueva=True):
+                      partida_nueva=True, validar=None):
         """Arma una partida lista para jugar.
 
         semilla: None = la de --semilla o una nueva.
@@ -141,6 +141,9 @@ class Aplicacion:
             datos obtenidos; si no coinciden se lanza ErrorVersion.
         partida_nueva: True reinicia el presupuesto de red (es por partida, §5.1). Al
             cargar una partida guardada se continúa la misma partida: no se reinicia.
+        validar(partida): opcional; se llama con la partida ya reconstruida ANTES de
+            reemplazar a la actual y de crear su log. Si lanza un error, no se reemplaza
+            nada (la partida, el hilo de red y el log actuales siguen como estaban).
 
         Si algo falla, la partida que se estaba jugando sigue intacta (útil al cargar).
         """
@@ -149,7 +152,7 @@ class Aplicacion:
         self.log = None
         try:
             partida = self._armar(id_cripta, semilla, ordenes_previas, exigir_versiones,
-                                  partida_nueva)
+                                  partida_nueva, validar)
         except BaseException:
             if self.ejecutor is not None:
                 self.ejecutor.cerrar()
@@ -163,7 +166,8 @@ class Aplicacion:
             anterior[3].cerrar()                       # su log queda completo en disco
         return partida
 
-    def _armar(self, id_cripta, semilla, ordenes_previas, exigir_versiones, partida_nueva):
+    def _armar(self, id_cripta, semilla, ordenes_previas, exigir_versiones, partida_nueva,
+               validar=None):
         if partida_nueva and self.partidas_creadas > 0 and not self._presupuesto_listo:
             self.presupuesto.reiniciar()
         if partida_nueva:
@@ -213,6 +217,8 @@ class Aplicacion:
                     raise ErrorVersion("la orden %d (%s) fue rechazada al reconstruir la partida"
                                        % (numero, orden.a_texto()))
                 self.ordenes.append(orden)
+        if validar is not None:
+            validar(partida)          # antes de crear el log: si falla, no queda log a medias
 
         if self.registrar_log:
             encabezado = EncabezadoLog(id_cripta, version, self.version_catalogo, semilla,

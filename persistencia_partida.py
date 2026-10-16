@@ -95,31 +95,44 @@ class PersistenciaPartida:
                 raise ErrorCarga("El archivo de partida está dañado: %s" % error)
 
         app = self.aplicacion
+        marca = app.presupuesto.marca()
+
+        def validar(partida):
+            """Compara la re-simulación con la foto guardada. Corre dentro de
+            crear_partida, ANTES de reemplazar la partida actual: si lanza, la aplicación,
+            el controlador y el log siguen con la partida que se estaba jugando."""
+            sala_guardada = leer_sala(self.ruta, general.sala_actual)   # una sala, vía el índice
+            diferencias = []
+            if partida.reloj.tiempo_actual != general.reloj:
+                diferencias.append("reloj %d en vez de %d" % (partida.reloj.tiempo_actual,
+                                                              general.reloj))
+            if partida.jugador.vida != general.vida:
+                diferencias.append("vida %d en vez de %d" % (partida.jugador.vida, general.vida))
+            if partida.jugador.sala.id != general.sala_actual:
+                diferencias.append("sala %s en vez de %s" % (partida.jugador.sala.id,
+                                                             general.sala_actual))
+            if sala_guardada is not None:
+                objetos = []
+                for objeto in partida.objetos_en_sala():
+                    objetos.append(objeto.id)
+                if objetos != sala_guardada.objetos:
+                    diferencias.append("objetos del suelo distintos en la sala actual")
+            if len(diferencias) > 0:
+                raise ErrorCarga("La partida reconstruida no coincide con la guardada (%s)."
+                                 % ", ".join(diferencias))
+
         try:
             partida = app.crear_partida(general.id_cripta, semilla=general.semilla,
                                         ordenes_previas=ordenes, partida_nueva=False,
                                         exigir_versiones=(general.version_cripta,
-                                                          general.version_catalogo))
+                                                          general.version_catalogo),
+                                        validar=validar)
+        except ErrorCarga:
+            raise
         except ErrorCripta as error:
             raise ErrorCarga("No se puede cargar la partida guardada: %s" % error)
-
-        # Verificación contra la foto: si la re-simulación no llega al mismo estado, avisar.
-        sala_guardada = leer_sala(self.ruta, general.sala_actual)   # una sala, vía el índice
-        diferencias = []
-        if partida.reloj.tiempo_actual != general.reloj:
-            diferencias.append("reloj %d en vez de %d" % (partida.reloj.tiempo_actual, general.reloj))
-        if partida.jugador.vida != general.vida:
-            diferencias.append("vida %d en vez de %d" % (partida.jugador.vida, general.vida))
-        if partida.jugador.sala.id != general.sala_actual:
-            diferencias.append("sala %s en vez de %s" % (partida.jugador.sala.id, general.sala_actual))
-        if sala_guardada is not None:
-            objetos = []
-            for objeto in partida.objetos_en_sala():
-                objetos.append(objeto.id)
-            if objetos != sala_guardada.objetos:
-                diferencias.append("objetos del suelo distintos en la sala actual")
-        if len(diferencias) > 0:
-            raise ErrorCarga("La partida reconstruida no coincide con la guardada (%s)."
-                             % ", ".join(diferencias))
+        # §5.1: la partida cargada sigue gastando SU presupuesto: lo que ya había usado
+        # antes de guardarse + lo que costó cargarla ahora. Solo si la carga se completó.
+        app.presupuesto.continuar(general.solicitudes, marca)
         partida.bitacora.agregar("Partida cargada: %d acciones re-ejecutadas." % len(ordenes))
         return partida

@@ -331,7 +331,7 @@ class Partida:
         if objeto not in self.inventario.objetos():
             return self._rechazar("No tienes ese objeto.")
         if objeto.es_pergamino():
-            return self.usar_pergamino()
+            return self.usar_pergamino(objeto)     # el seleccionado, sin buscar otro
         if objeto.clase == "pocion":
             efecto = lambda: self._beber(objeto)
         elif objeto.clase == "antidoto":
@@ -365,17 +365,20 @@ class Partida:
         efectos.encender_antorcha(self, antorcha)
         self.bitacora.agregar("Enciendes la antorcha.")
 
-    def usar_pergamino(self) -> bool:
+    def usar_pergamino(self, pergamino=None) -> bool:
         """§2.11: deshace la última acción del jugador y todo lo ocurrido después.
         No consume tiempo virtual, no cuenta como acción y no se registra en el historial.
-        El pergamino queda fuera del alcance de la reversión."""
+        El pergamino queda fuera del alcance de la reversión.
+
+        pergamino: el que el jugador seleccionó (usar desde el cursor: O(1)). Si es None
+        (orden "retroceso" sin elegir), se busca el primero del inventario."""
         if not self._puede_actuar():
             return False
-        pergamino = None
-        for objeto in self.inventario.objetos():
-            if objeto.es_pergamino():
-                pergamino = objeto
-                break
+        if pergamino is None:
+            for objeto in self.inventario:            # recorre sin copiar la lista
+                if objeto.es_pergamino():
+                    pergamino = objeto
+                    break
         if pergamino is None:
             return self._rechazar("No tienes pergaminos de retroceso.")
         if not self.registro.puede_deshacer():

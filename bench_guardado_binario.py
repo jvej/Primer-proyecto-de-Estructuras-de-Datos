@@ -18,6 +18,7 @@ RUTA_JSON = "bench_partida.json"
 def armar_partida(n):
     p = PartidaGuardada(1250, 42, 27, 3, "cripta-bench", "v1", "cat-bench-1", "Jugador")
     p.inventario = ["itm_daga", "itm_llave_negra"]
+    p.solicitudes = 7
     tipos = ("mover N", "recoger 0", "atacar 0", "esperar", "equipar 1", "pergamino")
     for i in range(3 * n):
         p.ordenes.append(tipos[i % len(tipos)])
@@ -37,8 +38,7 @@ def a_json(p):
     salas = []
     for s in p.salas:
         salas.append([s.id, s.rastro, s.enemigos, s.objetos, s.puertas])
-    return [p.reloj, p.semilla, p.vida, p.sala_actual, p.inventario, p.id_cripta,
-            p.version_cripta, p.version_catalogo, p.nombre, p.ordenes, salas]
+    return [p.reloj, p.semilla, p.vida, p.sala_actual, p.inventario, p.id_cripta, p.version_cripta, p.version_catalogo, p.nombre, p.ordenes, p.solicitudes, salas]
 
 
 def mediana(valores):
