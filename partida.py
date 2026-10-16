@@ -290,7 +290,7 @@ class Partida:
     def soltar(self, objeto) -> bool:
         if not self._puede_actuar():
             return False
-        if objeto not in self.inventario.objetos():
+        if not self.inventario.contiene(objeto):      # O(1) si es el del cursor (§4.5)
             return self._rechazar("No tienes ese objeto.")
         sala = self.jugador.sala
 
@@ -309,7 +309,7 @@ class Partida:
     def equipar(self, objeto) -> bool:
         if not self._puede_actuar():
             return False
-        if objeto not in self.inventario.objetos():
+        if not self.inventario.contiene(objeto):      # O(1) si es el del cursor (§4.5)
             return self._rechazar("No tienes ese objeto.")
         if objeto.clase not in ("arma", "armadura"):
             return self._rechazar("Eso no se puede equipar.")
@@ -328,10 +328,10 @@ class Partida:
     def usar(self, objeto) -> bool:
         if not self._puede_actuar():
             return False
-        if objeto not in self.inventario.objetos():
+        if not self.inventario.contiene(objeto):      # O(1) si es el del cursor (§4.5)
             return self._rechazar("No tienes ese objeto.")
         if objeto.es_pergamino():
-            return self.usar_pergamino()
+            return self.usar_pergamino(objeto)     # el seleccionado, sin buscar otro
         if objeto.clase == "pocion":
             efecto = lambda: self._beber(objeto)
         elif objeto.clase == "antidoto":
@@ -365,17 +365,20 @@ class Partida:
         efectos.encender_antorcha(self, antorcha)
         self.bitacora.agregar("Enciendes la antorcha.")
 
-    def usar_pergamino(self) -> bool:
+    def usar_pergamino(self, pergamino=None) -> bool:
         """§2.11: deshace la última acción del jugador y todo lo ocurrido después.
         No consume tiempo virtual, no cuenta como acción y no se registra en el historial.
-        El pergamino queda fuera del alcance de la reversión."""
+        El pergamino queda fuera del alcance de la reversión.
+
+        pergamino: el que el jugador seleccionó (usar desde el cursor: O(1)). Si es None
+        (orden "retroceso" sin elegir), se busca el primero del inventario."""
         if not self._puede_actuar():
             return False
-        pergamino = None
-        for objeto in self.inventario.objetos():
-            if objeto.es_pergamino():
-                pergamino = objeto
-                break
+        if pergamino is None:
+            for objeto in self.inventario:            # recorre sin copiar la lista
+                if objeto.es_pergamino():
+                    pergamino = objeto
+                    break
         if pergamino is None:
             return self._rechazar("No tienes pergaminos de retroceso.")
         if not self.registro.puede_deshacer():
@@ -457,10 +460,13 @@ class Partida:
         for objeto in self.inventario.objetos():
             if objeto.id == id_ficha:
                 return True
-        for objeto in self.jugador.sala.objetos:
+        sala = self.jugador.sala
+        if sala is None:                 # carga inicial: el jugador aún no está en ninguna sala
+            return False
+        for objeto in sala.objetos:
             if objeto.id == id_ficha:
                 return True
-        for trampa in self.jugador.sala.trampas:
+        for trampa in sala.trampas:
             if trampa.id == id_ficha:
                 return True
         return False

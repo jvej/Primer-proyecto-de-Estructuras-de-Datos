@@ -10,7 +10,6 @@ resultado (no sirve para "volver a tirar los dados").
 No es una copia del estado del juego: es solo el estado del generador, y solo en
 los grupos que realmente lo usan (esperar o moverse sin combate no lo guardan).
 
-CAMBIO DE PRUEBA
 """
 import random
 class AzarReversible:

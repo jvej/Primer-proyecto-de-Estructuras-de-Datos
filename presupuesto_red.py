@@ -19,12 +19,34 @@ class PresupuestoRed:
             self.limite = limite
 
     def reiniciar(self):
-        """Nueva partida: el presupuesto es por partida (§5.1). El límite lo fija
-        después la partida nueva con fijar_limite()."""
+        """Nueva partida: el presupuesto es por partida (§5.1). Se borra también el límite
+        de la partida anterior: hasta que la nueva lo fije con fijar_limite() (al leer sus
+        datos generales) no hay tope conocido, así el límite de la cripta anterior no
+        frena las primeras solicitudes de la nueva."""
         with self._cerrojo:
+            self.limite = None
             self.realizadas = 0
             self.reservadas = 0
             self._credito = 0
+
+    def marca(self):
+        """Foto de los contadores, para saber después cuánto se gastó desde aquí."""
+        with self._cerrojo:
+            return (self.realizadas, self.reservadas)
+
+    def continuar(self, previas, marca):
+        """Al cargar una partida guardada (§5.1, §4.10): el presupuesto es de ESA partida,
+        así que cuenta las `previas` solicitudes que ya había gastado antes de guardarse
+        más las que se hicieron desde `marca` (las de la carga). Reabrir el programa no
+        devuelve presupuesto."""
+        with self._cerrojo:
+            if not self.activo:
+                return
+            nuevas = self.realizadas - marca[0]
+            reservas_nuevas = self.reservadas - marca[1]
+            self.realizadas = previas + nuevas
+            self.reservadas = previas + reservas_nuevas
+            self._credito = self.reservadas - self.realizadas
 
     def restantes(self):
         """Solicitudes que aún se pueden planificar (None si no hay tope conocido)."""

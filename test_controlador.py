@@ -98,10 +98,10 @@ def test_observadores_reciben_ordenes_resueltas_y_solo_las_aceptadas():
     vistas = []
     c.agregar_observador(vistas.append)
     c.ejecutar(Orden(INV_SIGUIENTE))                         # cursor en el 2.º (no es de partida)
-    assert c.ejecutar(Orden(SOLTAR, None))                   # "el actual" -> posición 1
+    assert c.ejecutar(Orden(SOLTAR, None))                   # "el actual" -> etiqueta de su nodo
     assert not c.ejecutar(Orden(ATACAR, 0))                  # no hay enemigos: rechazada
     assert c.ejecutar(Orden(ESPERAR))
-    assert vistas == [Orden(SOLTAR, 1), Orden(ESPERAR)], vistas
+    assert vistas == [Orden(SOLTAR, "@2"), Orden(ESPERAR)], vistas
     esc.cerrar()
 
 

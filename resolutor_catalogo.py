@@ -67,13 +67,17 @@ class ResolutorCatalogo:
     def _incorporar(self, tarea, grupo):
         for id_ in grupo:
             self._marcados.eliminar(id_)
-        cuerpo = tarea.resultado_o_error()
+        try:
+            cuerpo = tarea.resultado_o_error()
+        finally:
+            tarea.resultado = None       # la respuesta cruda no debe retener fichas (§4.4)
         recibidos = ListaOrdenada()
         for ficha in cuerpo["entidades"]:
             self.local.guardar(ficha["id"], ficha)
             recibidos.insertar(ficha["id"], True)
             if ficha.get("clase") == "enemigo" and "suelta" in ficha:
                 self.pedir(ficha["suelta"])          # lo que suelta también necesita ficha
+        cuerpo = None                    # solo la caché (con su tope) conserva las fichas
         for id_ in grupo:
             if not recibidos.contiene(id_):
                 raise ErrorRed("catálogo", "el servidor no devolvió la ficha " + str(id_))
@@ -85,6 +89,7 @@ class ResolutorCatalogo:
             if not tarea.terminada():
                 break
             self._siguiente += 1
+            self._soltar_lote(self._siguiente - 1)
             self._incorporar(tarea, grupo)
 
     def esperar(self, ids=None):
@@ -98,7 +103,22 @@ class ResolutorCatalogo:
             tarea, grupo = self._en_vuelo[self._siguiente]
             tarea.esperar_fin()
             self._siguiente += 1
+            self._soltar_lote(self._siguiente - 1)
             self._incorporar(tarea, grupo)
+
+    def _soltar_lote(self, posicion):
+        """Un lote ya incorporado no se vuelve a leer: se suelta su casilla para que la
+        tarea (y su respuesta) no sigan vivas. La lista conserva su largo, así los índices
+        de los lotes siguientes no cambian."""
+        self._en_vuelo[posicion] = None
+
+    def respuestas_retenidas(self):
+        """Cuántos lotes todavía retienen una respuesta (para pruebas y bench)."""
+        total = 0
+        for entrada in self._en_vuelo:
+            if entrada is not None and entrada[0].resultado is not None:
+                total += 1
+        return total
 
     def disponible(self, id_):
         return self.local.disponible(id_)
