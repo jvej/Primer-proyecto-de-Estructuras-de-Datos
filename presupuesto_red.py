@@ -18,6 +18,14 @@ class PresupuestoRed:
         with self._cerrojo:
             self.limite = limite
 
+    def reiniciar(self):
+        """Nueva partida: el presupuesto es por partida (§5.1). El límite lo fija
+        después la partida nueva con fijar_limite()."""
+        with self._cerrojo:
+            self.realizadas = 0
+            self.reservadas = 0
+            self._credito = 0
+
     def restantes(self):
         """Solicitudes que aún se pueden planificar (None si no hay tope conocido)."""
         with self._cerrojo:

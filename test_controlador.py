@@ -257,7 +257,7 @@ def test_sesion_salir_en_el_menu_de_criptas():
 CARPETA = os.path.dirname(os.path.abspath(__file__))
 MODELO = ("partida.py", "actor.py", "sala.py", "mapa.py", "efectos.py", "registro.py", "inventario.py",
           "lista_doble.py", "agenda_eventos.py", "objetos.py", "combate.py", "comportamiento.py",
-          "motor_enemigos.py", "evento.py", "costos.py")
+          "motor_enemigos.py", "evento.py", "costos.py", "azar.py")
 
 
 def _fuente(nombre):
