@@ -46,5 +46,13 @@ class Vista(ABC):
         """Pantalla final: victoria o derrota con el resumen."""
 
     @abstractmethod
+    def mostrar_puntajes(self, registros):
+        """registros: tabla de puntajes ya ordenada (puntajes.RegistroPuntaje)."""
+
+    @abstractmethod
+    def pedir_nombre(self):
+        """Nombre del jugador para el log y la tabla de puntajes."""
+
+    @abstractmethod
     def confirmar(self, pregunta):
         """Pregunta de sí/no. Devuelve True o False."""

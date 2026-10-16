@@ -15,22 +15,29 @@ que es lo que necesita el log de replay (§4.11).
 
 Persistencia (guardar/cargar, §4.10) es un objeto opcional con:
     guardar(partida) -> str   (mensaje para el usuario)
-    cargar() -> Partida o None
+    cargar() -> Partida o None (puede lanzar ErrorCripta con el motivo)
 Si no se entrega, esas órdenes avisan que aún no están disponibles.
+
+puntajes (§2.12) es un objeto opcional con listar() -> registros ya ordenados.
+al_terminar(partida) -> str es opcional: se llama al ganar o perder (registrar el
+puntaje, cerrar el log, reporte de red) y su texto se muestra como aviso.
 """
 
 from errores import ErrorCripta
 from orden import (ABRIR, AYUDA, ATACAR, CARGAR, EQUIPAR, ESPERAR, GUARDAR, INV_ANTERIOR,
                    INV_INICIO, INV_ORDENAR, INV_SIGUIENTE, INVENTARIO, MOVER, Orden,
-                   ORDENES_DE_PARTIDA, PERGAMINO, RECOGER, SALIR, SOLTAR, USAR)
+                   ORDENES_DE_PARTIDA, PERGAMINO, PUNTAJES, RECOGER, SALIR, SOLTAR, USAR)
 from sala import DIRECCIONES
 
 
 class Controlador:
-    def __init__(self, partida=None, vista=None, persistencia=None):
+    def __init__(self, partida=None, vista=None, persistencia=None, puntajes=None,
+                 al_terminar=None):
         self.partida = partida
         self.vista = vista
         self.persistencia = persistencia
+        self.puntajes = puntajes
+        self.al_terminar = al_terminar
         self._observadores = []
         self._terminado = False
 
@@ -124,6 +131,8 @@ class Controlador:
             return self._guardar()
         if tipo == CARGAR:
             return self._cargar()
+        if tipo == PUNTAJES:
+            return self._mostrar_puntajes()
         if tipo == AYUDA:
             if self.vista is not None:
                 self.vista.mostrar_ayuda()
@@ -159,7 +168,11 @@ class Controlador:
         if self.persistencia is None:
             self._avisar("Cargar todavía no está disponible.")
             return False
-        nueva = self.persistencia.cargar()
+        try:
+            nueva = self.persistencia.cargar()
+        except ErrorCripta as error:
+            self._avisar(str(error))
+            return False
         if nueva is None:
             self._avisar("No hay una partida guardada que cargar.")
             return False
@@ -176,6 +189,8 @@ class Controlador:
         if self.partida.estado != "jugando":
             self.vista.mostrar_partida(self.partida)
             self.vista.mostrar_fin(self.partida)
+            if self.al_terminar is not None:
+                self.vista.mostrar_aviso(self.al_terminar(self.partida))
 
     def correr_sesion(self, listar_criptas, crear_partida):
         """Flujo completo: elegir cripta, jugar, y repetir si el usuario quiere.
@@ -204,6 +219,14 @@ class Controlador:
                 return
 
     # ------------------------------------------------------------ internos
+    def _mostrar_puntajes(self):
+        if self.puntajes is None:
+            self._avisar("La tabla de puntajes no está disponible.")
+            return False
+        if self.vista is not None:
+            self.vista.mostrar_puntajes(self.puntajes.listar())
+        return True
+
     def _mostrar_inventario(self):
         if self.vista is not None:
             self.vista.mostrar_inventario(self.partida)

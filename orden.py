@@ -34,6 +34,7 @@ INV_ORDENAR = "inv_ordenar"
 GUARDAR = "guardar"
 CARGAR = "cargar"
 AYUDA = "ayuda"
+PUNTAJES = "puntajes"
 SALIR = "salir"
 
 ORDENES_DE_PARTIDA = (MOVER, ABRIR, ATACAR, ESPERAR, RECOGER, USAR, EQUIPAR, SOLTAR, PERGAMINO)
@@ -56,3 +57,38 @@ class Orden:
 
     def __repr__(self):
         return "Orden(%r, %r, %r)" % (self.tipo, self.argumento, self.extra)
+
+    # ---------------------------------------------- texto para el log de replay (§4.11)
+    def a_texto(self):
+        """Una línea del log: 'mover N', 'recoger 0', 'esperar'... Solo órdenes de partida
+        ya resueltas (el argumento es una dirección, una posición o nada)."""
+        if not self.es_de_partida():
+            raise ValueError("solo las órdenes de partida van al log: %r" % (self,))
+        if self.argumento is None:
+            return self.tipo
+        return "%s %s" % (self.tipo, self.argumento)
+
+    @staticmethod
+    def desde_texto(linea):
+        """Inversa de a_texto(). Lanza ValueError si la línea no es una orden válida."""
+        partes = linea.split()
+        if len(partes) == 0 or partes[0] not in ORDENES_DE_PARTIDA:
+            raise ValueError("orden desconocida: %r" % linea)
+        tipo = partes[0]
+        if tipo in SIN_ARGUMENTO:
+            if len(partes) != 1:
+                raise ValueError("'%s' no lleva argumento: %r" % (tipo, linea))
+            return Orden(tipo)
+        if len(partes) != 2:
+            raise ValueError("'%s' lleva exactamente un argumento: %r" % (tipo, linea))
+        if tipo in CON_DIRECCION:
+            if partes[1] not in ("N", "S", "E", "O"):
+                raise ValueError("dirección no válida: %r" % linea)
+            return Orden(tipo, partes[1])
+        if not partes[1].isdigit():
+            raise ValueError("posición no válida: %r" % linea)
+        return Orden(tipo, int(partes[1]))
+
+
+SIN_ARGUMENTO = (ESPERAR, PERGAMINO)
+CON_DIRECCION = (MOVER, ABRIR)
