@@ -6,18 +6,19 @@ Ejecutar: python test_gui.py
   - el Modelo y el Controlador no importan Pygame (MVC, §6);
   - --replay y --bench no cargan Pygame;
   - las animaciones se deducen de la partida sin cambiarla (ataque, daño, muerte, correr,
-    abrir puerta).
+    abrir puerta, trampa);
+  - recoger un arma no cambia la imagen del jugador: solo equiparla.
 """
 import os
 import sys
 
-from animaciones_gui import (ABRIR_PUERTA, ATAQUE, CORRER, DANO, MUERTE, REPOSO, Animador,
-                             indice_de_cuadro)
+from animaciones_gui import (ABRIR_PUERTA, ATAQUE, CORRER, CORRER_MS, DANO, MUERTE, REPOSO,
+                             TRAMPA, Animador, indice_de_cuadro)
 from controlador import Controlador
 from controles_gui import (SIG_ENEMIGO, SIG_SUELO, ajustar_posicion, orden_para_tecla,
                            siguiente_posicion)
 from cripta_de_prueba import armar, entrada, esqueleto_linea
-from orden import ABRIR, ATACAR, INV_ORDENAR, MOVER, Orden, PERGAMINO, SALIR
+from orden import ABRIR, ATACAR, EQUIPAR, INV_ORDENAR, MOVER, Orden, PERGAMINO, RECOGER, SALIR
 from vista_consola import interpretar
 
 CARPETA = os.path.dirname(os.path.abspath(__file__))
@@ -127,6 +128,34 @@ def test_entrar_a_otra_sala_anima_la_carrera():
     esc.cerrar()
 
 
+def test_trampa_al_entrar_anima_el_dano_cuando_termina_de_correr():
+    esc = armar(esqueleto_linea(2), [entrada(2, trampas=[("t-1", "trp_dardos")])])
+    partida = esc.partida
+    animador = Animador()
+    animador.reiniciar(partida)
+    vida = partida.jugador.vida
+    assert Controlador(partida).ejecutar(Orden(MOVER, "N"))
+    assert partida.jugador.vida < vida                               # la trampa sí hizo daño
+    animador.observar(partida, 0, MOVER, [])
+    assert animador.estado(partida.jugador, 100)[0] == CORRER         # primero entra corriendo
+    assert animador.estado(partida.jugador, CORRER_MS + 10)[0] == DANO   # y al llegar, el daño
+    efectos = animador.efectos_trampa(CORRER_MS + 10)
+    assert len(efectos) == 1 and efectos[0][1] == "trp_dardos"
+    assert animador.efectos_trampa(100) == []                        # no antes de llegar
+    esc.cerrar()
+
+
+def test_recoger_un_arma_no_la_equipa():
+    esc = armar(esqueleto_linea(2), [entrada(1, objetos=["itm_daga"])])
+    partida = esc.partida
+    controlador = Controlador(partida)
+    assert controlador.ejecutar(Orden(RECOGER, 0))
+    assert partida.jugador.arma is None                 # la imagen sigue siendo "sin arma"
+    assert controlador.ejecutar(Orden(EQUIPAR, None))
+    assert partida.jugador.arma is not None             # ahora sí: imagen con espada
+    esc.cerrar()
+
+
 def test_cuadros_de_animacion():
     assert indice_de_cuadro(REPOSO, 0, 2) == 0 and indice_de_cuadro(REPOSO, 460, 2) == 1
     assert indice_de_cuadro(REPOSO, 920, 2) == 0                 # el reposo se repite
@@ -134,6 +163,7 @@ def test_cuadros_de_animacion():
     assert indice_de_cuadro(ATAQUE, 0, 0) == -1                  # sin cuadros: imagen estática
     assert indice_de_cuadro(CORRER, 0, 6) == 0 and indice_de_cuadro(CORRER, 80 * 7, 6) == 1   # se repite
     assert indice_de_cuadro(ABRIR_PUERTA, 0, 4) == 0 and indice_de_cuadro(ABRIR_PUERTA, 9999, 4) == 3
+    assert indice_de_cuadro(TRAMPA, 0, 4) == 0 and indice_de_cuadro(TRAMPA, 9999, 4) == 3
 
 
 if __name__ == "__main__":

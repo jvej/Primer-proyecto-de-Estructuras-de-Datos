@@ -42,7 +42,8 @@ import os
 import pygame
 
 from animaciones_gui import (ABRIR_MS, ABRIR_PUERTA, ATAQUE, CORRER, CORRER_MS, DANO,
-                             DESTELLO_MS, MUERTE, REPOSO, Animador, duracion, indice_de_cuadro)
+                             DESTELLO_MS, MUERTE, REPOSO, TRAMPA, Animador, duracion,
+                             indice_de_cuadro)
 from controles_gui import (AYUDA_LINEAS, BOTONES, SIG_ENEMIGO, SIG_SUELO, ajustar_posicion,
                            orden_para_tecla, siguiente_posicion)
 from orden import ABRIR, ATACAR, CARGAR, MOVER, Orden, RECOGER, SALIR
@@ -153,7 +154,9 @@ class Sprites:
                 break
             self.abrir.append(imagen)
         self.carpeta = carpeta
+        self.alto = alto
         self.iconos = []                # [(archivo, imagen o None)]: cada icono se carga una vez
+        self.trampas = []               # [(id_trampa, [cuadros])]: se cargan la primera vez
 
     def _cargar(self, carpeta, archivo, alto, voltear):
         ruta = os.path.join(carpeta, archivo)
@@ -214,6 +217,28 @@ class Sprites:
                 self.avisos.append("No se pudo cargar %s (%s)." % (ruta, error))
         self.iconos.append((archivo, imagen))
         return imagen
+
+    def cuadro_trampa(self, id_trampa, transcurrido):
+        """Cuadro del efecto de la trampa: trampa_<id>_N.png o, si no hay, trampa_N.png."""
+        cuadros = self._cuadros_trampa(id_trampa)
+        if len(cuadros) == 0:
+            cuadros = self._cuadros_trampa("")
+        i = indice_de_cuadro(TRAMPA, transcurrido, len(cuadros))
+        return cuadros[i] if i >= 0 else None
+
+    def _cuadros_trampa(self, id_trampa):
+        for otro, cuadros in self.trampas:
+            if otro == id_trampa:
+                return cuadros
+        prefijo = "trampa_%s_" % id_trampa if id_trampa else "trampa_"
+        cuadros = []
+        for numero in range(1, self.MAXIMO_CUADROS + 1):
+            imagen = self._cargar(self.carpeta, "%s%d.png" % (prefijo, numero), self.alto, False)
+            if imagen is None:
+                break
+            cuadros.append(imagen)
+        self.trampas.append((id_trampa, cuadros))
+        return cuadros
 
     def imagen(self, nombre, tipo, transcurrido):
         """El cuadro que toca ahora, o None si ese personaje no tiene ninguna imagen."""
@@ -647,10 +672,24 @@ class VistaPygame(Vista):
             self.pantalla.blit(self.halo, self.halo.get_rect(center=centro_jugador))
         self._dibujar_actor(jugador, self._version_jugador(jugador), COLOR_JUGADOR,
                             centro_jugador, "Tú", False, hacia)
+        self._dibujar_trampas_activas(jugador, centro_jugador)
         self._dibujar_enemigos(partida.enemigos_en_sala())
         self._dibujar_caidos()
         self._dibujar_numeros()
         self._dibujar_suelo(partida.objetos_en_sala())
+
+    def _dibujar_trampas_activas(self, jugador, centro):
+        """Efecto de la trampa que acaba de saltar, encima del jugador (solo dibujo)."""
+        for actor, id_trampa, transcurrido in self.animador.efectos_trampa(pygame.time.get_ticks()):
+            if actor is not jugador:
+                continue
+            imagen = self.sprites.cuadro_trampa(id_trampa, transcurrido)
+            if imagen is not None:
+                self.pantalla.blit(imagen, imagen.get_rect(center=centro))
+            else:                                   # sin imágenes: un destello rojo
+                rect = pygame.Rect(0, 0, 110, 120)
+                rect.center = centro
+                self._destello(rect)
 
     def _posicion_jugador(self, jugador):
         """Dónde se dibuja el jugador y hacia dónde mira (1 derecha, -1 izquierda).

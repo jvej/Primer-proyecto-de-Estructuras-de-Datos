@@ -13,6 +13,10 @@ que compara lo que ve ahora con lo que vio la vez anterior (solo lectura):
   - un mensaje nuevo dice "<enemigo> te ataca" ......... ataque de ese enemigo
   - el jugador entró a otra sala (última orden MOVER) .. correr desde la puerta
   - el jugador abrió una puerta (la vista lo pide) ..... correr de vuelta desde ella
+  - un mensaje nuevo dice "¡Trampa! ..." .............. efecto de la trampa sobre el jugador
+                                                         y su daño; si acaba de entrar a la
+                                                         sala, ambos empiezan cuando termina
+                                                         de correr (llega y entonces salta)
 La animación de ABRIR la puerta con la llave la dibuja la vista ANTES de entregar la
 orden (como correr hasta la puerta): es solo dibujo y el Modelo decide si se abre.
 
@@ -32,6 +36,7 @@ DANO = "dano"
 MUERTE = "muerte"
 CORRER = "correr"
 ABRIR_PUERTA = "abrir"
+TRAMPA = "trampa"
 
 CUADRO_MS = 140             # duración de cada cuadro de ataque / daño / muerte
 REPOSO_MS = 450             # duración de cada cuadro de reposo (respiración)
@@ -43,17 +48,21 @@ ABRIR_CUADRO_MS = 160       # cada cuadro de abrir la puerta con la llave
 ABRIR_CUADROS = 4
 ABRIR_MS = ABRIR_CUADRO_MS * ABRIR_CUADROS
 DESTELLO_MS = 700           # brillo de la puerta recién abierta
+TRAMPA_CUADRO_MS = 120      # cada cuadro del efecto de una trampa
+TRAMPA_CUADROS = 4
+TRAMPA_MS = TRAMPA_CUADRO_MS * TRAMPA_CUADROS
 
 
 class Animacion:
-    __slots__ = ("actor", "tipo", "inicio", "centro", "cantidad")
+    __slots__ = ("actor", "tipo", "inicio", "centro", "cantidad", "dato")
 
-    def __init__(self, actor, tipo, inicio, centro=None, cantidad=0):
+    def __init__(self, actor, tipo, inicio, centro=None, cantidad=0, dato=None):
         self.actor = actor
         self.tipo = tipo
-        self.inicio = inicio        # ms de la ventana en que empezó
+        self.inicio = inicio        # ms de la ventana en que empieza (puede ser futuro)
         self.centro = centro        # dónde dibujarla si el actor ya no está en la sala
         self.cantidad = cantidad    # daño recibido (para el número flotante)
+        self.dato = dato            # trampa: id de la ficha de la trampa que saltó
 
 
 class Animador:
@@ -80,8 +89,15 @@ class Animador:
             self._tomar_foto(partida)
             return
         jugador = partida.jugador
+        retraso = 0
         if ultima_orden == MOVER and partida.sala_actual() is not self._sala:
             self._agregar(Animacion(jugador, CORRER, ahora))
+            retraso = CORRER_MS             # la trampa salta cuando termina de entrar
+        trampas = self._trampas_disparadas(partida)
+        for id_trampa in trampas:
+            self._agregar(Animacion(jugador, TRAMPA, ahora + retraso, dato=id_trampa))
+        if len(trampas) == 0:
+            retraso = 0                     # sin trampa, el daño se ve en el momento
         if ultima_orden == ATACAR:
             self._agregar(Animacion(jugador, ATAQUE, ahora))
         misma_sala = partida.sala_actual() is self._sala
@@ -97,7 +113,7 @@ class Animador:
         if not jugador.esta_vivo():
             self._agregar(Animacion(jugador, MUERTE, ahora, None, max(0, perdida)))
         elif perdida > 0:
-            self._agregar(Animacion(jugador, DANO, ahora, None, perdida))
+            self._agregar(Animacion(jugador, DANO, ahora + retraso, None, perdida))
         for enemigo in partida.enemigos_en_sala():
             if self._ataco(partida, enemigo):
                 self._agregar(Animacion(enemigo, ATAQUE, ahora))
@@ -107,14 +123,32 @@ class Animador:
         """La vista pide una carrera (por ejemplo, volver de la puerta que acaba de abrir)."""
         self._agregar(Animacion(actor, CORRER, ahora))
 
-    def _ataco(self, partida, enemigo):
+    def _mensajes_nuevos(self, partida):
         bitacora = partida.bitacora
         nuevos = bitacora.total_historico - self._total_mensajes
         mensajes = bitacora.ultimos()
-        inicio = max(0, len(mensajes) - nuevos)
+        resultado = []
+        for i in range(max(0, len(mensajes) - nuevos), len(mensajes)):
+            resultado.append(mensajes[i])
+        return resultado
+
+    def _trampas_disparadas(self, partida):
+        """Ids de las trampas que saltaron en esta orden ("¡Trampa! <nombre>." en la bitácora)."""
+        ids = []
+        for mensaje in self._mensajes_nuevos(partida):
+            if not mensaje.startswith("¡Trampa!"):
+                continue
+            encontrada = None
+            for trampa in partida.trampas_en_sala():
+                if trampa.nombre in mensaje:
+                    encontrada = trampa.id
+            ids.append(encontrada if encontrada is not None else "")
+        return ids
+
+    def _ataco(self, partida, enemigo):
         prefijo = enemigo.etiqueta() + " te ataca"
-        for i in range(inicio, len(mensajes)):
-            if mensajes[i].startswith(prefijo):
+        for mensaje in self._mensajes_nuevos(partida):
+            if mensaje.startswith(prefijo):
                 return True
         return False
 
@@ -144,8 +178,8 @@ class Animador:
         Prioridad: muerte > daño > correr > ataque > reposo."""
         elegida = None
         for animacion in self.activas:
-            if animacion.actor is not actor:
-                continue
+            if animacion.actor is not actor or animacion.inicio > ahora:
+                continue                    # de otro actor, o todavía no empieza
             if elegida is None or _prioridad(animacion.tipo) > _prioridad(elegida.tipo):
                 elegida = animacion
         if elegida is None:
@@ -160,7 +194,7 @@ class Animador:
         resultado = []
         for animacion in self.activas:
             if (animacion.tipo == MUERTE and animacion.centro is not None
-                    and ahora - animacion.inicio < duracion(MUERTE) + CUADRO_MS):
+                    and 0 <= ahora - animacion.inicio < duracion(MUERTE) + CUADRO_MS):
                 resultado.append((animacion.actor, animacion.centro, ahora - animacion.inicio))
         return resultado
 
@@ -169,8 +203,17 @@ class Animador:
         resultado = []
         for animacion in self.activas:
             transcurrido = ahora - animacion.inicio
-            if animacion.cantidad > 0 and transcurrido < DURACION_NUMERO_MS:
+            if animacion.cantidad > 0 and 0 <= transcurrido < DURACION_NUMERO_MS:
                 resultado.append((animacion.actor, animacion.centro, animacion.cantidad, transcurrido))
+        return resultado
+
+    def efectos_trampa(self, ahora):
+        """Trampas que están saltando ahora: [(actor, id_trampa, ms)]."""
+        resultado = []
+        for animacion in self.activas:
+            transcurrido = ahora - animacion.inicio
+            if animacion.tipo == TRAMPA and 0 <= transcurrido < TRAMPA_MS:
+                resultado.append((animacion.actor, animacion.dato, transcurrido))
         return resultado
 
     def limpiar(self, ahora):
@@ -189,6 +232,8 @@ def duracion(tipo):
         return CORRER_MS
     if tipo == ABRIR_PUERTA:
         return ABRIR_MS
+    if tipo == TRAMPA:
+        return TRAMPA_MS
     if tipo == DANO:
         return CUADRO_MS * 2            # el único cuadro de daño se sostiene un poco más
     return CUADRO_MS * CUADROS_MAXIMOS
@@ -204,6 +249,8 @@ def indice_de_cuadro(tipo, transcurrido, cantidad_cuadros):
         return (transcurrido // CORRER_CUADRO_MS) % cantidad_cuadros
     if tipo == ABRIR_PUERTA:
         return min(transcurrido // ABRIR_CUADRO_MS, cantidad_cuadros - 1)
+    if tipo == TRAMPA:
+        return min(transcurrido // TRAMPA_CUADRO_MS, cantidad_cuadros - 1)
     paso = duracion(tipo) // cantidad_cuadros if tipo != DANO else duracion(tipo)
     return min(transcurrido // max(1, paso), cantidad_cuadros - 1)
 
