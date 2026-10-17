@@ -38,7 +38,8 @@ def a_json(p):
     salas = []
     for s in p.salas:
         salas.append([s.id, s.rastro, s.enemigos, s.objetos, s.puertas])
-    return [p.reloj, p.semilla, p.vida, p.sala_actual, p.inventario, p.id_cripta, p.version_cripta, p.version_catalogo, p.nombre, p.ordenes, p.solicitudes, salas]
+    return [p.reloj, p.semilla, p.vida, p.sala_actual, p.inventario, p.id_cripta,
+            p.version_cripta, p.version_catalogo, p.nombre, p.ordenes, p.solicitudes, salas]
 
 
 def mediana(valores):

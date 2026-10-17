@@ -290,7 +290,7 @@ class Partida:
     def soltar(self, objeto) -> bool:
         if not self._puede_actuar():
             return False
-        if objeto not in self.inventario.objetos():
+        if not self.inventario.contiene(objeto):      # O(1) si es el del cursor (§4.5)
             return self._rechazar("No tienes ese objeto.")
         sala = self.jugador.sala
 
@@ -309,7 +309,7 @@ class Partida:
     def equipar(self, objeto) -> bool:
         if not self._puede_actuar():
             return False
-        if objeto not in self.inventario.objetos():
+        if not self.inventario.contiene(objeto):      # O(1) si es el del cursor (§4.5)
             return self._rechazar("No tienes ese objeto.")
         if objeto.clase not in ("arma", "armadura"):
             return self._rechazar("Eso no se puede equipar.")
@@ -328,7 +328,7 @@ class Partida:
     def usar(self, objeto) -> bool:
         if not self._puede_actuar():
             return False
-        if objeto not in self.inventario.objetos():
+        if not self.inventario.contiene(objeto):      # O(1) si es el del cursor (§4.5)
             return self._rechazar("No tienes ese objeto.")
         if objeto.es_pergamino():
             return self.usar_pergamino(objeto)     # el seleccionado, sin buscar otro

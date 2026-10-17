@@ -7,6 +7,9 @@ Ejecutar: python test_revision.py
   3.3  política explícita cuando todas las fichas están en uso
   5.1  soltar el objeto del cursor no recorre el inventario (no depende de su posición)
   5.2  guardar y reabrir no devuelve presupuesto de red
+  2.5  el límite de la cripta anterior no frena las primeras solicitudes de la nueva
+  2.6  la caché no pasa el tope por una ficha que no está en uso
+  4    cargar una partida que no coincide no deja la aplicación a medias
 """
 import gc
 import os
@@ -134,11 +137,52 @@ def test_saturacion_explicita_y_vuelve_al_tope():
     c = Cache(tope=3, en_uso=lambda i: i in usadas)
     for i in usadas:
         c.poner(i, i)
-    assert c.poner("d", "d") is None and c.cantidad() == 4 and c.desbordes == 1
-    usadas[:] = []                                                 # ya nada está en uso
-    c.poner("e", "e")
-    assert c.cantidad() == 3                                       # se corrige en el siguiente poner
-    assert c.contiene("e") and c.desbordes == 1
+    # desborde evitable: "d" no está en uso -> no entra a memoria (queda en disco)
+    assert c.poner("d", "d") is None and c.cantidad() == 3 and not c.contiene("d")
+    assert c.rechazadas == 1 and c.desbordes == 0
+    # desborde inevitable: "d" SÍ está en uso -> entra aunque pase el tope
+    usadas.append("d")
+    c.poner("d", "d")
+    assert c.cantidad() == 4 and c.desbordes == 1
+    # cuando dejan de estar en uso, hasta una simple actualización vuelve al tope
+    usadas[:] = []
+    c.poner("a", "a2")
+    assert c.cantidad() == 3 and c.obtener("a") == "a2"
+
+
+def test_el_limite_anterior_no_frena_la_partida_nueva():
+    p = PresupuestoRed(limite=1)
+    p.registrar("partida anterior")
+    p.reiniciar()
+    p.registrar("lista de criptas")          # antes: ErrorPresupuesto por el límite viejo (1)
+    p.registrar("datos generales")
+    p.fijar_limite(10)
+    assert p.realizadas == 2 and p.restantes() == 8
+
+
+def test_cargar_que_no_coincide_no_cambia_la_partida_actual():
+    base, paquete = entorno()
+    datos = os.path.join(base, "datos")
+    app = Aplicacion(ClienteOffline(paquete), PresupuestoRed(activo=False), datos, semilla=7)
+    partida = app.crear_partida(crear_paquete_prueba.ID)
+    c = Controlador(partida, persistencia=PersistenciaPartida(app))
+    c.agregar_observador(app.registrar_orden)
+    c.ejecutar(Orden(MOVER, "N"))
+    PersistenciaPartida(app).guardar(partida)
+    # se daña la foto: el reloj guardado ya no coincide con lo que da la re-simulación
+    from guardado_binario import cargar_todo, guardar
+    foto = cargar_todo(app.ruta_guardado)
+    foto.reloj += 1
+    guardar(app.ruta_guardado, foto)
+    log_antes, ordenes_antes, ejecutor_antes = app.log, app.ordenes, app.ejecutor
+    archivos_antes = os.listdir(os.path.join(datos, "partidas"))
+    assert not c.ejecutar(Orden("cargar"))                       # se rechaza con aviso
+    assert c.partida is partida and app.partida is partida       # coherentes, sin cambiar
+    assert app.log is log_antes and app.ordenes is ordenes_antes and app.ejecutor is ejecutor_antes
+    assert os.listdir(os.path.join(datos, "partidas")) == archivos_antes   # ni log a medias
+    assert c.ejecutar(Orden(MOVER, "S"))                          # la partida sigue jugable
+    app.cerrar()
+    shutil.rmtree(base, ignore_errors=True)
 
 
 def test_soltar_desde_el_cursor_no_depende_de_la_posicion():

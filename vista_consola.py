@@ -15,12 +15,13 @@ Comandos (los números se cuentan desde 1, como se muestran en pantalla):
     inv | sig | ant | inicio ... ver el inventario y mover el cursor
     ordenar peso|valor|nombre [desc] ... vista ordenada (no cambia el orden real)
     retroceso | r ...... usar un pergamino de retroceso
+    puntajes ........... tabla de puntajes
     guardar | cargar | salir | ayuda
 """
 
 from orden import (ABRIR, AYUDA, ATACAR, CARGAR, EQUIPAR, ESPERAR, GUARDAR, INV_ANTERIOR,
                    INV_INICIO, INV_ORDENAR, INV_SIGUIENTE, INVENTARIO, MOVER, Orden,
-                   PERGAMINO, RECOGER, SALIR, SOLTAR, USAR)
+                   PERGAMINO, PUNTAJES, RECOGER, SALIR, SOLTAR, USAR)
 from vista_base import Vista
 
 CRITERIOS = ("peso", "valor", "nombre")
@@ -102,6 +103,8 @@ def interpretar(linea, partida):
         return Orden(GUARDAR)
     if comando == "cargar":
         return Orden(CARGAR)
+    if comando in ("puntajes", "puntos", "tabla"):
+        return Orden(PUNTAJES)
     if comando in ("ayuda", "?", "h"):
         return Orden(AYUDA)
     if comando in ("salir", "q"):
@@ -131,6 +134,7 @@ AYUDA_TEXTO = """Comandos (los números se cuentan desde 1, como se ven en panta
   inv                ver el inventario     sig | ant | inicio   mover el cursor
   ordenar peso|valor|nombre [desc]   vista ordenada (no cambia el orden real)
   retroceso | r      usar un pergamino de retroceso
+  puntajes           ver la tabla de puntajes
   guardar | cargar | salir | ayuda"""
 
 
@@ -166,6 +170,12 @@ class VistaConsola(Vista):
             if isinstance(resultado, Orden):
                 return resultado
             self._salida(resultado)
+
+    def pedir_nombre(self):
+        texto = self._leer("Tu nombre: ")
+        if texto is None or texto.strip() == "":
+            return "Jugador"
+        return texto.strip()
 
     def confirmar(self, pregunta):
         texto = self._leer(pregunta + " (s/n): ")
@@ -235,6 +245,20 @@ class VistaConsola(Vista):
             self._salida("  (vacío)")
         for posicion, objeto in pares:
             self._salida("  %d) %s" % (posicion + 1, self._texto_objeto(objeto)))
+
+    def mostrar_puntajes(self, registros):
+        self._salida("\nTabla de puntajes (victorias primero, luego menor tiempo y menos acciones):")
+        if len(registros) == 0:
+            self._salida("  (todavía no hay partidas terminadas)")
+            return
+        self._salida("  #  %-14s %-22s %-9s %8s %10s %8s" % (
+            "Jugador", "Cripta", "Resultado", "Acciones", "Derrotados", "Tiempo"))
+        i = 1
+        for r in registros:
+            self._salida(" %2d  %-14s %-22s %-9s %8d %10d %8d" % (
+                i, r.nombre[:14], (r.id_cripta + " v" + r.version_cripta)[:22], r.resultado,
+                r.acciones, r.derrotados, r.tiempo))
+            i += 1
 
     def mostrar_aviso(self, texto):
         self._salida(texto)
