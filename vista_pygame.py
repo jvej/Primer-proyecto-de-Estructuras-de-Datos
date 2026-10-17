@@ -309,10 +309,14 @@ class VistaPygame(Vista):
         self._modal("Tabla de puntajes", lineas)
 
     def mostrar_aviso(self, texto):
+        print(texto)                    # también en la consola, por si la ventana se cierra
         fin = pygame.time.get_ticks() + DURACION_AVISO_MS
         for linea in str(texto).splitlines():
-            if linea.strip() != "":
-                self.avisos.append([linea, fin])
+            if linea.strip() == "":
+                continue
+            self.avisos.append([linea, fin])
+            if self.fin is not None:    # el resumen final no se borra con el tiempo
+                self.resumen_fin.append(linea)
         while len(self.avisos) > MAX_AVISOS:
             self.avisos.pop(0)
 
@@ -322,10 +326,17 @@ class VistaPygame(Vista):
     def mostrar_fin(self, partida):
         self.partida = partida
         self.fin = partida
+        self.resumen_fin = []           # lo que avise la aplicación al terminar (puntaje, log)
 
     def cerrar(self):
+        """Antes de cerrar la ventana, si quedó algún aviso (por ejemplo un error al
+        cargar las criptas) se muestra para que no se pierda."""
+        if not self.cerrada and self.partida is None and len(self.avisos) > 0:
+            lineas = []
+            for texto, _fin in self.avisos:
+                lineas.append(texto)
+            self._modal("Aviso", lineas)
         pygame.quit()
-
     # ============================================================ eventos y cuadro
     def _eventos(self):
         eventos = pygame.event.get()
@@ -614,7 +625,7 @@ class VistaPygame(Vista):
             partida.acciones, partida.derrotados, partida.reloj.tiempo_actual), TEXTO,
             caja.centerx, caja.y + 76, centro=True)
         y = caja.y + 118
-        for texto, _fin in self.avisos:
+        for texto in self.resumen_fin[-10:]:
             self._texto(self.fuente_chica, texto, TEXTO_TENUE, caja.x + 26, y, ancho_max=caja.w - 52)
             y += 16
 
