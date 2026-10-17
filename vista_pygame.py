@@ -13,15 +13,17 @@ Cómo encaja sin tocar el Modelo ni el Controlador:
     órdenes de partida: no consumen tiempo ni van al log de replay.
   - Mantener una tecla pulsada NO repite la acción (solo cuenta cada pulsación).
 
-Imágenes (recursos/sprites/), PNG con fondo transparente, todos mirando a la derecha
+Imágenes ("Poses personajes/"), PNG con fondo transparente, todos mirando a la derecha
 (los enemigos se voltean solos para mirar al jugador):
     <personaje>.png                    imagen estática
     <personaje>_reposo_1.png, _2 ...   respiración (se repite)
     <personaje>_ataque_1.png ...       ataque
     <personaje>_dano_1.png             recibe daño
     <personaje>_muerte_1.png ...       muere (se queda en el último cuadro)
-Personajes: jugador (manos vacías), jugador_armado (con arma equipada), guardian,
-errante, rastreador y enemigo (respaldo para cualquier comportamiento desconocido).
+    <personaje>_correr_1.png ...       corre hacia la puerta / desde la puerta (se repite)
+Personajes: jugador (manos vacías), jugador_espada (arma equipada), jugador_antorcha
+(antorcha encendida), jugador_armado (arma y antorcha), guardian, errante, rastreador
+y enemigo (respaldo para cualquier comportamiento desconocido).
 Se eligen por comportamiento, no por id de cripta ni de catálogo. Si falta un cuadro
 se usa la imagen estática; si falta todo, una figura simple. Nunca se cae el juego.
 
@@ -34,8 +36,8 @@ import os
 
 import pygame
 
-from animaciones_gui import (ATAQUE, DANO, MUERTE, REPOSO, Animador, duracion,
-                             indice_de_cuadro)
+from animaciones_gui import (ATAQUE, CORRER, CORRER_MS, DANO, MUERTE, REPOSO, Animador,
+                             duracion, indice_de_cuadro)
 from controles_gui import (AYUDA_LINEAS, BOTONES, SIG_ENEMIGO, SIG_SUELO, ajustar_posicion,
                            orden_para_tecla, siguiente_posicion)
 from orden import ABRIR, ATACAR, CARGAR, MOVER, Orden, RECOGER, SALIR
@@ -44,6 +46,7 @@ from vista_base import Vista
 ANCHO, ALTO = 1280, 720
 FPS = 30
 CARPETA_SPRITES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Poses personajes")
+
 # ------------------------------------------------------------------ colores
 FONDO = (18, 15, 20)
 PANEL = (34, 29, 36)
@@ -84,7 +87,7 @@ def _fuente(tamano, negrita=False):
 
 class Hoja:
     """Las imágenes de un personaje: la estática y los cuadros de cada animación."""
-    __slots__ = ("estatica", "reposo", "ataque", "dano", "muerte")
+    __slots__ = ("estatica", "reposo", "ataque", "dano", "muerte", "correr")
 
     def __init__(self):
         self.estatica = None
@@ -92,8 +95,11 @@ class Hoja:
         self.ataque = []
         self.dano = []
         self.muerte = []
+        self.correr = []
 
     def cuadros(self, tipo):
+        if tipo == CORRER:
+            return self.correr
         if tipo == ATAQUE:
             return self.ataque
         if tipo == DANO:
@@ -104,7 +110,7 @@ class Hoja:
 
     def vacia(self):
         return (self.estatica is None and len(self.reposo) == 0 and len(self.ataque) == 0
-                and len(self.dano) == 0 and len(self.muerte) == 0)
+                and len(self.dano) == 0 and len(self.muerte) == 0 and len(self.correr) == 0)
 
 
 class Sprites:
@@ -115,7 +121,7 @@ class Sprites:
                   "guardian", "errante", "rastreador", "enemigo")
     # si falta la versión pedida del jugador, se usa la primera de esta lista que exista
     RESPALDO_JUGADOR = ("jugador", "jugador_espada", "jugador_antorcha", "jugador_armado")
-    ANIMACIONES = (REPOSO, ATAQUE, DANO, MUERTE)
+    ANIMACIONES = (REPOSO, ATAQUE, DANO, MUERTE, CORRER)
     MAXIMO_CUADROS = 8
 
     def __init__(self, carpeta, alto):
@@ -202,6 +208,8 @@ class VistaPygame(Vista):
         self.ultima_orden = None        # tipo de la última orden entregada (para animar)
         self.centros = []               # [(actor, (x, y))] dónde se dibujó cada actor
         self.halo = self._crear_halo()
+        self.saliendo = None            # (dirección, inicio_ms) mientras corre hacia una puerta
+        self.entrando_por = None        # dirección de la puerta por la que acaba de entrar
         self.partida = None
         self.fin = None                 # partida terminada cuyo resumen se muestra
         self.resumen_fin = []
@@ -299,10 +307,31 @@ class VistaPygame(Vista):
         cargar), se deja dibujado un aviso: la espera es de tiempo real, no virtual."""
         self.ultima_orden = orden.tipo
         if orden.tipo == MOVER:
+            self._correr_hacia(orden.argumento)
+            self.entrando_por = _opuesta(orden.argumento)
             self._dibujar_cargando("Entrando...", sobre_partida=True)
         elif orden.tipo == CARGAR:
             self._dibujar_cargando("Cargando partida...", sobre_partida=True)
         return orden
+
+    def _correr_hacia(self, direccion):
+        """Antes de entregar MOVER, el jugador corre hasta la puerta (solo dibujo, tiempo
+        real). Si la salida no existe o está cerrada no corre: el Modelo la rechazará."""
+        if self.partida is None:
+            return
+        abierta = False
+        for otra, estado, _vecino, _llave in self.partida.salidas_visibles():
+            if otra == direccion and estado != "cerrada":
+                abierta = True
+        if not abierta:
+            return
+        self.saliendo = (direccion, pygame.time.get_ticks())
+        while not self.cerrada and pygame.time.get_ticks() - self.saliendo[1] < CORRER_MS:
+            if len(pygame.event.get(pygame.QUIT)) > 0:   # las teclas quedan en cola, no se pierden
+                self.cerrada = True
+            self._dibujar_partida(self.partida)
+            self._mostrar_cuadro()
+        self.saliendo = None
 
     def pedir_nombre(self):
         texto = ""
@@ -531,15 +560,31 @@ class VistaPygame(Vista):
                 trampa.nombre, "armada" if trampa.armada else "desarmada"), CERRADA, SALA.x + 22, y)
             y += 18
         jugador = partida.jugador
-        centro_jugador = (SALA.x + 170, SALA.centery - 20)
+        centro_jugador, hacia = self._posicion_jugador(jugador)
         if jugador.antorcha_encendida:              # la antorcha se ve como un halo de luz
             self.pantalla.blit(self.halo, self.halo.get_rect(center=centro_jugador))
         self._dibujar_actor(jugador, self._version_jugador(jugador), COLOR_JUGADOR,
-                            centro_jugador, "Tú", False, 1)
+                            centro_jugador, "Tú", False, hacia)
         self._dibujar_enemigos(partida.enemigos_en_sala())
         self._dibujar_caidos()
         self._dibujar_numeros()
         self._dibujar_suelo(partida.objetos_en_sala())
+
+    def _posicion_jugador(self, jugador):
+        """Dónde se dibuja el jugador y hacia dónde mira (1 derecha, -1 izquierda).
+        Al salir corre del centro a la puerta; al entrar, de la puerta al centro."""
+        centro = (SALA.x + 170, SALA.centery - 20)
+        ahora = pygame.time.get_ticks()
+        if self.saliendo is not None:
+            puerta = _punto_de_puerta(self.saliendo[0])
+            avance = min(1.0, (ahora - self.saliendo[1]) / CORRER_MS)
+            return _entre(centro, puerta, avance), (-1 if puerta[0] < centro[0] else 1)
+        tipo, transcurrido = self.animador.estado(jugador, ahora)
+        if tipo == CORRER and self.entrando_por is not None:
+            puerta = _punto_de_puerta(self.entrando_por)
+            avance = min(1.0, transcurrido / CORRER_MS)
+            return _entre(puerta, centro, avance), (-1 if centro[0] < puerta[0] else 1)
+        return centro, 1
 
     def _version_jugador(self, jugador):
         """Qué imagen del jugador usar según lo que lleva: arma equipada y/o antorcha encendida."""
@@ -551,6 +596,7 @@ class VistaPygame(Vista):
         if jugador.antorcha_encendida:
             return "jugador_antorcha"
         return "jugador"
+
     def _dibujar_puerta(self, direccion, estado, id_vecino, llave):
         color = ABIERTA if estado != "cerrada" else CERRADA
         if direccion == "N":
@@ -593,11 +639,15 @@ class VistaPygame(Vista):
     def _dibujar_actor(self, actor, nombre_sprite, color, centro, etiqueta, elegido, hacia):
         """hacia: 1 si mira a la derecha (jugador), -1 si mira a la izquierda (enemigos)."""
         self.centros.append((actor, centro))
-        tipo, transcurrido = self.animador.estado(actor, pygame.time.get_ticks())
+        ahora = pygame.time.get_ticks()
+        tipo, transcurrido = self.animador.estado(actor, ahora)
+        if self.saliendo is not None and actor is self.partida.jugador:
+            tipo, transcurrido = CORRER, ahora - self.saliendo[1]
         dibujo = centro
         if tipo == ATAQUE and transcurrido < duracion(ATAQUE):    # embestida hacia el rival
             dibujo = (centro[0] + hacia * 16, centro[1])
-        rect = self._dibujar_cuerpo(nombre_sprite, color, dibujo, tipo, transcurrido)
+        voltear = hacia < 0 and nombre_sprite.startswith("jugador")
+        rect = self._dibujar_cuerpo(nombre_sprite, color, dibujo, tipo, transcurrido, voltear)
         if elegido:
             pygame.draw.rect(self.pantalla, SELECCION, rect.inflate(12, 12), 3)
             self._texto(self.fuente_chica, "objetivo", SELECCION, rect.centerx, rect.y - 34, centro=True)
@@ -606,9 +656,12 @@ class VistaPygame(Vista):
         self._barra_vida(pygame.Rect(centro[0] - 40, rect.bottom + 24, 80, 7), actor.vida, actor.vida_max)
         return rect.inflate(20, 50)
 
-    def _dibujar_cuerpo(self, nombre_sprite, color, centro, tipo, transcurrido):
-        """El sprite del cuadro que toca o, si no hay imágenes, la figura provisional."""
+    def _dibujar_cuerpo(self, nombre_sprite, color, centro, tipo, transcurrido, voltear=False):
+        """El sprite del cuadro que toca o, si no hay imágenes, la figura provisional.
+        voltear: el jugador mira a la izquierda (corre hacia la puerta oeste)."""
         imagen = self.sprites.imagen(nombre_sprite, tipo, transcurrido)
+        if imagen is not None and voltear:
+            imagen = pygame.transform.flip(imagen, True, False)
         if imagen is not None:
             rect = imagen.get_rect(center=centro)
             self.pantalla.blit(imagen, rect)
@@ -832,3 +885,30 @@ class VistaPygame(Vista):
         if comportamiento == "rastreador":
             return COLOR_RASTREADOR
         return COLOR_ENEMIGO
+
+
+def _opuesta(direccion):
+    """Si sale por el norte, entra a la sala nueva por el sur, etc."""
+    if direccion == "N":
+        return "S"
+    if direccion == "S":
+        return "N"
+    if direccion == "E":
+        return "O"
+    return "E"
+
+
+def _punto_de_puerta(direccion):
+    """Dónde se para el jugador junto a cada puerta de la sala dibujada."""
+    if direccion == "N":
+        return (SALA.centerx, SALA.y + 70)
+    if direccion == "S":
+        return (SALA.centerx, SALA.bottom - 110)
+    if direccion == "E":
+        return (SALA.right - 70, SALA.centery - 20)
+    return (SALA.x + 70, SALA.centery - 20)
+
+
+def _entre(desde, hasta, avance):
+    return (int(desde[0] + (hasta[0] - desde[0]) * avance),
+            int(desde[1] + (hasta[1] - desde[1]) * avance))

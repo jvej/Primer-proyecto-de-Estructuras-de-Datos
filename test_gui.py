@@ -5,12 +5,12 @@ Ejecutar: python test_gui.py
   - elegir enemigo u objeto no es una orden (no consume tiempo ni va al log);
   - el Modelo y el Controlador no importan Pygame (MVC, §6);
   - --replay y --bench no cargan Pygame;
-  - las animaciones se deducen de la partida sin cambiarla (ataque, daño, muerte).
+  - las animaciones se deducen de la partida sin cambiarla (ataque, daño, muerte, correr).
 """
 import os
 import sys
 
-from animaciones_gui import (ATAQUE, DANO, MUERTE, REPOSO, Animador, indice_de_cuadro)
+from animaciones_gui import (ATAQUE, CORRER, DANO, MUERTE, REPOSO, Animador, indice_de_cuadro)
 from controlador import Controlador
 from controles_gui import (SIG_ENEMIGO, SIG_SUELO, ajustar_posicion, orden_para_tecla,
                            siguiente_posicion)
@@ -113,11 +113,24 @@ def test_retroceso_no_anima():
     esc.cerrar()
 
 
+def test_entrar_a_otra_sala_anima_la_carrera():
+    esc = armar(esqueleto_linea(2))
+    partida = esc.partida
+    animador = Animador()
+    animador.reiniciar(partida)
+    assert Controlador(partida).ejecutar(Orden(MOVER, "N"))
+    animador.observar(partida, 0, MOVER, [])
+    assert animador.estado(partida.jugador, 100)[0] == CORRER
+    assert animador.estado(partida.jugador, 5000)[0] == REPOSO     # luego vuelve al reposo
+    esc.cerrar()
+
+
 def test_cuadros_de_animacion():
     assert indice_de_cuadro(REPOSO, 0, 2) == 0 and indice_de_cuadro(REPOSO, 460, 2) == 1
     assert indice_de_cuadro(REPOSO, 920, 2) == 0                 # el reposo se repite
     assert indice_de_cuadro(MUERTE, 0, 3) == 0 and indice_de_cuadro(MUERTE, 99999, 3) == 2
     assert indice_de_cuadro(ATAQUE, 0, 0) == -1                  # sin cuadros: imagen estática
+    assert indice_de_cuadro(CORRER, 0, 6) == 0 and indice_de_cuadro(CORRER, 80 * 7, 6) == 1   # se repite
 
 
 if __name__ == "__main__":

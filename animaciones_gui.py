@@ -11,6 +11,7 @@ que compara lo que ve ahora con lo que vio la vez anterior (solo lectura):
   - el jugador tiene menos vida que antes ............. daño del jugador (+ número)
   - el jugador murió .................................. muerte del jugador (queda tendido)
   - un mensaje nuevo dice "<enemigo> te ataca" ......... ataque de ese enemigo
+  - el jugador entró a otra sala (última orden MOVER) .. correr desde la puerta
 
 Los tiempos son de la VENTANA (milisegundos reales), no del reloj virtual: a 30 o 60
 FPS la partida es la misma, solo cambia la suavidad del dibujo. Tras un retroceso o una
@@ -20,17 +21,20 @@ Sin diccionarios: las animaciones activas y la foto anterior son listas pequeña
 (los actores de una sala), recorridas linealmente.
 """
 
-from orden import ATACAR, CARGAR, PERGAMINO
+from orden import ATACAR, CARGAR, MOVER, PERGAMINO
 
 REPOSO = "reposo"
 ATAQUE = "ataque"
 DANO = "dano"
 MUERTE = "muerte"
+CORRER = "correr"
 
 CUADRO_MS = 140             # duración de cada cuadro de ataque / daño / muerte
 REPOSO_MS = 450             # duración de cada cuadro de reposo (respiración)
 CUADROS_MAXIMOS = 3         # ataque y muerte tienen 3 cuadros; daño, 1
 DURACION_NUMERO_MS = 900    # el número de daño flota y desaparece
+CORRER_CUADRO_MS = 80       # la carrera cambia de cuadro más rápido y se repite
+CORRER_MS = 420             # lo que tarda en cruzar desde la puerta (o hasta ella)
 
 
 class Animacion:
@@ -68,6 +72,8 @@ class Animador:
             self._tomar_foto(partida)
             return
         jugador = partida.jugador
+        if ultima_orden == MOVER and partida.sala_actual() is not self._sala:
+            self._agregar(Animacion(jugador, CORRER, ahora))
         if ultima_orden == ATACAR:
             self._agregar(Animacion(jugador, ATAQUE, ahora))
         misma_sala = partida.sala_actual() is self._sala
@@ -123,7 +129,7 @@ class Animador:
     # ------------------------------------------------------------ consulta
     def estado(self, actor, ahora):
         """(tipo, ms_desde_que_empezó) de lo que el actor está haciendo ahora.
-        Prioridad: muerte > daño > ataque > reposo."""
+        Prioridad: muerte > daño > correr > ataque > reposo."""
         elegida = None
         for animacion in self.activas:
             if animacion.actor is not actor:
@@ -167,6 +173,8 @@ class Animador:
 
 
 def duracion(tipo):
+    if tipo == CORRER:
+        return CORRER_MS
     if tipo == DANO:
         return CUADRO_MS * 2            # el único cuadro de daño se sostiene un poco más
     return CUADRO_MS * CUADROS_MAXIMOS
@@ -178,14 +186,18 @@ def indice_de_cuadro(tipo, transcurrido, cantidad_cuadros):
         return -1
     if tipo == REPOSO:
         return (transcurrido // REPOSO_MS) % cantidad_cuadros
+    if tipo == CORRER:
+        return (transcurrido // CORRER_CUADRO_MS) % cantidad_cuadros
     paso = duracion(tipo) // cantidad_cuadros if tipo != DANO else duracion(tipo)
     return min(transcurrido // max(1, paso), cantidad_cuadros - 1)
 
 
 def _prioridad(tipo):
     if tipo == MUERTE:
-        return 3
+        return 4
     if tipo == DANO:
+        return 3
+    if tipo == CORRER:
         return 2
     if tipo == ATAQUE:
         return 1
