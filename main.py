@@ -3,6 +3,7 @@
 Uso:
     python main.py                              jugar contra el servicio web
     python main.py --offline paquete/           jugar leyendo el paquete de respuestas
+    python main.py --gui                        jugar en ventana (Pygame); también con --offline
     python main.py --replay datos_cripta/partidas/x.log    reproducir sin interacción
     python main.py --bench                      todas las mediciones
     python main.py --bench historial inventario solo esos subsistemas
@@ -16,7 +17,8 @@ Opciones:
 
 Arquitectura (§6): aquí solo se ARMAN las piezas. El Modelo (partida.py) no sabe de
 red, disco ni interfaz; el Controlador recibe funciones y objetos ya armados; la Vista
-de consola solo se crea en el modo interactivo (--replay y --bench no la instancian).
+de consola o la de Pygame (--gui) solo se crean en el modo interactivo: --replay y
+--bench no abren ventana ni importan Pygame.
 """
 
 import argparse
@@ -62,6 +64,8 @@ def leer_argumentos(argv):
     parser.add_argument("--nombre", help="nombre del jugador")
     parser.add_argument("--datos", default=CARPETA_DEFECTO,
                         help="carpeta de datos generados (por defecto %s)" % CARPETA_DEFECTO)
+    parser.add_argument("--gui", action="store_true",
+                        help="interfaz gráfica con Pygame en vez de la consola")
     parser.add_argument("--detalle", action="store_true",
                         help="con --replay, muestra cada orden reproducida")
     argumentos = parser.parse_args(argv)
@@ -110,15 +114,28 @@ def correr_replay(argumentos):
 
 
 # ------------------------------------------------------------------ jugar
-def correr_interactivo(argumentos):
-    from vista_consola import VistaConsola      # solo el modo interactivo crea una vista
+def crear_vista(argumentos):
+    """Solo el modo interactivo crea una vista. Pygame se importa únicamente con --gui."""
+    if argumentos.gui:
+        try:
+            from vista_pygame import VistaPygame
+        except ImportError:
+            print("Falta Pygame. Instálalo con:  python -m pip install pygame")
+            return None
+        return VistaPygame()
+    from vista_consola import VistaConsola
+    return VistaConsola()
 
+
+def correr_interactivo(argumentos):
     try:
         fuente, presupuesto = crear_fuente_datos(argumentos.offline is not None, argumentos.offline)
     except ValueError as error:
         print(error)
         return 2
-    vista = VistaConsola()
+    vista = crear_vista(argumentos)
+    if vista is None:
+        return 2
     print("CRIPTA. Escribe 'ayuda' durante la partida para ver los comandos.")
     if argumentos.offline:
         print("Modo sin conexión: datos de %s" % argumentos.offline)
@@ -143,6 +160,8 @@ def correr_interactivo(argumentos):
                 print("La partida quedó registrada en %s (puede reproducirse con --replay)."
                       % ruta_log)
             print(aplicacion.reporte())
+        if argumentos.gui:
+            vista.cerrar()
     print("Hasta pronto.")
     return 0
 
