@@ -27,12 +27,12 @@ import runpy
 import sys
 import time
 
-from aplicacion import CACHE_DEFECTO, CARPETA_DEFECTO, Aplicacion
-from controlador import Controlador
-from errores import ErrorCripta
-from fabrica_fuentes import crear_fuente_datos
-from persistencia_partida import PersistenciaPartida
-from reproductor import reproducir
+from controlador.aplicacion import CACHE_DEFECTO, CARPETA_DEFECTO, Aplicacion
+from controlador.controlador import Controlador
+from modelo.juego.errores import ErrorCripta
+from modelo.datos.fabrica_fuentes import crear_fuente_datos
+from modelo.datos.persistencia_partida import PersistenciaPartida
+from controlador.reproductor import reproducir
 
 CARPETA_PROYECTO = os.path.dirname(os.path.abspath(__file__))
 
@@ -92,7 +92,7 @@ def correr_benches(pedidos):
         print("#" * 72)
         inicio = time.perf_counter()
         try:
-            runpy.run_path(os.path.join(CARPETA_PROYECTO, archivo), run_name="__main__")
+            runpy.run_path(os.path.join(CARPETA_PROYECTO, "bench", archivo), run_name="__main__")
         except Exception as error:          # un bench roto no impide medir los demás
             fallidos += 1
             print("ERROR en %s: %s: %s" % (archivo, type(error).__name__, error))
@@ -118,12 +118,12 @@ def crear_vista(argumentos):
     """Solo el modo interactivo crea una vista. Pygame se importa únicamente con --gui."""
     if argumentos.gui:
         try:
-            from vista_pygame import VistaPygame
+            from vista.vista_pygame import VistaPygame
         except ImportError:
             print("Falta Pygame. Instálalo con:  python -m pip install pygame")
             return None
         return VistaPygame()
-    from vista_consola import VistaConsola
+    from vista.vista_consola import VistaConsola
     return VistaConsola()
 
 
