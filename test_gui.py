@@ -4,15 +4,18 @@ Ejecutar: python test_gui.py
   - cada tecla produce la misma Orden que el comando equivalente de la consola;
   - elegir enemigo u objeto no es una orden (no consume tiempo ni va al log);
   - el Modelo y el Controlador no importan Pygame (MVC, §6);
-  - --replay y --bench no cargan Pygame.
+  - --replay y --bench no cargan Pygame;
+  - las animaciones se deducen de la partida sin cambiarla (ataque, daño, muerte).
 """
 import os
 import sys
 
+from animaciones_gui import (ATAQUE, DANO, MUERTE, REPOSO, Animador, indice_de_cuadro)
+from controlador import Controlador
 from controles_gui import (SIG_ENEMIGO, SIG_SUELO, ajustar_posicion, orden_para_tecla,
                            siguiente_posicion)
-from cripta_de_prueba import armar, esqueleto_linea
-from orden import ABRIR, INV_ORDENAR, MOVER, Orden, SALIR
+from cripta_de_prueba import armar, entrada, esqueleto_linea
+from orden import ABRIR, ATACAR, INV_ORDENAR, MOVER, Orden, PERGAMINO, SALIR
 from vista_consola import interpretar
 
 CARPETA = os.path.dirname(os.path.abspath(__file__))
@@ -67,6 +70,54 @@ def test_replay_y_bench_no_cargan_pygame():
     argumentos = main.leer_argumentos(["--replay", "x.log"])
     assert not argumentos.gui
     assert "pygame" not in sys.modules
+
+
+def test_animaciones_salen_de_la_partida_sin_cambiarla():
+    esc = armar(esqueleto_linea(2), [entrada(1, enemigos=[("e-1", "ent_errante", 6)])])
+    partida = esc.partida
+    controlador = Controlador(partida)
+    enemigo = partida.enemigos_en_sala()[0]
+    animador = Animador()
+    animador.reiniciar(partida)
+    ahora = 1000
+    vistos = []
+    while enemigo.esta_vivo() and partida.estado == "jugando":
+        assert controlador.ejecutar(Orden(ATACAR, 0))
+        antes = (partida.reloj.tiempo_actual, partida.jugador.vida, enemigo.vida)
+        animador.observar(partida, ahora, ATACAR, [(enemigo, (500, 200))])
+        assert antes == (partida.reloj.tiempo_actual, partida.jugador.vida, enemigo.vida)
+        vistos.append(animador.estado(partida.jugador, ahora)[0])
+        ahora += 2000
+    assert ATAQUE in vistos or DANO in vistos
+    if not enemigo.esta_vivo():
+        caidos = animador.fantasmas(ahora - 2000)
+        assert len(caidos) == 1 and caidos[0][0] is enemigo and caidos[0][1] == (500, 200)
+        assert animador.estado(enemigo, ahora - 2000)[0] == MUERTE
+    esc.cerrar()
+
+
+def test_retroceso_no_anima():
+    esc = armar(esqueleto_linea(2), [entrada(1, enemigos=[("e-1", "ent_troll", 20)])])
+    esc.dar("itm_pergamino")
+    partida = esc.partida
+    controlador = Controlador(partida)
+    animador = Animador()
+    animador.reiniciar(partida)
+    controlador.ejecutar(Orden(ATACAR, 0))
+    animador.observar(partida, 0, ATACAR, [])
+    animador.activas = []
+    controlador.ejecutar(Orden(PERGAMINO))          # la vida "sube": no es daño ni muerte
+    animador.observar(partida, 10, PERGAMINO, [])
+    assert animador.activas == []
+    assert animador.estado(partida.jugador, 10)[0] == REPOSO
+    esc.cerrar()
+
+
+def test_cuadros_de_animacion():
+    assert indice_de_cuadro(REPOSO, 0, 2) == 0 and indice_de_cuadro(REPOSO, 460, 2) == 1
+    assert indice_de_cuadro(REPOSO, 920, 2) == 0                 # el reposo se repite
+    assert indice_de_cuadro(MUERTE, 0, 3) == 0 and indice_de_cuadro(MUERTE, 99999, 3) == 2
+    assert indice_de_cuadro(ATAQUE, 0, 0) == -1                  # sin cuadros: imagen estática
 
 
 if __name__ == "__main__":

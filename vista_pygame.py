@@ -13,19 +13,29 @@ Cómo encaja sin tocar el Modelo ni el Controlador:
     órdenes de partida: no consumen tiempo ni van al log de replay.
   - Mantener una tecla pulsada NO repite la acción (solo cuenta cada pulsación).
 
-Imágenes: si existe recursos/sprites/<nombre>.png se usa; si no, una figura simple.
-Nombres: jugador, guardian, errante, rastreador y enemigo (respaldo para cualquier
-comportamiento desconocido). Los sprites se eligen por comportamiento, no por id de
-cripta ni de catálogo, así una cripta nueva se dibuja sin cambiar nada.
+Imágenes (recursos/sprites/), PNG con fondo transparente, todos mirando a la derecha
+(los enemigos se voltean solos para mirar al jugador):
+    <personaje>.png                    imagen estática
+    <personaje>_reposo_1.png, _2 ...   respiración (se repite)
+    <personaje>_ataque_1.png ...       ataque
+    <personaje>_dano_1.png             recibe daño
+    <personaje>_muerte_1.png ...       muere (se queda en el último cuadro)
+Personajes: jugador (manos vacías), jugador_armado (con arma equipada), guardian,
+errante, rastreador y enemigo (respaldo para cualquier comportamiento desconocido).
+Se eligen por comportamiento, no por id de cripta ni de catálogo. Si falta un cuadro
+se usa la imagen estática; si falta todo, una figura simple. Nunca se cae el juego.
 
-Esta primera versión es funcional (figuras y texto). Las animaciones se agregan después
-sobre esta base, siempre como dibujo de resultados que ya calculó el Modelo.
+Animaciones (animaciones_gui.py): solo DIBUJAN resultados que el Modelo ya calculó
+(quién atacó, quién perdió vida, quién murió). Usan tiempo real de la ventana, nunca
+el reloj virtual, así que no cambian la partida ni el replay.
 """
 
 import os
 
 import pygame
 
+from animaciones_gui import (ATAQUE, DANO, MUERTE, REPOSO, Animador, duracion,
+                             indice_de_cuadro)
 from controles_gui import (AYUDA_LINEAS, BOTONES, SIG_ENEMIGO, SIG_SUELO, ajustar_posicion,
                            orden_para_tecla, siguiente_posicion)
 from orden import ABRIR, ATACAR, CARGAR, MOVER, Orden, RECOGER, SALIR
@@ -33,8 +43,7 @@ from vista_base import Vista
 
 ANCHO, ALTO = 1280, 720
 FPS = 30
-CARPETA_SPRITES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "recursos", "sprites")
-
+CARPETA_SPRITES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Poses personajes")
 # ------------------------------------------------------------------ colores
 FONDO = (18, 15, 20)
 PANEL = (34, 29, 36)
@@ -62,6 +71,7 @@ MENSAJES = pygame.Rect(870, 384, 390, 326)
 BOTONERA_Y = 536
 AVISOS_Y = 624
 
+ALTO_SPRITE = 120
 MAX_ENEMIGOS_DIBUJADOS = 8
 MAX_OBJETOS_DIBUJADOS = 6
 DURACION_AVISO_MS = 7000
@@ -72,41 +82,108 @@ def _fuente(tamano, negrita=False):
     return pygame.font.SysFont("consolas,dejavusansmono,menlo,couriernew", tamano, bold=negrita)
 
 
-class Sprites:
-    """Carga cada imagen una sola vez y la reutiliza. Sin diccionarios: dos listas
-    paralelas y búsqueda lineal (son 5 nombres)."""
+class Hoja:
+    """Las imágenes de un personaje: la estática y los cuadros de cada animación."""
+    __slots__ = ("estatica", "reposo", "ataque", "dano", "muerte")
 
-    NOMBRES = ("jugador", "guardian", "errante", "rastreador", "enemigo")
+    def __init__(self):
+        self.estatica = None
+        self.reposo = []
+        self.ataque = []
+        self.dano = []
+        self.muerte = []
+
+    def cuadros(self, tipo):
+        if tipo == ATAQUE:
+            return self.ataque
+        if tipo == DANO:
+            return self.dano
+        if tipo == MUERTE:
+            return self.muerte
+        return self.reposo
+
+    def vacia(self):
+        return (self.estatica is None and len(self.reposo) == 0 and len(self.ataque) == 0
+                and len(self.dano) == 0 and len(self.muerte) == 0)
+
+
+class Sprites:
+    """Carga cada imagen una sola vez y la reutiliza. Sin diccionarios: una lista de
+    pares (nombre, Hoja) con búsqueda lineal (son 8 personajes)."""
+
+    PERSONAJES = ("jugador", "jugador_espada", "jugador_antorcha", "jugador_armado",
+                  "guardian", "errante", "rastreador", "enemigo")
+    # si falta la versión pedida del jugador, se usa la primera de esta lista que exista
+    RESPALDO_JUGADOR = ("jugador", "jugador_espada", "jugador_antorcha", "jugador_armado")
+    ANIMACIONES = (REPOSO, ATAQUE, DANO, MUERTE)
+    MAXIMO_CUADROS = 8
 
     def __init__(self, carpeta, alto):
-        self.imagenes = []
+        self.hojas = []
         self.avisos = []
         if not os.path.isdir(carpeta):
             self.avisos.append("Sin carpeta de sprites (%s): se usan figuras simples." % carpeta)
-        for nombre in self.NOMBRES:
-            self.imagenes.append(self._cargar(carpeta, nombre, alto))
+        for nombre in self.PERSONAJES:
+            voltear = not nombre.startswith("jugador")      # los enemigos miran al jugador
+            hoja = Hoja()
+            hoja.estatica = self._cargar(carpeta, nombre + ".png", alto, voltear)
+            for tipo in self.ANIMACIONES:
+                for numero in range(1, self.MAXIMO_CUADROS + 1):
+                    imagen = self._cargar(carpeta, "%s_%s_%d.png" % (nombre, tipo, numero), alto, voltear)
+                    if imagen is None:
+                        break
+                    hoja.cuadros(tipo).append(imagen)
+            self.hojas.append((nombre, hoja))
 
-    def _cargar(self, carpeta, nombre, alto):
-        ruta = os.path.join(carpeta, nombre + ".png")
+    def _cargar(self, carpeta, archivo, alto, voltear):
+        ruta = os.path.join(carpeta, archivo)
         if not os.path.exists(ruta):
             return None
         try:
             imagen = pygame.image.load(ruta).convert_alpha()
         except pygame.error as error:
-            self.avisos.append("No se pudo cargar %s (%s): se usa una figura." % (ruta, error))
+            self.avisos.append("No se pudo cargar %s (%s): se usa otra imagen." % (ruta, error))
             return None
         ancho = max(1, imagen.get_width() * alto // max(1, imagen.get_height()))
-        return pygame.transform.smoothscale(imagen, (ancho, alto))
+        imagen = pygame.transform.smoothscale(imagen, (ancho, alto))
+        if voltear:
+            imagen = pygame.transform.flip(imagen, True, False)
+        return imagen
 
-    def de(self, nombre):
-        """La imagen de ese nombre; si falta, la de 'enemigo'; si también falta, None."""
-        respaldo = None
-        for i in range(len(self.NOMBRES)):
-            if self.NOMBRES[i] == nombre and self.imagenes[i] is not None:
-                return self.imagenes[i]
-            if self.NOMBRES[i] == "enemigo":
-                respaldo = self.imagenes[i]
-        return respaldo if nombre != "jugador" else None
+    def hoja(self, nombre):
+        """La hoja de ese personaje; si no tiene imágenes, la de respaldo:
+        jugador -> la primera versión del jugador que exista; enemigo -> 'enemigo'."""
+        pedida = self._buscar(nombre)
+        if pedida is not None:
+            return pedida
+        if nombre.startswith("jugador"):
+            for otro in self.RESPALDO_JUGADOR:
+                hoja = self._buscar(otro)
+                if hoja is not None:
+                    return hoja
+            return None
+        return self._buscar("enemigo")
+
+    def _buscar(self, nombre):
+        for otro, hoja in self.hojas:
+            if otro == nombre and not hoja.vacia():
+                return hoja
+        return None
+
+    def imagen(self, nombre, tipo, transcurrido):
+        """El cuadro que toca ahora, o None si ese personaje no tiene ninguna imagen."""
+        hoja = self.hoja(nombre)
+        if hoja is None:
+            return None
+        cuadros = hoja.cuadros(tipo)
+        i = indice_de_cuadro(tipo, transcurrido, len(cuadros))
+        if i >= 0:
+            return cuadros[i]
+        if hoja.estatica is not None:
+            return hoja.estatica
+        if len(hoja.reposo) > 0:
+            return hoja.reposo[0]
+        return None
 
 
 class VistaPygame(Vista):
@@ -120,9 +197,14 @@ class VistaPygame(Vista):
         self.fuente_chica = _fuente(13)
         self.fuente_media = _fuente(20, True)
         self.fuente_grande = _fuente(34, True)
-        self.sprites = Sprites(carpeta_sprites, 110)
+        self.sprites = Sprites(carpeta_sprites, ALTO_SPRITE)
+        self.animador = Animador()
+        self.ultima_orden = None        # tipo de la última orden entregada (para animar)
+        self.centros = []               # [(actor, (x, y))] dónde se dibujó cada actor
+        self.halo = self._crear_halo()
         self.partida = None
         self.fin = None                 # partida terminada cuyo resumen se muestra
+        self.resumen_fin = []
         self.enemigo_elegido = 0
         self.objeto_elegido = 0
         self.avisos = []                # [texto, instante_real_en_que_desaparece]
@@ -136,6 +218,7 @@ class VistaPygame(Vista):
     def elegir_cripta(self, criptas):
         self.partida = None
         self.fin = None
+        self.animador.reiniciar()
         elegida = 0
         while not self.cerrada:
             for evento in self._eventos():
@@ -214,6 +297,7 @@ class VistaPygame(Vista):
     def _entregar(self, orden):
         """Antes de devolver una orden que puede esperar a la red (entrar a una sala nueva,
         cargar), se deja dibujado un aviso: la espera es de tiempo real, no virtual."""
+        self.ultima_orden = orden.tipo
         if orden.tipo == MOVER:
             self._dibujar_cargando("Entrando...", sobre_partida=True)
         elif orden.tipo == CARGAR:
@@ -275,6 +359,11 @@ class VistaPygame(Vista):
 
     # ================================================================ salida
     def mostrar_partida(self, partida):
+        if partida is not self.partida:             # partida nueva o cargada: sin animar
+            self.animador.reiniciar(partida)
+        else:
+            self.animador.observar(partida, pygame.time.get_ticks(), self.ultima_orden, self.centros)
+        self.ultima_orden = None
         self.partida = partida
         self.enemigo_elegido = ajustar_posicion(self.enemigo_elegido, len(partida.enemigos_en_sala()))
         self.objeto_elegido = ajustar_posicion(self.objeto_elegido, len(partida.objetos_en_sala()))
@@ -337,6 +426,7 @@ class VistaPygame(Vista):
                 lineas.append(texto)
             self._modal("Aviso", lineas)
         pygame.quit()
+
     # ============================================================ eventos y cuadro
     def _eventos(self):
         eventos = pygame.event.get()
@@ -399,6 +489,8 @@ class VistaPygame(Vista):
 
     def _dibujar_partida(self, partida):
         self.zonas = []
+        self.centros = []
+        self.animador.limpiar(pygame.time.get_ticks())
         self.pantalla.fill(FONDO)
         self._dibujar_barra_superior(partida)
         self._dibujar_sala(partida)
@@ -438,11 +530,27 @@ class VistaPygame(Vista):
             self._texto(self.fuente_chica, "Trampa: %s (%s)" % (
                 trampa.nombre, "armada" if trampa.armada else "desarmada"), CERRADA, SALA.x + 22, y)
             y += 18
-        self._dibujar_actor(partida.jugador, "jugador", COLOR_JUGADOR,
-                            (SALA.x + 170, SALA.centery - 20), "Tú", False)
+        jugador = partida.jugador
+        centro_jugador = (SALA.x + 170, SALA.centery - 20)
+        if jugador.antorcha_encendida:              # la antorcha se ve como un halo de luz
+            self.pantalla.blit(self.halo, self.halo.get_rect(center=centro_jugador))
+        self._dibujar_actor(jugador, self._version_jugador(jugador), COLOR_JUGADOR,
+                            centro_jugador, "Tú", False, 1)
         self._dibujar_enemigos(partida.enemigos_en_sala())
+        self._dibujar_caidos()
+        self._dibujar_numeros()
         self._dibujar_suelo(partida.objetos_en_sala())
 
+    def _version_jugador(self, jugador):
+        """Qué imagen del jugador usar según lo que lleva: arma equipada y/o antorcha encendida."""
+        con_arma = jugador.arma is not None
+        if con_arma and jugador.antorcha_encendida:
+            return "jugador_armado"
+        if con_arma:
+            return "jugador_espada"
+        if jugador.antorcha_encendida:
+            return "jugador_antorcha"
+        return "jugador"
     def _dibujar_puerta(self, direccion, estado, id_vecino, llave):
         color = ABIERTA if estado != "cerrada" else CERRADA
         if direccion == "N":
@@ -473,31 +581,80 @@ class VistaPygame(Vista):
             enemigo = enemigos[i]
             columna = i % 4
             fila = i // 4
-            centro = (SALA.x + 380 + columna * 118, SALA.y + 110 + fila * 150)
+            centro = (SALA.x + 400 + columna * 122, SALA.y + 115 + fila * 155)
             color = self._color_de(enemigo.comportamiento)
             rect = self._dibujar_actor(enemigo, enemigo.comportamiento, color, centro,
-                                       enemigo.etiqueta(), i == self.enemigo_elegido)
+                                       enemigo.etiqueta(), i == self.enemigo_elegido, -1)
             self.zonas.append((rect, ("enemigo", i)))
         if len(enemigos) > MAX_ENEMIGOS_DIBUJADOS:
             self._texto(self.fuente_chica, "+%d enemigos más" % (len(enemigos) - MAX_ENEMIGOS_DIBUJADOS),
                         TEXTO, SALA.right - 160, SALA.y + 20)
 
-    def _dibujar_actor(self, actor, nombre_sprite, color, centro, etiqueta, elegido):
-        imagen = self.sprites.de(nombre_sprite)
-        if imagen is not None:
-            rect = imagen.get_rect(center=centro)
-            self.pantalla.blit(imagen, rect)
-        else:
-            rect = pygame.Rect(0, 0, 70, 70)
-            rect.center = centro
-            self._figura(nombre_sprite, color, rect)
+    def _dibujar_actor(self, actor, nombre_sprite, color, centro, etiqueta, elegido, hacia):
+        """hacia: 1 si mira a la derecha (jugador), -1 si mira a la izquierda (enemigos)."""
+        self.centros.append((actor, centro))
+        tipo, transcurrido = self.animador.estado(actor, pygame.time.get_ticks())
+        dibujo = centro
+        if tipo == ATAQUE and transcurrido < duracion(ATAQUE):    # embestida hacia el rival
+            dibujo = (centro[0] + hacia * 16, centro[1])
+        rect = self._dibujar_cuerpo(nombre_sprite, color, dibujo, tipo, transcurrido)
         if elegido:
             pygame.draw.rect(self.pantalla, SELECCION, rect.inflate(12, 12), 3)
             self._texto(self.fuente_chica, "objetivo", SELECCION, rect.centerx, rect.y - 34, centro=True)
-        self._texto(self.fuente_chica, etiqueta, TEXTO, rect.centerx, rect.bottom + 6,
+        self._texto(self.fuente_chica, etiqueta, TEXTO, centro[0], rect.bottom + 6,
                     centro=True, ancho_max=116)
-        self._barra_vida(pygame.Rect(rect.centerx - 40, rect.bottom + 24, 80, 7), actor.vida, actor.vida_max)
+        self._barra_vida(pygame.Rect(centro[0] - 40, rect.bottom + 24, 80, 7), actor.vida, actor.vida_max)
         return rect.inflate(20, 50)
+
+    def _dibujar_cuerpo(self, nombre_sprite, color, centro, tipo, transcurrido):
+        """El sprite del cuadro que toca o, si no hay imágenes, la figura provisional."""
+        imagen = self.sprites.imagen(nombre_sprite, tipo, transcurrido)
+        if imagen is not None:
+            rect = imagen.get_rect(center=centro)
+            self.pantalla.blit(imagen, rect)
+            if tipo == DANO and len(self.sprites.hoja(nombre_sprite).dano) == 0:
+                self._destello(rect)                # sin cuadro de daño: destello rojo
+            return rect
+        rect = pygame.Rect(0, 0, 70, 70)
+        rect.center = centro
+        if tipo == MUERTE:
+            rect = pygame.Rect(rect.x - 10, rect.bottom - 24, 90, 24)     # figura "tendida"
+            pygame.draw.rect(self.pantalla, TEXTO_TENUE, rect)
+            return rect
+        self._figura(nombre_sprite, VIDA if tipo == DANO else color, rect)
+        return rect
+
+    def _dibujar_caidos(self):
+        """Enemigos que acaban de morir: su animación de muerte en el último lugar donde estaban."""
+        ahora = pygame.time.get_ticks()
+        for actor, centro, transcurrido in self.animador.fantasmas(ahora):
+            self._dibujar_cuerpo(actor.comportamiento, self._color_de(actor.comportamiento),
+                                 centro, MUERTE, transcurrido)
+
+    def _dibujar_numeros(self):
+        """Daño recibido flotando hacia arriba sobre quien lo recibió."""
+        ahora = pygame.time.get_ticks()
+        for actor, centro, cantidad, transcurrido in self.animador.numeros(ahora):
+            if centro is None:
+                for otro, lugar in self.centros:
+                    if otro is actor:
+                        centro = lugar
+            if centro is None:
+                continue
+            subida = transcurrido * 50 // 900
+            self._texto(self.fuente_media, "-%d" % cantidad, VIDA, centro[0], centro[1] - 70 - subida,
+                        centro=True)
+
+    def _destello(self, rect):
+        velo = pygame.Surface((rect.w, rect.h), pygame.SRCALPHA)
+        velo.fill((220, 40, 40, 90))
+        self.pantalla.blit(velo, rect)
+
+    def _crear_halo(self):
+        halo = pygame.Surface((240, 240), pygame.SRCALPHA)
+        for radio, alfa in ((120, 25), (95, 35), (70, 45)):
+            pygame.draw.circle(halo, (255, 160, 60, alfa), (120, 120), radio)
+        return halo
 
     def _figura(self, nombre, color, rect):
         """Figura provisional según el comportamiento (o el jugador)."""
