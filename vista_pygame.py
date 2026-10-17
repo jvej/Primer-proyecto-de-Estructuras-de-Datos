@@ -21,6 +21,11 @@ Imágenes ("Poses personajes/"), PNG con fondo transparente, todos mirando a la 
     <personaje>_dano_1.png             recibe daño
     <personaje>_muerte_1.png ...       muere (se queda en el último cuadro)
     <personaje>_correr_1.png ...       corre hacia la puerta / desde la puerta (se repite)
+    jugador_abrir_1.png ...            abre una puerta con la llave (una sola versión para
+                                       todas las del jugador)
+    objeto_<id>.png / objeto_<clase>.png   icono de un objeto del suelo: primero el de su
+                                       id exacto (objeto_itm_daga.png), si no el de su clase
+                                       (objeto_arma.png); si no hay ninguno, una tarjeta de texto
 Personajes: jugador (manos vacías), jugador_espada (arma equipada), jugador_antorcha
 (antorcha encendida), jugador_armado (arma y antorcha), guardian, errante, rastreador
 y enemigo (respaldo para cualquier comportamiento desconocido).
@@ -36,8 +41,8 @@ import os
 
 import pygame
 
-from animaciones_gui import (ATAQUE, CORRER, CORRER_MS, DANO, MUERTE, REPOSO, Animador,
-                             duracion, indice_de_cuadro)
+from animaciones_gui import (ABRIR_MS, ABRIR_PUERTA, ATAQUE, CORRER, CORRER_MS, DANO,
+                             DESTELLO_MS, MUERTE, REPOSO, Animador, duracion, indice_de_cuadro)
 from controles_gui import (AYUDA_LINEAS, BOTONES, SIG_ENEMIGO, SIG_SUELO, ajustar_posicion,
                            orden_para_tecla, siguiente_posicion)
 from orden import ABRIR, ATACAR, CARGAR, MOVER, Orden, RECOGER, SALIR
@@ -75,6 +80,7 @@ BOTONERA_Y = 536
 AVISOS_Y = 624
 
 ALTO_SPRITE = 120
+TAMANO_ICONO = 56           # lado del icono de un objeto del suelo
 MAX_ENEMIGOS_DIBUJADOS = 8
 MAX_OBJETOS_DIBUJADOS = 6
 DURACION_AVISO_MS = 7000
@@ -140,6 +146,14 @@ class Sprites:
                         break
                     hoja.cuadros(tipo).append(imagen)
             self.hojas.append((nombre, hoja))
+        self.abrir = []                 # jugador_abrir_N.png: una sola versión para todas
+        for numero in range(1, self.MAXIMO_CUADROS + 1):
+            imagen = self._cargar(carpeta, "jugador_abrir_%d.png" % numero, alto, False)
+            if imagen is None:
+                break
+            self.abrir.append(imagen)
+        self.carpeta = carpeta
+        self.iconos = []                # [(archivo, imagen o None)]: cada icono se carga una vez
 
     def _cargar(self, carpeta, archivo, alto, voltear):
         ruta = os.path.join(carpeta, archivo)
@@ -176,8 +190,38 @@ class Sprites:
                 return hoja
         return None
 
+    def icono(self, objeto):
+        """Icono del objeto: objeto_<id>.png; si no existe, objeto_<clase>.png; si no, None."""
+        imagen = self._icono("objeto_%s.png" % objeto.id)
+        if imagen is None:
+            imagen = self._icono("objeto_%s.png" % objeto.clase)
+        return imagen
+
+    def _icono(self, archivo):
+        for otro, imagen in self.iconos:
+            if otro == archivo:
+                return imagen
+        imagen = None
+        ruta = os.path.join(self.carpeta, archivo)
+        if os.path.exists(ruta):
+            try:
+                original = pygame.image.load(ruta).convert_alpha()
+                lado = max(original.get_width(), original.get_height(), 1)
+                imagen = pygame.transform.smoothscale(original, (
+                    max(1, original.get_width() * TAMANO_ICONO // lado),
+                    max(1, original.get_height() * TAMANO_ICONO // lado)))
+            except pygame.error as error:
+                self.avisos.append("No se pudo cargar %s (%s)." % (ruta, error))
+        self.iconos.append((archivo, imagen))
+        return imagen
+
     def imagen(self, nombre, tipo, transcurrido):
         """El cuadro que toca ahora, o None si ese personaje no tiene ninguna imagen."""
+        if tipo == ABRIR_PUERTA:
+            i = indice_de_cuadro(tipo, transcurrido, len(self.abrir))
+            if i >= 0:
+                return self.abrir[i]
+            tipo = REPOSO                   # sin cuadros de abrir: se queda en reposo
         hoja = self.hoja(nombre)
         if hoja is None:
             return None
@@ -209,7 +253,10 @@ class VistaPygame(Vista):
         self.centros = []               # [(actor, (x, y))] dónde se dibujó cada actor
         self.halo = self._crear_halo()
         self.saliendo = None            # (dirección, inicio_ms) mientras corre hacia una puerta
+        self.volver_de = None           # puerta recién abierta: el jugador vuelve corriendo
         self.entrando_por = None        # dirección de la puerta por la que acaba de entrar
+        self.abriendo = None            # (dirección, inicio_ms) mientras usa la llave
+        self.destello = None            # (dirección, inicio_ms) brillo de la puerta abierta
         self.partida = None
         self.fin = None                 # partida terminada cuyo resumen se muestra
         self.resumen_fin = []
@@ -310,6 +357,8 @@ class VistaPygame(Vista):
             self._correr_hacia(orden.argumento)
             self.entrando_por = _opuesta(orden.argumento)
             self._dibujar_cargando("Entrando...", sobre_partida=True)
+        elif orden.tipo == ABRIR:
+            self._abrir_puerta(orden.argumento)
         elif orden.tipo == CARGAR:
             self._dibujar_cargando("Cargando partida...", sobre_partida=True)
         return orden
@@ -317,21 +366,50 @@ class VistaPygame(Vista):
     def _correr_hacia(self, direccion):
         """Antes de entregar MOVER, el jugador corre hasta la puerta (solo dibujo, tiempo
         real). Si la salida no existe o está cerrada no corre: el Modelo la rechazará."""
-        if self.partida is None:
-            return
-        abierta = False
-        for otra, estado, _vecino, _llave in self.partida.salidas_visibles():
-            if otra == direccion and estado != "cerrada":
-                abierta = True
-        if not abierta:
+        if self.partida is None or self._salida(direccion) not in ("abierta",):
             return
         self.saliendo = (direccion, pygame.time.get_ticks())
-        while not self.cerrada and pygame.time.get_ticks() - self.saliendo[1] < CORRER_MS:
+        self._esperar_dibujando(self.saliendo[1], CORRER_MS)
+        self.saliendo = None
+
+    def _abrir_puerta(self, direccion):
+        """Antes de entregar ABRIR: corre hasta la puerta y usa la llave (solo dibujo).
+        Solo se anima si la puerta está cerrada y el jugador lleva la llave que la abre;
+        si no, el Modelo rechazará la orden con su mensaje y aquí no se dibuja nada."""
+        if self.partida is None:
+            return
+        estado, llave = self._salida(direccion, con_llave=True)
+        if estado != "cerrada" or llave is None or not self._lleva_llave(llave):
+            return
+        self.saliendo = (direccion, pygame.time.get_ticks())
+        self._esperar_dibujando(self.saliendo[1], CORRER_MS)
+        self.saliendo = None
+        self.abriendo = (direccion, pygame.time.get_ticks())
+        self._esperar_dibujando(self.abriendo[1], ABRIR_MS)
+        self.abriendo = None
+        self.destello = (direccion, pygame.time.get_ticks())
+        self.volver_de = direccion              # al mostrar la partida, corre de vuelta
+
+    def _esperar_dibujando(self, inicio, duracion_ms):
+        while not self.cerrada and pygame.time.get_ticks() - inicio < duracion_ms:
             if len(pygame.event.get(pygame.QUIT)) > 0:   # las teclas quedan en cola, no se pierden
                 self.cerrada = True
             self._dibujar_partida(self.partida)
             self._mostrar_cuadro()
-        self.saliendo = None
+
+    def _salida(self, direccion, con_llave=False):
+        """Estado de la salida en esa dirección ('abierta' / 'cerrada' / None si no hay)."""
+        for otra, estado, _vecino, llave in self.partida.salidas_visibles():
+            if otra == direccion:
+                return (estado, llave) if con_llave else estado
+        return (None, None) if con_llave else None
+
+    def _lleva_llave(self, id_llave):
+        """Misma regla que el Modelo para saber si una llave abre la puerta (solo lectura)."""
+        for objeto in self.partida.inventario.objetos():
+            if objeto.clase == "llave" and (objeto.id == id_llave or objeto.abre == id_llave):
+                return True
+        return False
 
     def pedir_nombre(self):
         texto = ""
@@ -392,6 +470,10 @@ class VistaPygame(Vista):
             self.animador.reiniciar(partida)
         else:
             self.animador.observar(partida, pygame.time.get_ticks(), self.ultima_orden, self.centros)
+        if self.volver_de is not None:              # vuelve corriendo desde la puerta que abrió
+            self.entrando_por = self.volver_de
+            self.animador.correr(partida.jugador, pygame.time.get_ticks())
+            self.volver_de = None
         self.ultima_orden = None
         self.partida = partida
         self.enemigo_elegido = ajustar_posicion(self.enemigo_elegido, len(partida.enemigos_en_sala()))
@@ -575,6 +657,9 @@ class VistaPygame(Vista):
         Al salir corre del centro a la puerta; al entrar, de la puerta al centro."""
         centro = (SALA.x + 170, SALA.centery - 20)
         ahora = pygame.time.get_ticks()
+        if self.abriendo is not None:               # junto a la puerta, usando la llave
+            puerta = _punto_de_puerta(self.abriendo[0])
+            return puerta, (-1 if puerta[0] < centro[0] else 1)
         if self.saliendo is not None:
             puerta = _punto_de_puerta(self.saliendo[0])
             avance = min(1.0, (ahora - self.saliendo[1]) / CORRER_MS)
@@ -611,6 +696,12 @@ class VistaPygame(Vista):
         else:
             rect = pygame.Rect(SALA.x - 6, SALA.centery - 50, 22, 100)
             etiqueta = (rect.right + 70, rect.centery - 8)
+        if (self.destello is not None and self.destello[0] == direccion and estado != "cerrada"
+                and pygame.time.get_ticks() - self.destello[1] < DESTELLO_MS):
+            brillo = rect.inflate(30, 30)                 # la puerta recién abierta brilla
+            velo = pygame.Surface((brillo.w, brillo.h), pygame.SRCALPHA)
+            velo.fill((250, 210, 90, 110))
+            self.pantalla.blit(velo, brillo)
         pygame.draw.rect(self.pantalla, color, rect)
         pygame.draw.rect(self.pantalla, TEXTO, rect, 1)
         texto = "%s: sala %s" % (direccion, id_vecino)
@@ -643,6 +734,8 @@ class VistaPygame(Vista):
         tipo, transcurrido = self.animador.estado(actor, ahora)
         if self.saliendo is not None and actor is self.partida.jugador:
             tipo, transcurrido = CORRER, ahora - self.saliendo[1]
+        if self.abriendo is not None and actor is self.partida.jugador:
+            tipo, transcurrido = ABRIR_PUERTA, ahora - self.abriendo[1]
         dibujo = centro
         if tipo == ATAQUE and transcurrido < duracion(ATAQUE):    # embestida hacia el rival
             dibujo = (centro[0] + hacia * 16, centro[1])
@@ -724,18 +817,26 @@ class VistaPygame(Vista):
         pygame.draw.rect(self.pantalla, FONDO, rect, 1)
 
     def _dibujar_suelo(self, objetos):
+        """Objetos del suelo: el nombre arriba y el icono debajo (o la clase en texto si no
+        hay icono). Primer clic elige, segundo clic recoge."""
         if len(objetos) == 0:
             return
         self._texto(self.fuente_chica, "En el suelo (F o clic: elegir · G o 2º clic: recoger)",
-                    TEXTO_TENUE, SALA.x + 30, SALA.bottom - 112)
+                    TEXTO_TENUE, SALA.x + 30, SALA.bottom - 136)
         for i in range(min(len(objetos), MAX_OBJETOS_DIBUJADOS)):
             objeto = objetos[i]
-            rect = pygame.Rect(SALA.x + 30 + i * 128, SALA.bottom - 90, 118, 58)
+            rect = pygame.Rect(SALA.x + 30 + i * 128, SALA.bottom - 116, 118, 96)
             pygame.draw.rect(self.pantalla, PANEL, rect)
             pygame.draw.rect(self.pantalla, SELECCION if i == self.objeto_elegido else BORDE, rect,
                              3 if i == self.objeto_elegido else 1)
-            self._texto(self.fuente_chica, objeto.nombre, TEXTO, rect.x + 6, rect.y + 8, ancho_max=106)
-            self._texto(self.fuente_chica, objeto.clase, TEXTO_TENUE, rect.x + 6, rect.y + 32, ancho_max=106)
+            self._texto(self.fuente_chica, objeto.nombre, TEXTO, rect.centerx, rect.y + 6,
+                        centro=True, ancho_max=110)
+            icono = self.sprites.icono(objeto)
+            if icono is not None:
+                self.pantalla.blit(icono, icono.get_rect(center=(rect.centerx, rect.y + 56)))
+            else:
+                self._texto(self.fuente_chica, objeto.clase, TEXTO_TENUE, rect.centerx, rect.y + 48,
+                            centro=True, ancho_max=110)
             self.zonas.append((rect, ("suelo", i)))
         if len(objetos) > MAX_OBJETOS_DIBUJADOS:
             self._texto(self.fuente_chica, "+%d más (F)" % (len(objetos) - MAX_OBJETOS_DIBUJADOS),

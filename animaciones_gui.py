@@ -12,6 +12,9 @@ que compara lo que ve ahora con lo que vio la vez anterior (solo lectura):
   - el jugador murió .................................. muerte del jugador (queda tendido)
   - un mensaje nuevo dice "<enemigo> te ataca" ......... ataque de ese enemigo
   - el jugador entró a otra sala (última orden MOVER) .. correr desde la puerta
+  - el jugador abrió una puerta (la vista lo pide) ..... correr de vuelta desde ella
+La animación de ABRIR la puerta con la llave la dibuja la vista ANTES de entregar la
+orden (como correr hasta la puerta): es solo dibujo y el Modelo decide si se abre.
 
 Los tiempos son de la VENTANA (milisegundos reales), no del reloj virtual: a 30 o 60
 FPS la partida es la misma, solo cambia la suavidad del dibujo. Tras un retroceso o una
@@ -28,6 +31,7 @@ ATAQUE = "ataque"
 DANO = "dano"
 MUERTE = "muerte"
 CORRER = "correr"
+ABRIR_PUERTA = "abrir"
 
 CUADRO_MS = 140             # duración de cada cuadro de ataque / daño / muerte
 REPOSO_MS = 450             # duración de cada cuadro de reposo (respiración)
@@ -35,6 +39,10 @@ CUADROS_MAXIMOS = 3         # ataque y muerte tienen 3 cuadros; daño, 1
 DURACION_NUMERO_MS = 900    # el número de daño flota y desaparece
 CORRER_CUADRO_MS = 80       # la carrera cambia de cuadro más rápido y se repite
 CORRER_MS = 420             # lo que tarda en cruzar desde la puerta (o hasta ella)
+ABRIR_CUADRO_MS = 160       # cada cuadro de abrir la puerta con la llave
+ABRIR_CUADROS = 4
+ABRIR_MS = ABRIR_CUADRO_MS * ABRIR_CUADROS
+DESTELLO_MS = 700           # brillo de la puerta recién abierta
 
 
 class Animacion:
@@ -94,6 +102,10 @@ class Animador:
             if self._ataco(partida, enemigo):
                 self._agregar(Animacion(enemigo, ATAQUE, ahora))
         self._tomar_foto(partida)
+
+    def correr(self, actor, ahora):
+        """La vista pide una carrera (por ejemplo, volver de la puerta que acaba de abrir)."""
+        self._agregar(Animacion(actor, CORRER, ahora))
 
     def _ataco(self, partida, enemigo):
         bitacora = partida.bitacora
@@ -175,6 +187,8 @@ class Animador:
 def duracion(tipo):
     if tipo == CORRER:
         return CORRER_MS
+    if tipo == ABRIR_PUERTA:
+        return ABRIR_MS
     if tipo == DANO:
         return CUADRO_MS * 2            # el único cuadro de daño se sostiene un poco más
     return CUADRO_MS * CUADROS_MAXIMOS
@@ -188,6 +202,8 @@ def indice_de_cuadro(tipo, transcurrido, cantidad_cuadros):
         return (transcurrido // REPOSO_MS) % cantidad_cuadros
     if tipo == CORRER:
         return (transcurrido // CORRER_CUADRO_MS) % cantidad_cuadros
+    if tipo == ABRIR_PUERTA:
+        return min(transcurrido // ABRIR_CUADRO_MS, cantidad_cuadros - 1)
     paso = duracion(tipo) // cantidad_cuadros if tipo != DANO else duracion(tipo)
     return min(transcurrido // max(1, paso), cantidad_cuadros - 1)
 
