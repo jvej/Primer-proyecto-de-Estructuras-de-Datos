@@ -776,12 +776,12 @@ class VistaPygame(Vista):
             tipo = _tipo_de_enemigo(enemigo.comportamiento)
             color = self._color_de(tipo)
             rect = self._dibujar_actor(enemigo, tipo, color, centro,
-                                       enemigo.etiqueta(), i == self.enemigo_elegido, -1)
+                                       _acortar_ids(enemigo.etiqueta()), i == self.enemigo_elegido, -1)
             self.zonas.append((rect, ("enemigo", i)))
         if len(enemigos) > MAX_ENEMIGOS_DIBUJADOS:
             self._texto(self.fuente_chica, "+%d enemigos más" % (len(enemigos) - MAX_ENEMIGOS_DIBUJADOS),
                         TEXTO, SALA.right - 160, SALA.y + 20)
-
+            
     def _dibujar_actor(self, actor, nombre_sprite, color, centro, etiqueta, elegido, hacia):
         """hacia: 1 si mira a la derecha (jugador), -1 si mira a la izquierda (enemigos)."""
         self.centros.append((actor, centro))
@@ -960,7 +960,8 @@ class VistaPygame(Vista):
         y = MENSAJES.y + 38
         for i in range(max(0, len(mensajes) - 20), len(mensajes)):     # los 20 más recientes
             color = TEXTO if i >= len(mensajes) - 3 else TEXTO_TENUE
-            self._texto(self.fuente_chica, mensajes[i], color, MENSAJES.x + 10, y, ancho_max=MENSAJES.w - 20)
+            self._texto(self.fuente_chica, _acortar_ids(mensajes[i]), color, MENSAJES.x + 10, y,
+                        ancho_max=MENSAJES.w - 20)
             y += 14
 
     def _dibujar_botonera(self):
@@ -1076,6 +1077,24 @@ def _tipo_de_enemigo(comportamiento):
             limpio += letra
     return limpio
 
+def _acortar_ids(texto):
+    """Para mostrar: 'Rata gigante [e-rata-cripta-02-4] te ataca' -> 'Rata gigante #4 te ataca'.
+    Si el id no termina en número, se quita entero. El Modelo y el log no cambian."""
+    resultado = ""
+    i = 0
+    while i < len(texto):
+        abre = texto.find(" [", i)
+        cierra = texto.find("]", abre + 2) if abre >= 0 else -1
+        if abre < 0 or cierra < 0:
+            resultado += texto[i:]
+            break
+        identificador = texto[abre + 2:cierra]
+        numero = identificador[identificador.rfind("-") + 1:]
+        resultado += texto[i:abre]
+        if numero.isdigit():
+            resultado += " #" + numero
+        i = cierra + 1
+    return resultado
 
 def _opuesta(direccion):
     """Si sale por el norte, entra a la sala nueva por el sur, etc."""
