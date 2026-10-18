@@ -16,7 +16,7 @@ from tests.cripta_de_prueba import CATALOGO, entrada, esqueleto_linea
 
 ID = "cripta-prueba"
 VERSION = "p1"
-VERSION_CATALOGO = "cat-prueba-1"
+VERSION_CATALOGO = "cat-prueba-2"
 
 
 def salas_y_contenido():
