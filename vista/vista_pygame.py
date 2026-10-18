@@ -27,7 +27,12 @@ Imágenes ("Poses personajes/"), PNG con fondo transparente, todos mirando a la 
                                        jugador): primero el de esa trampa, si no el genérico
     fondo_menu.png                     fondo de la pantalla para escribir el nombre
     fondo_sala_1.png, _2, _3 ...       fondos de la pantalla de elegir cripta: cada vez que
-                                       se abre se elige uno al azar (las salas no llevan fondo)
+                                       se abre se elige uno al azar
+    sala_1.png, sala_2.png ...         piso de la sala vista desde arriba, SIN puertas; cada
+                                       sala usa siempre el mismo (según su número)
+    puerta_1.png ... puerta_4.png      la puerta de la pared de arriba: 1 cerrada ... 4 abierta.
+                                       Se gira sola para las otras paredes y solo se dibuja en
+                                       las salidas que la sala tiene; al usar la llave se anima
     objeto_<id>.png / objeto_<clase>.png   icono de un objeto del suelo: primero el de su
                                        id exacto (objeto_itm_daga.png), si no el de su clase
                                        (objeto_arma.png); si no hay ninguno, una tarjeta de texto
@@ -95,7 +100,13 @@ BOTONERA_Y = 536
 AVISOS_Y = 624
 
 ALTO_SPRITE = 120
-SUELO_Y = SALA.y + 230      # altura del centro de los personajes en la sala
+SUELO_Y = SALA.y + 190      # altura del centro de los personajes en la sala
+GROSOR_MURO = 46            # grosor de la pared en la imagen de la sala (ya escalada)
+ANCHO_PUERTA = 130          # ancho de la imagen de la puerta (el alto sale de la imagen)
+LARGO_PUERTA = 120          # puerta sin imagen: largo en las paredes de arriba y abajo
+ALTO_PUERTA_LATERAL = 100   # puerta sin imagen: largo en las paredes izquierda y derecha
+DIRECCIONES_PUERTA = ("N", "S", "E", "O")
+GIRO_PUERTA = (0, 180, -90, 90)   # grados para que la puerta de arriba quede en cada pared
 TAMANO_ICONO = 52           # lado del icono de un objeto del suelo
 MAX_ENEMIGOS_DIBUJADOS = 8
 MAX_OBJETOS_DIBUJADOS = 6
@@ -295,6 +306,11 @@ class VistaPygame(Vista):
         self.centros = []               # [(actor, (x, y))] dónde se dibujó cada actor
         self.halo = self._crear_halo()
         self.fondo_menu, self.fondos_nivel = self._cargar_fondos(carpeta_sprites)
+        self.pisos = self._cargar_pisos(carpeta_sprites)      # sala_N.png
+        self.avisos = []                # [texto, instante_real_en_que_desaparece]
+        self.fin = None                 # partida terminada cuyo resumen se muestra
+        self.resumen_fin = []
+        self.puertas = self._cargar_puertas(carpeta_sprites)  # [cuadros] por pared (N, S, E, O)
         self.fondo_nivel = None         # el fondo elegido al azar para la pantalla de criptas
         self.azar = random.Random()     # propio de la vista: no toca el azar del Modelo
         self.saliendo = None            # (dirección, inicio_ms) mientras corre hacia una puerta
@@ -303,11 +319,8 @@ class VistaPygame(Vista):
         self.abriendo = None            # (dirección, inicio_ms) mientras usa la llave
         self.destello = None            # (dirección, inicio_ms) brillo de la puerta abierta
         self.partida = None
-        self.fin = None                 # partida terminada cuyo resumen se muestra
-        self.resumen_fin = []
         self.enemigo_elegido = 0
         self.objeto_elegido = 0
-        self.avisos = []                # [texto, instante_real_en_que_desaparece]
         self.zonas = []                 # [(rect, accion)] zonas clicables del cuadro actual
         self.resaltar_inventario_hasta = 0
         self.repitiendo = None          # (número, total, texto de la orden) durante una repetición
@@ -809,17 +822,22 @@ class VistaPygame(Vista):
                     TEXTO, 910, 38, ancho_max=350)
 
     def _dibujar_sala(self, partida):
-        pygame.draw.rect(self.pantalla, SUELO_SALA, SALA)
-        pygame.draw.rect(self.pantalla, MURO, SALA, 10)
+        if len(self.pisos) > 0:                     # cada sala, siempre el mismo piso
+            piso = self.pisos[_numero_de_sala(partida.sala_actual().id) % len(self.pisos)]
+            self.pantalla.blit(piso, SALA.topleft)
+        else:
+            pygame.draw.rect(self.pantalla, SUELO_SALA, SALA)
+            pygame.draw.rect(self.pantalla, MURO, SALA, 10)
         efectos = partida.efectos_activos()
         if len(efectos) > 0:
             self._texto(self.fuente, "Efectos: " + ", ".join(efectos), DORADO, SALA.x, SALA.y - 22)
         for direccion, estado, id_vecino, llave in partida.salidas_visibles():
             self._dibujar_puerta(direccion, estado, id_vecino, llave)
-        y = SALA.y + 20
+        y = SALA.y + GROSOR_MURO + 8
         for trampa in partida.trampas_en_sala():
             self._texto(self.fuente_chica, "Trampa: %s (%s)" % (
-                trampa.nombre, "armada" if trampa.armada else "desarmada"), CERRADA, SALA.x + 22, y)
+                trampa.nombre, "armada" if trampa.armada else "desarmada"), CERRADA,
+                SALA.x + GROSOR_MURO + 10, y)
             y += 18
         jugador = partida.jugador
         centro_jugador, hacia = self._posicion_jugador(jugador)
@@ -877,18 +895,21 @@ class VistaPygame(Vista):
         return "jugador"
 
     def _dibujar_puerta(self, direccion, estado, id_vecino, llave):
+        """Con imágenes: la puerta cerrada (cuadro 1), abierta (cuadro 4) o abriéndose con la
+        llave (1 a 4). Sin imágenes: un rectángulo verde (abierta) o rojo (cerrada)."""
         color = ABIERTA if estado != "cerrada" else CERRADA
+        imagen = self._cuadro_de_puerta(direccion, estado)
+        if imagen is not None:
+            rect = _rect_de_imagen_puerta(direccion, imagen)
+        else:
+            rect = _rect_de_puerta(direccion)
         if direccion == "N":
-            rect = pygame.Rect(SALA.centerx - 50, SALA.y - 6, 100, 22)
             etiqueta = (rect.centerx, rect.bottom + 6)
         elif direccion == "S":
-            rect = pygame.Rect(SALA.centerx - 50, SALA.bottom - 16, 100, 22)
             etiqueta = (rect.centerx, rect.y - 20)
         elif direccion == "E":
-            rect = pygame.Rect(SALA.right - 16, SALA.centery - 50, 22, 100)
             etiqueta = (rect.x - 70, rect.centery - 8)
         else:
-            rect = pygame.Rect(SALA.x - 6, SALA.centery - 50, 22, 100)
             etiqueta = (rect.right + 70, rect.centery - 8)
         if (self.destello is not None and self.destello[0] == direccion and estado != "cerrada"
                 and pygame.time.get_ticks() - self.destello[1] < DESTELLO_MS):
@@ -896,8 +917,11 @@ class VistaPygame(Vista):
             velo = pygame.Surface((brillo.w, brillo.h), pygame.SRCALPHA)
             velo.fill((250, 210, 90, 110))
             self.pantalla.blit(velo, brillo)
-        pygame.draw.rect(self.pantalla, color, rect)
-        pygame.draw.rect(self.pantalla, TEXTO, rect, 1)
+        if imagen is not None:
+            self.pantalla.blit(imagen, rect)
+        else:
+            pygame.draw.rect(self.pantalla, color, rect)
+            pygame.draw.rect(self.pantalla, TEXTO, rect, 1)
         texto = "%s: sala %s" % (direccion, id_vecino)
         if estado == "cerrada":
             texto += " (cerrada)"
@@ -912,7 +936,7 @@ class VistaPygame(Vista):
             enemigo = enemigos[i]
             columna = i % 4
             fila = i // 4                       # la segunda fila queda detrás, más arriba
-            centro = (SALA.x + 400 + columna * 122 + fila * 61, SUELO_Y - fila * 70)
+            centro = (SALA.x + 330 + columna * 112 + fila * 56, SUELO_Y - fila * 70)
             tipo = _tipo_de_enemigo(enemigo.comportamiento)
             color = self._color_de(tipo)
             rect = self._dibujar_actor(enemigo, tipo, color, centro,
@@ -991,6 +1015,52 @@ class VistaPygame(Vista):
         velo.fill((220, 40, 40, 90))
         self.pantalla.blit(velo, rect)
 
+    def _cargar_pisos(self, carpeta):
+        """sala_1.png, sala_2.png ...: el piso de la sala, escalado una vez al área de juego."""
+        pisos = []
+        for numero in range(1, 21):
+            piso = _cargar_cubriendo(os.path.join(carpeta, "sala_%d.png" % numero), SALA.w, SALA.h)
+            if piso is None:
+                break
+            pisos.append(piso)
+        return pisos
+
+    def _cargar_puertas(self, carpeta):
+        """puerta_1.png ... puerta_4.png (la de la pared de arriba). Se escalan una vez y se
+        giran para cada pared: [cuadros N, cuadros S, cuadros E, cuadros O]. Si falta alguna,
+        no se usan imágenes de puerta."""
+        originales = []
+        for numero in range(1, 5):
+            ruta = os.path.join(carpeta, "puerta_%d.png" % numero)
+            if not os.path.exists(ruta):
+                return []
+            try:
+                imagen = pygame.image.load(ruta).convert_alpha()
+            except pygame.error as error:
+                self.mostrar_aviso("No se pudo cargar %s (%s)." % (ruta, error))
+                return []
+            alto = max(1, imagen.get_height() * ANCHO_PUERTA // max(1, imagen.get_width()))
+            originales.append(pygame.transform.smoothscale(imagen, (ANCHO_PUERTA, alto)))
+        puertas = []
+        for giro in GIRO_PUERTA:
+            cuadros = []
+            for imagen in originales:
+                cuadros.append(pygame.transform.rotate(imagen, giro) if giro != 0 else imagen)
+            puertas.append(cuadros)
+        return puertas
+
+    def _cuadro_de_puerta(self, direccion, estado):
+        """Qué cuadro toca: abriéndose con la llave, cerrada (el primero) o abierta (el último)."""
+        if len(self.puertas) == 0:
+            return None
+        cuadros = self.puertas[DIRECCIONES_PUERTA.index(direccion)]
+        if self.abriendo is not None and self.abriendo[0] == direccion:
+            transcurrido = pygame.time.get_ticks() - self.abriendo[1]
+            return cuadros[min(len(cuadros) - 1, transcurrido * len(cuadros) // max(1, ABRIR_MS))]
+        if estado == "cerrada":
+            return cuadros[0]
+        return cuadros[len(cuadros) - 1]
+
     def _cargar_fondos(self, carpeta):
         """fondo_menu.png (nombre) y fondo_sala_N.png (elegir cripta), a pantalla completa.
         Se escalan una sola vez, recortando lo que sobre para no deformarlos."""
@@ -1040,25 +1110,25 @@ class VistaPygame(Vista):
         if len(objetos) == 0:
             return
         self._texto(self.fuente_chica, "En el suelo (F o clic: elegir · G o 2º clic: recoger)",
-                    TEXTO_TENUE, SALA.x + 30, SALA.bottom - 110)
+                    TEXTO, SALA.x + GROSOR_MURO + 8, SALA.bottom - 140)
         for i in range(min(len(objetos), MAX_OBJETOS_DIBUJADOS)):
             objeto = objetos[i]
-            rect = pygame.Rect(SALA.x + 30 + i * 128, SALA.bottom - 92, 118, 80)
+            rect = pygame.Rect(SALA.x + GROSOR_MURO + 8 + i * 118, SALA.bottom - 122, 110, 76)
             pygame.draw.rect(self.pantalla, PANEL, rect)
             pygame.draw.rect(self.pantalla, SELECCION if i == self.objeto_elegido else BORDE, rect,
                              3 if i == self.objeto_elegido else 1)
             self._texto(self.fuente_chica, objeto.nombre, TEXTO, rect.centerx, rect.y + 6,
-                        centro=True, ancho_max=110)
+                        centro=True, ancho_max=102)
             icono = self.sprites.icono(objeto)
             if icono is not None:
                 self.pantalla.blit(icono, icono.get_rect(center=(rect.centerx, rect.y + 48)))
             else:
                 self._texto(self.fuente_chica, objeto.clase, TEXTO_TENUE, rect.centerx, rect.y + 40,
-                            centro=True, ancho_max=110)
+                            centro=True, ancho_max=102)
             self.zonas.append((rect, ("suelo", i)))
         if len(objetos) > MAX_OBJETOS_DIBUJADOS:
             self._texto(self.fuente_chica, "+%d más (F)" % (len(objetos) - MAX_OBJETOS_DIBUJADOS),
-                        TEXTO, SALA.right - 110, SALA.bottom - 60)
+                        TEXTO, SALA.right - GROSOR_MURO - 80, SALA.bottom - 90)
 
     def _dibujar_inventario(self, partida):
         inventario = partida.inventario
@@ -1289,6 +1359,44 @@ def _texto_de_orden(orden):
     return nombre
 
 
+def _rect_de_puerta(direccion):
+    """Puerta sin imagen: centrada en su pared y del grosor del muro."""
+    if direccion == "N":
+        return pygame.Rect(SALA.centerx - LARGO_PUERTA // 2, SALA.y, LARGO_PUERTA, GROSOR_MURO)
+    if direccion == "S":
+        return pygame.Rect(SALA.centerx - LARGO_PUERTA // 2, SALA.bottom - GROSOR_MURO,
+                           LARGO_PUERTA, GROSOR_MURO)
+    if direccion == "E":
+        return pygame.Rect(SALA.right - GROSOR_MURO, SALA.centery - ALTO_PUERTA_LATERAL // 2,
+                           GROSOR_MURO, ALTO_PUERTA_LATERAL)
+    return pygame.Rect(SALA.x, SALA.centery - ALTO_PUERTA_LATERAL // 2,
+                       GROSOR_MURO, ALTO_PUERTA_LATERAL)
+
+
+def _rect_de_imagen_puerta(direccion, imagen):
+    """Dónde va la imagen de la puerta: pegada al borde de su pared y centrada en ella."""
+    rect = imagen.get_rect()
+    if direccion == "N":
+        rect.x, rect.y = SALA.centerx - rect.w // 2, SALA.y
+    elif direccion == "S":
+        rect.x, rect.y = SALA.centerx - rect.w // 2, SALA.bottom - rect.h
+    elif direccion == "E":
+        rect.x, rect.y = SALA.right - rect.w, SALA.centery - rect.h // 2
+    else:
+        rect.x, rect.y = SALA.x, SALA.centery - rect.h // 2
+    return rect
+
+
+def _numero_de_sala(id_sala):
+    """Número para elegir el piso de una sala (los ids pueden ser números o textos)."""
+    if isinstance(id_sala, int):
+        return max(0, id_sala - 1)
+    total = 0
+    for letra in str(id_sala):
+        total += ord(letra)
+    return total
+
+
 def _opuesta(direccion):
     """Si sale por el norte, entra a la sala nueva por el sur, etc."""
     if direccion == "N":
@@ -1303,12 +1411,12 @@ def _opuesta(direccion):
 def _punto_de_puerta(direccion):
     """Dónde se para el jugador junto a cada puerta de la sala dibujada."""
     if direccion == "N":
-        return (SALA.centerx, SALA.y + 70)
+        return (SALA.centerx, SALA.y + 110)
     if direccion == "S":
-        return (SALA.centerx, SALA.bottom - 110)
+        return (SALA.centerx, SALA.bottom - 120)
     if direccion == "E":
-        return (SALA.right - 70, SUELO_Y)
-    return (SALA.x + 70, SUELO_Y)
+        return (SALA.right - 110, SUELO_Y)
+    return (SALA.x + 110, SUELO_Y)
 
 
 def _entre(desde, hasta, avance):
