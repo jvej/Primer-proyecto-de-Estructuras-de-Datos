@@ -34,7 +34,8 @@ Imágenes ("Poses personajes/"), PNG con fondo transparente, todos mirando a la 
 Personajes: jugador (manos vacías), jugador_espada (arma equipada), jugador_antorcha
 (antorcha encendida), jugador_armado (arma y antorcha), guardian, errante, rastreador
 y enemigo (respaldo para cualquier comportamiento desconocido).
-Se eligen por comportamiento, no por id de cripta ni de catálogo. Si falta un cuadro
+Se eligen por comportamiento, no por id de cripta ni de catálogo (sin importar tildes ni
+mayúsculas: "Guardián" de la API usa guardian.png). Si falta un cuadro
 se usa la imagen estática; si falta todo, una figura simple. Nunca se cae el juego.
 
 Animaciones (animaciones_gui.py): solo DIBUJAN resultados que el Modelo ya calculó
@@ -44,14 +45,15 @@ el reloj virtual, así que no cambian la partida ni el replay.
 
 import os
 import random
+import unicodedata
 
 import pygame
 
 from vista.animaciones_gui import (ABRIR_MS, ABRIR_PUERTA, ATAQUE, CORRER, CORRER_MS, DANO,
-                             DESTELLO_MS, MUERTE, REPOSO, TRAMPA, Animador, duracion,
-                             indice_de_cuadro)
+                                   DESTELLO_MS, MUERTE, REPOSO, TRAMPA, Animador, duracion,
+                                   indice_de_cuadro)
 from vista.controles_gui import (AYUDA_LINEAS, BOTONES, SIG_ENEMIGO, SIG_SUELO, ajustar_posicion,
-                           orden_para_tecla, siguiente_posicion)
+                                 orden_para_tecla, siguiente_posicion)
 from controlador.orden import ABRIR, ATACAR, CARGAR, MOVER, Orden, RECOGER, SALIR
 from vista.vista_base import Vista
 
@@ -771,8 +773,9 @@ class VistaPygame(Vista):
             columna = i % 4
             fila = i // 4                       # la segunda fila queda detrás, más arriba
             centro = (SALA.x + 400 + columna * 122 + fila * 61, SUELO_Y - fila * 70)
-            color = self._color_de(enemigo.comportamiento)
-            rect = self._dibujar_actor(enemigo, enemigo.comportamiento, color, centro,
+            tipo = _tipo_de_enemigo(enemigo.comportamiento)
+            color = self._color_de(tipo)
+            rect = self._dibujar_actor(enemigo, tipo, color, centro,
                                        enemigo.etiqueta(), i == self.enemigo_elegido, -1)
             self.zonas.append((rect, ("enemigo", i)))
         if len(enemigos) > MAX_ENEMIGOS_DIBUJADOS:
@@ -826,8 +829,8 @@ class VistaPygame(Vista):
         """Enemigos que acaban de morir: su animación de muerte en el último lugar donde estaban."""
         ahora = pygame.time.get_ticks()
         for actor, centro, transcurrido in self.animador.fantasmas(ahora):
-            self._dibujar_cuerpo(actor.comportamiento, self._color_de(actor.comportamiento),
-                                 centro, MUERTE, transcurrido)
+            tipo = _tipo_de_enemigo(actor.comportamiento)
+            self._dibujar_cuerpo(tipo, self._color_de(tipo), centro, MUERTE, transcurrido)
 
     def _dibujar_numeros(self):
         """Daño recibido flotando hacia arriba sobre quien lo recibió."""
@@ -1061,6 +1064,17 @@ class VistaPygame(Vista):
         if comportamiento == "rastreador":
             return COLOR_RASTREADOR
         return COLOR_ENEMIGO
+
+
+def _tipo_de_enemigo(comportamiento):
+    """Nombre de sprite del comportamiento: sin tildes, en minúsculas y sin espacios
+    ("Guardián" -> "guardian"). Solo para dibujar; el Modelo no cambia."""
+    texto = unicodedata.normalize("NFD", str(comportamiento or "")).strip().lower()
+    limpio = ""
+    for letra in texto:
+        if unicodedata.category(letra) != "Mn":      # Mn = tilde u otra marca sobre la letra
+            limpio += letra
+    return limpio
 
 
 def _opuesta(direccion):

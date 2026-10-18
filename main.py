@@ -118,9 +118,14 @@ def crear_vista(argumentos):
     """Solo el modo interactivo crea una vista. Pygame se importa únicamente con --gui."""
     if argumentos.gui:
         try:
-            from vista.vista_pygame import VistaPygame
+            import pygame  # noqa: F401
         except ImportError:
             print("Falta Pygame. Instálalo con:  python -m pip install pygame")
+            return None
+        try:
+            from vista.vista_pygame import VistaPygame
+        except ImportError as error:
+            print("No se pudo abrir la vista gráfica: %s" % error)
             return None
         return VistaPygame()
     from vista.vista_consola import VistaConsola
