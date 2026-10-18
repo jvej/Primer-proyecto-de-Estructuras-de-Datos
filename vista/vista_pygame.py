@@ -62,9 +62,11 @@ pausa (Espacio), se avanza una orden (→), se cambia la velocidad (1/2/4) o se 
 
 Animaciones (animaciones_gui.py): solo DIBUJAN resultados que el Modelo ya calculó
 (quién atacó, quién perdió vida, quién murió). Usan tiempo real de la ventana, nunca
-el reloj virtual, así que no cambian la partida ni el replay.
+el reloj virtual, así que no cambian la partida ni el replay. El jugador corre siempre a
+la misma velocidad: a una puerta lejana tarda más que a una cercana.
 """
 
+import math
 import os
 import random
 import unicodedata
@@ -343,8 +345,9 @@ class Sonidos:
                 return sonido
         return None
 
-    def tocar(self, nombre, respaldo=None):
-        """Toca el efecto; si no existe, el de respaldo (por ejemplo dano_enemigo)."""
+    def tocar(self, nombre, respaldo=None, durante=0):
+        """Toca el efecto; si no existe, el de respaldo (por ejemplo dano_enemigo).
+        durante > 0: lo repite hasta cumplir esos ms y lo corta (los pasos de una carrera)."""
         if not self.activo:
             return
         sonido = self._buscar(nombre)
@@ -352,7 +355,10 @@ class Sonidos:
             sonido = self._buscar(respaldo)
         if sonido is not None:
             try:
-                sonido.play()
+                if durante > 0:
+                    sonido.play(-1, durante)
+                else:
+                    sonido.play()
             except pygame.error:
                 pass
 
@@ -408,7 +414,8 @@ class VistaPygame(Vista):
         self.puertas = self._cargar_puertas(carpeta_sprites)  # [cuadros] por pared (N, S, E, O)
         self.fondo_nivel = None         # el fondo elegido al azar para la pantalla de criptas
         self.azar = random.Random()     # propio de la vista: no toca el azar del Modelo
-        self.saliendo = None            # (dirección, inicio_ms) mientras corre hacia una puerta
+        self.saliendo = None            # (dirección, inicio_ms, duración_ms) mientras corre a una puerta
+        self.entrando_ms = CORRER_MS    # lo que tarda la carrera de entrada (según la puerta)
         self.volver_de = None           # puerta recién abierta: el jugador vuelve corriendo
         self.entrando_por = None        # dirección de la puerta por la que acaba de entrar
         self.abriendo = None            # (dirección, inicio_ms) mientras usa la llave
@@ -533,9 +540,10 @@ class VistaPygame(Vista):
         real). Si la salida no existe o está cerrada no corre: el Modelo la rechazará."""
         if self.partida is None or self._salida(direccion) not in ("abierta",):
             return
-        self.saliendo = (direccion, pygame.time.get_ticks())
-        self.sonidos.tocar("pasos")
-        self._esperar_dibujando(self.saliendo[1], CORRER_MS)
+        correr_ms = _duracion_carrera(direccion)
+        self.saliendo = (direccion, pygame.time.get_ticks(), correr_ms)
+        self.sonidos.tocar("pasos", durante=correr_ms)
+        self._esperar_dibujando(self.saliendo[1], correr_ms)
         self.saliendo = None
 
     def _abrir_puerta(self, direccion):
@@ -547,9 +555,10 @@ class VistaPygame(Vista):
         estado, llave = self._salida(direccion, con_llave=True)
         if estado != "cerrada" or llave is None or not self._lleva_llave(llave):
             return
-        self.saliendo = (direccion, pygame.time.get_ticks())
-        self.sonidos.tocar("pasos")
-        self._esperar_dibujando(self.saliendo[1], CORRER_MS)
+        correr_ms = _duracion_carrera(direccion)
+        self.saliendo = (direccion, pygame.time.get_ticks(), correr_ms)
+        self.sonidos.tocar("pasos", durante=correr_ms)
+        self._esperar_dibujando(self.saliendo[1], correr_ms)
         self.saliendo = None
         self.abriendo = (direccion, pygame.time.get_ticks())
         self.sonidos.tocar("puerta_abrir")          # solo aquí: tiene la llave y la usa
@@ -639,11 +648,15 @@ class VistaPygame(Vista):
             self.animador.reiniciar(partida)
             self.mensajes_oidos = partida.bitacora.total_historico
         else:
-            self.animador.observar(partida, pygame.time.get_ticks(), self.ultima_orden, self.centros)
+            if self.entrando_por is not None:       # misma velocidad por cualquier puerta
+                self.entrando_ms = _duracion_carrera(self.entrando_por)
+            self.animador.observar(partida, pygame.time.get_ticks(), self.ultima_orden, self.centros,
+                                   self.entrando_ms)
             self._sonar_mensajes(partida)
         if self.volver_de is not None:              # vuelve corriendo desde la puerta que abrió
             self.entrando_por = self.volver_de
-            self.animador.correr(partida.jugador, pygame.time.get_ticks())
+            self.entrando_ms = _duracion_carrera(self.volver_de)
+            self.animador.correr(partida.jugador, pygame.time.get_ticks(), self.entrando_ms)
             self.volver_de = None
         self.ultima_orden = None
         self.partida = partida
@@ -882,7 +895,7 @@ class VistaPygame(Vista):
         elif animacion.tipo == TRAMPA:
             self.sonidos.tocar("trampa")
         elif animacion.tipo == CORRER and actor is jugador:
-            self.sonidos.tocar("pasos")
+            self.sonidos.tocar("pasos", durante=animacion.dato or CORRER_MS)
 
     def _sonar_mensajes(self, partida):
         """Recoger, equipar, beber, antorcha y pergamino no tienen animación: suenan según el
@@ -1022,19 +1035,19 @@ class VistaPygame(Vista):
     def _posicion_jugador(self, jugador):
         """Dónde se dibuja el jugador y hacia dónde mira (1 derecha, -1 izquierda).
         Al salir corre del centro a la puerta; al entrar, de la puerta al centro."""
-        centro = (SALA.x + 170, SUELO_Y)
+        centro = CENTRO_JUGADOR
         ahora = pygame.time.get_ticks()
         if self.abriendo is not None:               # junto a la puerta, usando la llave
             puerta = _punto_de_puerta(self.abriendo[0])
             return puerta, (-1 if puerta[0] < centro[0] else 1)
         if self.saliendo is not None:
             puerta = _punto_de_puerta(self.saliendo[0])
-            avance = min(1.0, (ahora - self.saliendo[1]) / CORRER_MS)
+            avance = min(1.0, (ahora - self.saliendo[1]) / self.saliendo[2])
             return _entre(centro, puerta, avance), (-1 if puerta[0] < centro[0] else 1)
         tipo, transcurrido = self.animador.estado(jugador, ahora)
         if tipo == CORRER and self.entrando_por is not None:
             puerta = _punto_de_puerta(self.entrando_por)
-            avance = min(1.0, transcurrido / CORRER_MS)
+            avance = min(1.0, transcurrido / max(1, self.entrando_ms))
             return _entre(puerta, centro, avance), (-1 if centro[0] < puerta[0] else 1)
         return centro, 1
 
@@ -1574,6 +1587,17 @@ def _punto_de_puerta(direccion):
     return (SALA.x + 110, SUELO_Y)
 
 
+def _duracion_carrera(direccion):
+    """Ms que tarda en correr entre el centro y esa puerta a velocidad constante: la de ir
+    a la puerta de arriba en CORRER_MS. Así cruzar hasta la puerta del este (más lejos)
+    tarda más y la del oeste (más cerca) menos, pero siempre se ve igual de rápido."""
+    return max(120, int(_distancia(CENTRO_JUGADOR, _punto_de_puerta(direccion)) / VELOCIDAD_CORRER))
+
+
+def _distancia(a, b):
+    return math.hypot(a[0] - b[0], a[1] - b[1])
+
+
 def _entre(desde, hasta, avance):
     return (int(desde[0] + (hasta[0] - desde[0]) * avance),
             int(desde[1] + (hasta[1] - desde[1]) * avance))
@@ -1604,3 +1628,7 @@ def _orden_de_dibujo(cantidad):
     for i in range(min(4, cantidad)):
         orden.append(i)
     return orden
+
+
+CENTRO_JUGADOR = (SALA.x + 170, SUELO_Y)     # donde se para el jugador en la sala
+VELOCIDAD_CORRER = _distancia(CENTRO_JUGADOR, _punto_de_puerta("N")) / CORRER_MS   # px por ms

@@ -43,7 +43,7 @@ REPOSO_MS = 450             # duración de cada cuadro de reposo (respiración)
 CUADROS_MAXIMOS = 3         # ataque y muerte tienen 3 cuadros; daño, 1
 DURACION_NUMERO_MS = 900    # el número de daño flota y desaparece
 CORRER_CUADRO_MS = 80       # la carrera cambia de cuadro más rápido y se repite
-CORRER_MS = 600             # lo que tarda en cruzar (dura igual que pasos.ogg: 2 pasos)
+CORRER_MS = 600             # carrera por defecto; la vista pasa la de cada puerta (misma velocidad)
 ABRIR_CUADRO_MS = 160       # cada cuadro de abrir la puerta con la llave
 ABRIR_CUADROS = 4
 ABRIR_MS = ABRIR_CUADRO_MS * ABRIR_CUADROS
@@ -62,7 +62,7 @@ class Animacion:
         self.inicio = inicio        # ms de la ventana en que empieza (puede ser futuro)
         self.centro = centro        # dónde dibujarla si el actor ya no está en la sala
         self.cantidad = cantidad    # daño recibido (para el número flotante)
-        self.dato = dato            # trampa: id de la ficha de la trampa que saltó
+        self.dato = dato            # trampa: id de la trampa que saltó; correr: su duración en ms
 
 
 class Animador:
@@ -84,16 +84,17 @@ class Animador:
             self._tomar_foto(partida)
 
     # ------------------------------------------------------------ detección
-    def observar(self, partida, ahora, ultima_orden, centros):
-        """centros: [(actor, (x, y))] donde se dibujó cada actor en el último cuadro."""
+    def observar(self, partida, ahora, ultima_orden, centros, correr_ms=CORRER_MS):
+        """centros: [(actor, (x, y))] donde se dibujó cada actor en el último cuadro.
+        correr_ms: lo que tarda en entrar a la sala nueva (depende de la puerta)."""
         if self._vida_jugador is None or ultima_orden in (PERGAMINO, CARGAR):
             self._tomar_foto(partida)
             return
         jugador = partida.jugador
         retraso = 0
         if ultima_orden == MOVER and partida.sala_actual() is not self._sala:
-            self._agregar(Animacion(jugador, CORRER, ahora))
-            retraso = CORRER_MS             # la trampa salta cuando termina de entrar
+            self._agregar(Animacion(jugador, CORRER, ahora, dato=correr_ms))
+            retraso = correr_ms             # la trampa salta cuando termina de entrar
         trampas = self._trampas_disparadas(partida)
         for id_trampa in trampas:
             self._agregar(Animacion(jugador, TRAMPA, ahora + retraso, dato=id_trampa))
@@ -120,9 +121,9 @@ class Animador:
                 self._agregar(Animacion(enemigo, ATAQUE, ahora))
         self._tomar_foto(partida)
 
-    def correr(self, actor, ahora):
+    def correr(self, actor, ahora, correr_ms=CORRER_MS):
         """La vista pide una carrera (por ejemplo, volver de la puerta que acaba de abrir)."""
-        self._agregar(Animacion(actor, CORRER, ahora))
+        self._agregar(Animacion(actor, CORRER, ahora, dato=correr_ms))
 
     def _mensajes_nuevos(self, partida):
         bitacora = partida.bitacora
@@ -187,7 +188,7 @@ class Animador:
         if elegida is None:
             return REPOSO, ahora
         transcurrido = ahora - elegida.inicio
-        if elegida.tipo != MUERTE and transcurrido >= duracion(elegida.tipo):
+        if elegida.tipo != MUERTE and transcurrido >= _duracion_de(elegida):
             return REPOSO, ahora
         return elegida.tipo, transcurrido
 
@@ -223,7 +224,7 @@ class Animador:
         vigentes = []
         for animacion in self.activas:
             transcurrido = ahora - animacion.inicio
-            fin = max(duracion(animacion.tipo) + CUADRO_MS, DURACION_NUMERO_MS)
+            fin = max(_duracion_de(animacion) + CUADRO_MS, DURACION_NUMERO_MS)
             if transcurrido < fin or (animacion.tipo == MUERTE and animacion.centro is None):
                 vigentes.append(animacion)
         self.activas = vigentes
@@ -239,6 +240,13 @@ def duracion(tipo):
     if tipo == DANO:
         return CUADRO_MS * 2            # el único cuadro de daño se sostiene un poco más
     return CUADRO_MS * CUADROS_MAXIMOS
+
+
+def _duracion_de(animacion):
+    """Duración de esa animación: la carrera trae la suya (según la puerta)."""
+    if animacion.tipo == CORRER and animacion.dato:
+        return animacion.dato
+    return duracion(animacion.tipo)
 
 
 def indice_de_cuadro(tipo, transcurrido, cantidad_cuadros):
