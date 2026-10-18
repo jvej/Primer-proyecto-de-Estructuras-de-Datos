@@ -38,6 +38,11 @@ Se eligen por comportamiento, no por id de cripta ni de catálogo (sin importar 
 mayúsculas: "Guardián" de la API usa guardian.png). Si falta un cuadro
 se usa la imagen estática; si falta todo, una figura simple. Nunca se cae el juego.
 
+Repeticiones (§4.11): botón "Ver repeticiones" (R) en el menú de criptas y pregunta al
+ganar o perder. La lista muestra las últimas 20 partidas con fecha y hora. Durante la
+repetición la ventana solo MUESTRA: el Controlador ejecuta cada orden del log y aquí se
+pausa (Espacio), se avanza una orden (→), se cambia la velocidad (1/2/4) o se sale (Esc).
+
 Animaciones (animaciones_gui.py): solo DIBUJAN resultados que el Modelo ya calculó
 (quién atacó, quién perdió vida, quién murió). Usan tiempo real de la ventana, nunca
 el reloj virtual, así que no cambian la partida ni el replay.
@@ -54,7 +59,8 @@ from vista.animaciones_gui import (ABRIR_MS, ABRIR_PUERTA, ATAQUE, CORRER, CORRE
                                    indice_de_cuadro)
 from vista.controles_gui import (AYUDA_LINEAS, BOTONES, SIG_ENEMIGO, SIG_SUELO, ajustar_posicion,
                                  orden_para_tecla, siguiente_posicion)
-from controlador.orden import ABRIR, ATACAR, CARGAR, MOVER, Orden, RECOGER, SALIR
+from controlador.orden import (ABRIR, ATACAR, CARGAR, EQUIPAR, ESPERAR, MOVER, Orden, PERGAMINO,
+                               RECOGER, SALIR, SOLTAR, USAR, VER_REPETICIONES, es_clave)
 from vista.vista_base import Vista
 
 ANCHO, ALTO = 1280, 720
@@ -95,6 +101,8 @@ MAX_ENEMIGOS_DIBUJADOS = 8
 MAX_OBJETOS_DIBUJADOS = 6
 DURACION_AVISO_MS = 7000
 MAX_AVISOS = 6
+PASO_REPETICION_MS = 900    # tiempo entre órdenes de la repetición a velocidad x1
+VELOCIDADES = (1, 2, 4)
 
 
 def _fuente(tamano, negrita=False):
@@ -302,6 +310,9 @@ class VistaPygame(Vista):
         self.avisos = []                # [texto, instante_real_en_que_desaparece]
         self.zonas = []                 # [(rect, accion)] zonas clicables del cuadro actual
         self.resaltar_inventario_hasta = 0
+        self.repitiendo = None          # (número, total, texto de la orden) durante una repetición
+        self.velocidad = 1
+        self.en_pausa = False
         self.cerrada = False
         for texto in self.sprites.avisos:
             self.mostrar_aviso(texto)
@@ -327,10 +338,14 @@ class VistaPygame(Vista):
                         elegida = siguiente_posicion(elegida, len(criptas))
                     elif tecla in ("return", "enter", "space") and len(criptas) > 0:
                         return self._cripta_elegida(criptas[elegida])
+                    elif tecla == "r":
+                        return VER_REPETICIONES
                 elif evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
                     accion = self._zona_en(evento.pos)
                     if accion is not None and accion[0] == "cripta":
                         return self._cripta_elegida(criptas[accion[1]])
+                    if accion is not None and accion[0] == "repeticiones":
+                        return VER_REPETICIONES
             self._dibujar_menu(criptas, elegida)
             self._mostrar_cuadro()
         return None
@@ -578,6 +593,123 @@ class VistaPygame(Vista):
             self._modal("Aviso", lineas)
         pygame.quit()
 
+    # ============================================================ repeticiones
+    def soporta_repeticion(self):
+        return True
+
+    def elegir_repeticion(self, entradas):
+        """Lista de las últimas partidas (fecha y hora, jugador, cripta, órdenes)."""
+        elegida = 0
+        while not self.cerrada:
+            for evento in self._eventos():
+                if evento.type == pygame.KEYDOWN:
+                    tecla = pygame.key.name(evento.key)
+                    if tecla in ("escape", "backspace"):
+                        return None
+                    if tecla == "up" and len(entradas) > 0:
+                        elegida = (elegida - 1) % len(entradas)
+                    elif tecla == "down":
+                        elegida = siguiente_posicion(elegida, len(entradas))
+                    elif tecla in ("return", "enter", "space") and len(entradas) > 0:
+                        return entradas[elegida].ruta
+                elif evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
+                    accion = self._zona_en(evento.pos)
+                    if accion is not None and accion[0] == "repeticion":
+                        if accion[1] == elegida:             # primer clic elige, segundo abre
+                            return entradas[elegida].ruta
+                        elegida = accion[1]
+                    elif accion is not None and accion[0] == "volver":
+                        return None
+            self._dibujar_lista_repeticiones(entradas, elegida)
+            self._mostrar_cuadro()
+        return None
+
+    def paso_de_repeticion(self, partida, orden, numero, total):
+        """Espera el tiempo de un paso (o la tecla del usuario) y anima la orden que sigue.
+        No ejecuta nada: eso lo hace el Controlador al volver de aquí."""
+        self.partida = partida
+        self.fin = None
+        self.repitiendo = (numero, total, _texto_de_orden(orden))
+        if orden.tipo == ATACAR and isinstance(orden.argumento, int):
+            self.enemigo_elegido = orden.argumento        # se ve a quién ataca
+        if orden.tipo == RECOGER and isinstance(orden.argumento, int):
+            self.objeto_elegido = orden.argumento
+        inicio = pygame.time.get_ticks()
+        while not self.cerrada:
+            avanzar = False
+            for evento in self._eventos():
+                if evento.type != pygame.KEYDOWN:
+                    continue
+                tecla = pygame.key.name(evento.key)
+                if tecla == "escape":
+                    self.repitiendo = None
+                    return False
+                if tecla == "space":
+                    self.en_pausa = not self.en_pausa
+                    inicio = pygame.time.get_ticks()
+                elif tecla == "right":
+                    avanzar = True
+                elif tecla in ("1", "2", "4"):
+                    self.velocidad = int(tecla)
+            if avanzar:
+                break
+            if not self.en_pausa and pygame.time.get_ticks() - inicio >= PASO_REPETICION_MS // self.velocidad:
+                break
+            self._dibujar_partida(partida)
+            self._mostrar_cuadro()
+        if self.cerrada:
+            self.repitiendo = None
+            return False
+        self.ultima_orden = orden.tipo              # para que se anime igual que al jugar
+        if orden.tipo == MOVER:
+            self._correr_hacia(orden.argumento)
+            self.entrando_por = _opuesta(orden.argumento)
+        elif orden.tipo == ABRIR:
+            self._abrir_puerta(orden.argumento)
+        return True
+
+    def fin_de_repeticion(self, partida, lineas):
+        self.repitiendo = None
+        self.en_pausa = False
+        self.partida = partida
+        self.fin = None
+        self._modal("Fin de la repetición" if partida is not None else "No se puede repetir",
+                    list(lineas))
+        self.partida = None                         # se vuelve a los menús
+        self.animador.reiniciar()
+
+    def _dibujar_lista_repeticiones(self, entradas, elegida):
+        self.zonas = []
+        self._pintar_fondo(self.fondo_nivel)
+        self._texto(self.fuente_grande, "REPETICIONES", DORADO, ANCHO // 2, 40, centro=True)
+        self._texto(self.fuente, "Últimas %d partidas. Flechas y Enter (o clic dos veces) para verla. "
+                    "Esc: volver" % len(entradas), TEXTO_TENUE, ANCHO // 2, 90, centro=True)
+        x = ANCHO // 2 - 400
+        y = 124
+        self._texto(self.fuente_chica, "%-3s %-18s %-16s %-14s %s" % (
+            "#", "Fecha y hora", "Jugador", "Cripta", "Órdenes"), TEXTO_TENUE, x + 14, y)
+        y += 20
+        for i in range(len(entradas)):
+            entrada = entradas[i]
+            rect = pygame.Rect(x, y, 800, 23)
+            pygame.draw.rect(self.pantalla, PANEL, rect)
+            pygame.draw.rect(self.pantalla, SELECCION if i == elegida else BORDE, rect,
+                             2 if i == elegida else 1)
+            self._texto(self.fuente, "%-3d %-18s %-16s %-14s %d" % (
+                i + 1, _fecha_legible(entrada.fecha), (entrada.jugador or "-")[:16],
+                entrada.id_cripta[:14], entrada.ordenes),
+                SELECCION if i == elegida else TEXTO, x + 14, y + 3, ancho_max=772)
+            self.zonas.append((rect, ("repeticion", i)))
+            y += 25
+        if len(entradas) == 0:
+            self._texto(self.fuente_media, "Todavía no hay partidas para repetir.", TEXTO,
+                        ANCHO // 2, 220, centro=True)
+        volver = pygame.Rect(ANCHO // 2 - 90, ALTO - 48, 180, 36)
+        pygame.draw.rect(self.pantalla, PANEL, volver)
+        pygame.draw.rect(self.pantalla, BORDE, volver, 1)
+        self._texto(self.fuente, "Volver (Esc)", TEXTO, volver.centerx, volver.y + 9, centro=True)
+        self.zonas.append((volver, ("volver",)))
+
     # ============================================================ eventos y cuadro
     def _eventos(self):
         eventos = pygame.event.get()
@@ -636,7 +768,12 @@ class VistaPygame(Vista):
                 TEXTO_TENUE, rect.x + 20, rect.y + 38)
             self.zonas.append((rect, ("cripta", i)))
             y += 78
-        self._dibujar_avisos(ANCHO // 2 - 330, y + 20)
+        boton = pygame.Rect(ANCHO // 2 - 150, y + 6, 300, 40)
+        pygame.draw.rect(self.pantalla, PANEL, boton)
+        pygame.draw.rect(self.pantalla, DORADO, boton, 2)
+        self._texto(self.fuente, "Ver repeticiones (R)", DORADO, boton.centerx, boton.y + 11, centro=True)
+        self.zonas.append((boton, ("repeticiones",)))
+        self._dibujar_avisos(ANCHO // 2 - 330, y + 62)
 
     def _dibujar_partida(self, partida):
         self.zonas = []
@@ -647,7 +784,10 @@ class VistaPygame(Vista):
         self._dibujar_sala(partida)
         self._dibujar_inventario(partida)
         self._dibujar_mensajes(partida)
-        self._dibujar_botonera()
+        if self.repitiendo is not None:
+            self._dibujar_controles_repeticion()
+        else:
+            self._dibujar_botonera()
         self._dibujar_avisos(SALA.x, AVISOS_Y)
 
     def _dibujar_barra_superior(self, partida):
@@ -781,7 +921,7 @@ class VistaPygame(Vista):
         if len(enemigos) > MAX_ENEMIGOS_DIBUJADOS:
             self._texto(self.fuente_chica, "+%d enemigos más" % (len(enemigos) - MAX_ENEMIGOS_DIBUJADOS),
                         TEXTO, SALA.right - 160, SALA.y + 20)
-            
+
     def _dibujar_actor(self, actor, nombre_sprite, color, centro, etiqueta, elegido, hacia):
         """hacia: 1 si mira a la derecha (jugador), -1 si mira a la izquierda (enemigos)."""
         self.centros.append((actor, centro))
@@ -964,6 +1104,24 @@ class VistaPygame(Vista):
                         ancho_max=MENSAJES.w - 20)
             y += 14
 
+    def _dibujar_controles_repeticion(self):
+        """En la repetición no hay botones de juego: qué orden va, la velocidad y las teclas."""
+        numero, total, texto = self.repitiendo
+        caja = pygame.Rect(SALA.x, BOTONERA_Y, SALA.w, 78)
+        pygame.draw.rect(self.pantalla, PANEL, caja)
+        pygame.draw.rect(self.pantalla, DORADO, caja, 2)
+        estado = "EN PAUSA" if self.en_pausa else "velocidad x%d" % self.velocidad
+        self._texto(self.fuente_media, "REPETICIÓN  ·  orden %d de %d: %s  ·  %s" % (
+            numero, total, texto, estado), DORADO, caja.x + 14, caja.y + 8, ancho_max=caja.w - 28)
+        barra = pygame.Rect(caja.x + 14, caja.y + 36, caja.w - 28, 8)
+        pygame.draw.rect(self.pantalla, VIDA_FONDO, barra)
+        if total > 0:
+            pygame.draw.rect(self.pantalla, DORADO,
+                             pygame.Rect(barra.x, barra.y, max(1, barra.w * numero // total), barra.h))
+        self._texto(self.fuente_chica, "Espacio: pausa / seguir    →: siguiente orden    "
+                    "1 / 2 / 4: velocidad    Esc: salir de la repetición", TEXTO_TENUE,
+                    caja.x + 14, caja.y + 54)
+
     def _dibujar_botonera(self):
         x = SALA.x
         y = BOTONERA_Y
@@ -1077,6 +1235,7 @@ def _tipo_de_enemigo(comportamiento):
             limpio += letra
     return limpio
 
+
 def _acortar_ids(texto):
     """Para mostrar: 'Rata gigante [e-rata-cripta-02-4] te ataca' -> 'Rata gigante #4 te ataca'.
     Si el id no termina en número, se quita entero. El Modelo y el log no cambian."""
@@ -1095,6 +1254,40 @@ def _acortar_ids(texto):
             resultado += " #" + numero
         i = cierra + 1
     return resultado
+
+
+def _fecha_legible(fecha):
+    """'2026-10-15 11:53:02' -> '15/10/2026 11:53'. Si no tiene ese formato, tal cual."""
+    texto = str(fecha or "").strip()
+    if len(texto) < 16 or texto[4] != "-" or texto[7] != "-":
+        return texto or "sin fecha"
+    return "%s/%s/%s %s" % (texto[8:10], texto[5:7], texto[0:4], texto[11:16])
+
+
+def _texto_de_orden(orden):
+    """La orden del log en palabras, para el letrero de la repetición."""
+    argumento = orden.argumento
+    numero = argumento + 1 if isinstance(argumento, int) else None
+    if orden.tipo == MOVER:
+        return "ir al %s" % argumento
+    if orden.tipo == ABRIR:
+        return "abrir la puerta %s" % argumento
+    if orden.tipo == ATACAR:
+        return "atacar al enemigo %d" % numero if numero else "atacar"
+    if orden.tipo == RECOGER:
+        return "recoger el objeto %d" % numero if numero else "recoger"
+    if orden.tipo == ESPERAR:
+        return "esperar"
+    if orden.tipo == PERGAMINO:
+        return "pergamino de retroceso"
+    nombre = "usar" if orden.tipo == USAR else "equipar" if orden.tipo == EQUIPAR else \
+        "soltar" if orden.tipo == SOLTAR else orden.tipo
+    if numero:
+        return "%s el objeto %d" % (nombre, numero)
+    if es_clave(argumento):
+        return "%s un objeto" % nombre
+    return nombre
+
 
 def _opuesta(direccion):
     """Si sale por el norte, entra a la sala nueva por el sur, etc."""

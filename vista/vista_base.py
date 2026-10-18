@@ -15,7 +15,8 @@ from abc import ABC, abstractmethod
 class Vista(ABC):
     @abstractmethod
     def elegir_cripta(self, criptas):
-        """criptas: lista de {id, nombre, salas, dificultad}. Devuelve un id o None (salir)."""
+        """criptas: lista de {id, nombre, salas, dificultad}. Devuelve un id, None (salir)
+        o orden.VER_REPETICIONES (solo si la vista muestra repeticiones)."""
 
     @abstractmethod
     def pedir_orden(self, partida):
@@ -56,3 +57,23 @@ class Vista(ABC):
     @abstractmethod
     def confirmar(self, pregunta):
         """Pregunta de sí/no. Devuelve True o False."""
+
+    # ------------------------------------------------ repeticiones (§4.11)
+    # No son abstractos: una vista que no muestra repeticiones (la consola) no los
+    # necesita; para ella el replay sigue siendo --replay.
+    def soporta_repeticion(self):
+        """True si esta vista puede mostrar una repetición paso a paso."""
+        return False
+
+    def elegir_repeticion(self, entradas):
+        """entradas: bitacora_partida.EntradaLog, de la más nueva a la más vieja.
+        Devuelve la ruta elegida o None (volver)."""
+        return None
+
+    def paso_de_repeticion(self, partida, orden, numero, total):
+        """Antes de ejecutar cada orden de la repetición. Devuelve False para detenerla."""
+        return True
+
+    def fin_de_repeticion(self, partida, lineas):
+        """La repetición terminó (completa, detenida o desviada): lineas es el informe."""
+        self.mostrar_aviso("\n".join(lineas))
