@@ -22,7 +22,7 @@ CATALOGO = [
      "defensa": 1, "velocidad": 150, "comportamiento": "rastreador", "suelta": ["itm_pocion"]},
     {"id": "ent_esqueleto", "clase": "enemigo", "nombre": "Esqueleto", "vida_max": 10, "ataque": 4,
      "defensa": 2, "velocidad": 100, "comportamiento": "guardian", "suelta": ["itm_pocion"]},
-    {"id": "ent_errante", "clase": "enemigo", "nombre": "Murciélago", "vida_max": 6, "ataque": 3,
+    {"id": "ent_errante", "clase": "enemigo", "nombre": "Duende errante", "vida_max": 6, "ataque": 3,
      "defensa": 0, "velocidad": 100, "comportamiento": "errante", "suelta": []},
     {"id": "ent_troll", "clase": "enemigo", "nombre": "Troll", "vida_max": 20, "ataque": 6,
      "defensa": 1, "velocidad": 100, "comportamiento": "guardian", "regeneracion": 2, "suelta": []},
