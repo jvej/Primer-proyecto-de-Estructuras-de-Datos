@@ -43,6 +43,18 @@ Se eligen por comportamiento, no por id de cripta ni de catálogo (sin importar 
 mayúsculas: "Guardián" de la API usa guardian.png). Si falta un cuadro
 se usa la imagen estática; si falta todo, una figura simple. Nunca se cae el juego.
 
+Sonidos ("Sonidos/", junto a "Poses personajes/"), .ogg o .wav; el que falte no suena:
+    ataque_espada / ataque_punos       el jugador ataca con arma / sin arma
+    dano_jugador                       el jugador recibe daño (golpe o trampa)
+    dano_<comportamiento> / dano_enemigo       un enemigo recibe daño (dano_rastreador...)
+    muerte_<comportamiento> / muerte_enemigo   muere un enemigo
+    pasos, puerta_abrir, trampa        corre a una puerta, abre CON LLAVE, salta una trampa
+    recoger, equipar, beber, antorcha, pergamino   según el mensaje que deja la acción
+    victoria, derrota                  final de la partida (los botones no suenan)
+    musica_menu, musica_cripta         música de fondo en bucle (menús / partida)
+Suenan junto con su animación (mismo instante, en tiempo real de la ventana): no tocan
+el Modelo ni el replay, y la consola, --replay y --bench no los usan.
+
 Repeticiones (§4.11): botón "Ver repeticiones" (R) en el menú de criptas y pregunta al
 ganar o perder. La lista muestra las últimas 20 partidas con fecha y hora. Durante la
 repetición la ventana solo MUESTRA: el Controlador ejecuta cada orden del log y aquí se
@@ -71,6 +83,7 @@ from vista.vista_base import Vista
 ANCHO, ALTO = 1280, 720
 FPS = 30
 CARPETA_SPRITES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Poses personajes")
+CARPETA_SONIDOS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Sonidos")
 
 # ------------------------------------------------------------------ colores
 FONDO = (18, 15, 20)
@@ -114,6 +127,12 @@ DURACION_AVISO_MS = 7000
 MAX_AVISOS = 6
 PASO_REPETICION_MS = 900    # tiempo entre órdenes de la repetición a velocidad x1
 VELOCIDADES = (1, 2, 4)
+VOLUMEN_EFECTOS = 0.8
+VOLUMEN_MUSICA = 0.35
+# (comienzo del mensaje de la bitácora, sonido): acciones del jugador que no tienen animación
+SONIDOS_DE_MENSAJE = (("Recoges", "recoger"), ("Equipas", "equipar"), ("Bebes", "beber"),
+                      ("Tomas el antídoto", "beber"), ("Enciendes la antorcha", "antorcha"),
+                      ("Usas un pergamino", "pergamino"))
 
 
 def _fuente(tamano, negrita=False):
@@ -289,8 +308,81 @@ class Sprites:
         return None
 
 
+class Sonidos:
+    """Efectos (pygame.mixer.Sound, se cargan una vez) y música de fondo (pygame.mixer.music,
+    se lee del disco mientras suena). Sin diccionarios: lista de pares (nombre, sonido).
+    Si no hay tarjeta de sonido o falta un archivo, simplemente no suena: nunca se cae."""
+
+    def __init__(self, carpeta):
+        self.carpeta = carpeta
+        self.efectos = []
+        self.musica_actual = None
+        self.activo = False
+        try:
+            if pygame.mixer.get_init() is None:
+                pygame.mixer.init()
+            self.activo = pygame.mixer.get_init() is not None
+        except (pygame.error, AttributeError):
+            self.activo = False
+        if not self.activo or not os.path.isdir(carpeta):
+            return
+        for archivo in os.listdir(carpeta):
+            nombre, extension = os.path.splitext(archivo)
+            if extension.lower() not in (".ogg", ".wav") or nombre.startswith("musica_"):
+                continue
+            try:
+                sonido = pygame.mixer.Sound(os.path.join(carpeta, archivo))
+                sonido.set_volume(VOLUMEN_EFECTOS)
+                self.efectos.append((nombre, sonido))
+            except pygame.error:
+                pass
+
+    def _buscar(self, nombre):
+        for otro, sonido in self.efectos:
+            if otro == nombre:
+                return sonido
+        return None
+
+    def tocar(self, nombre, respaldo=None):
+        """Toca el efecto; si no existe, el de respaldo (por ejemplo dano_enemigo)."""
+        if not self.activo:
+            return
+        sonido = self._buscar(nombre)
+        if sonido is None and respaldo is not None:
+            sonido = self._buscar(respaldo)
+        if sonido is not None:
+            try:
+                sonido.play()
+            except pygame.error:
+                pass
+
+    def musica(self, nombre):
+        """Música de fondo en bucle; None la apaga. Si ya está sonando esa, no la reinicia."""
+        if not self.activo or nombre == self.musica_actual:
+            return
+        self.musica_actual = nombre
+        try:
+            if nombre is None:
+                pygame.mixer.music.fadeout(400)
+                return
+            for extension in (".ogg", ".wav"):
+                ruta = os.path.join(self.carpeta, nombre + extension)
+                if os.path.exists(ruta):
+                    pygame.mixer.music.load(ruta)
+                    pygame.mixer.music.set_volume(VOLUMEN_MUSICA)
+                    pygame.mixer.music.play(-1)
+                    return
+            pygame.mixer.music.stop()
+        except pygame.error:
+            pass
+
+
 class VistaPygame(Vista):
-    def __init__(self, carpeta_sprites=CARPETA_SPRITES, fps=FPS):
+    def __init__(self, carpeta_sprites=CARPETA_SPRITES, fps=FPS, carpeta_sonidos=CARPETA_SONIDOS):
+        try:
+            pygame.mixer.pre_init(44100, -16, 2, 512)   # poco retraso entre la acción y su sonido
+        except (pygame.error, AttributeError):
+            pass
         pygame.init()
         pygame.display.set_caption("CRIPTA")
         self.pantalla = pygame.display.set_mode((ANCHO, ALTO))
@@ -301,6 +393,9 @@ class VistaPygame(Vista):
         self.fuente_media = _fuente(20, True)
         self.fuente_grande = _fuente(34, True)
         self.sprites = Sprites(carpeta_sprites, ALTO_SPRITE)
+        self.sonidos = Sonidos(carpeta_sonidos)
+        self.sonadas = []               # animaciones cuyo sonido ya se tocó
+        self.mensajes_oidos = 0         # mensajes de la bitácora ya revisados para sonidos
         self.animador = Animador()
         self.ultima_orden = None        # tipo de la última orden entregada (para animar)
         self.centros = []               # [(actor, (x, y))] dónde se dibujó cada actor
@@ -338,6 +433,7 @@ class VistaPygame(Vista):
         self.fondo_nivel = None
         if len(self.fondos_nivel) > 0:              # uno distinto al azar cada vez
             self.fondo_nivel = self.fondos_nivel[self.azar.randrange(len(self.fondos_nivel))]
+        self.sonidos.musica("musica_menu")
         elegida = 0
         while not self.cerrada:
             for evento in self._eventos():
@@ -370,6 +466,7 @@ class VistaPygame(Vista):
     def pedir_orden(self, partida):
         self.partida = partida
         self.fin = None
+        self.sonidos.musica("musica_cripta")
         while not self.cerrada:
             for evento in self._eventos():
                 resultado = None
@@ -437,6 +534,7 @@ class VistaPygame(Vista):
         if self.partida is None or self._salida(direccion) not in ("abierta",):
             return
         self.saliendo = (direccion, pygame.time.get_ticks())
+        self.sonidos.tocar("pasos")
         self._esperar_dibujando(self.saliendo[1], CORRER_MS)
         self.saliendo = None
 
@@ -450,9 +548,11 @@ class VistaPygame(Vista):
         if estado != "cerrada" or llave is None or not self._lleva_llave(llave):
             return
         self.saliendo = (direccion, pygame.time.get_ticks())
+        self.sonidos.tocar("pasos")
         self._esperar_dibujando(self.saliendo[1], CORRER_MS)
         self.saliendo = None
         self.abriendo = (direccion, pygame.time.get_ticks())
+        self.sonidos.tocar("puerta_abrir")          # solo aquí: tiene la llave y la usa
         self._esperar_dibujando(self.abriendo[1], ABRIR_MS)
         self.abriendo = None
         self.destello = (direccion, pygame.time.get_ticks())
@@ -481,6 +581,7 @@ class VistaPygame(Vista):
 
     def pedir_nombre(self):
         texto = ""
+        self.sonidos.musica("musica_menu")
         while not self.cerrada:
             for evento in self._eventos():
                 if evento.type != pygame.KEYDOWN:
@@ -536,8 +637,10 @@ class VistaPygame(Vista):
     def mostrar_partida(self, partida):
         if partida is not self.partida:             # partida nueva o cargada: sin animar
             self.animador.reiniciar(partida)
+            self.mensajes_oidos = partida.bitacora.total_historico
         else:
             self.animador.observar(partida, pygame.time.get_ticks(), self.ultima_orden, self.centros)
+            self._sonar_mensajes(partida)
         if self.volver_de is not None:              # vuelve corriendo desde la puerta que abrió
             self.entrando_por = self.volver_de
             self.animador.correr(partida.jugador, pygame.time.get_ticks())
@@ -594,6 +697,8 @@ class VistaPygame(Vista):
     def mostrar_fin(self, partida):
         self.partida = partida
         self.fin = partida
+        self.sonidos.musica(None)
+        self.sonidos.tocar("victoria" if partida.estado == "victoria" else "derrota")
         self.resumen_fin = []           # lo que avise la aplicación al terminar (puntaje, log)
 
     def cerrar(self):
@@ -604,6 +709,7 @@ class VistaPygame(Vista):
             for texto, _fin in self.avisos:
                 lineas.append(texto)
             self._modal("Aviso", lineas)
+        self.sonidos.musica(None)
         pygame.quit()
 
     # ============================================================ repeticiones
@@ -612,6 +718,7 @@ class VistaPygame(Vista):
 
     def elegir_repeticion(self, entradas):
         """Lista de las últimas partidas (fecha y hora, jugador, cripta, órdenes)."""
+        self.sonidos.musica("musica_menu")
         elegida = 0
         while not self.cerrada:
             for evento in self._eventos():
@@ -642,6 +749,7 @@ class VistaPygame(Vista):
         No ejecuta nada: eso lo hace el Controlador al volver de aquí."""
         self.partida = partida
         self.fin = None
+        self.sonidos.musica("musica_cripta")
         self.repitiendo = (numero, total, _texto_de_orden(orden))
         if orden.tipo == ATACAR and isinstance(orden.argumento, int):
             self.enemigo_elegido = orden.argumento        # se ve a quién ataca
@@ -741,6 +849,52 @@ class VistaPygame(Vista):
                 return accion
         return None
 
+    # ================================================================ sonidos
+    def _sonar_animaciones(self, ahora):
+        """Cada animación suena una sola vez, en el instante en que empieza a dibujarse
+        (la trampa y su daño, por ejemplo, suenan cuando el jugador termina de entrar)."""
+        jugador = self.partida.jugador if self.partida is not None else None
+        vigentes = []
+        for animacion in self.animador.activas:
+            ya = False
+            for otra in self.sonadas:
+                if otra is animacion:
+                    ya = True
+            if ya:
+                vigentes.append(animacion)
+                continue
+            if animacion.inicio > ahora:
+                continue                            # todavía no empieza
+            vigentes.append(animacion)
+            self._sonar(animacion, jugador)
+        self.sonadas = vigentes
+
+    def _sonar(self, animacion, jugador):
+        actor = animacion.actor
+        if animacion.tipo == ATAQUE and actor is jugador:
+            self.sonidos.tocar("ataque_espada" if jugador.arma is not None else "ataque_punos")
+        elif animacion.tipo == DANO and actor is jugador:
+            self.sonidos.tocar("dano_jugador")
+        elif animacion.tipo == DANO:
+            self.sonidos.tocar("dano_" + _tipo_de_enemigo(actor.comportamiento), "dano_enemigo")
+        elif animacion.tipo == MUERTE and actor is not jugador:
+            self.sonidos.tocar("muerte_" + _tipo_de_enemigo(actor.comportamiento), "muerte_enemigo")
+        elif animacion.tipo == TRAMPA:
+            self.sonidos.tocar("trampa")
+        elif animacion.tipo == CORRER and actor is jugador:
+            self.sonidos.tocar("pasos")
+
+    def _sonar_mensajes(self, partida):
+        """Recoger, equipar, beber, antorcha y pergamino no tienen animación: suenan según el
+        mensaje que dejó la acción en la bitácora (solo los mensajes nuevos)."""
+        nuevos = partida.bitacora.total_historico - self.mensajes_oidos
+        self.mensajes_oidos = partida.bitacora.total_historico
+        mensajes = partida.bitacora.ultimos()
+        for i in range(max(0, len(mensajes) - nuevos), len(mensajes)):
+            for comienzo, sonido in SONIDOS_DE_MENSAJE:
+                if mensajes[i].startswith(comienzo):
+                    self.sonidos.tocar(sonido)
+
     def _modal(self, titulo, lineas):
         """Ventana encima del juego hasta que se pulse una tecla o se haga clic."""
         while not self.cerrada:
@@ -792,6 +946,7 @@ class VistaPygame(Vista):
         self.zonas = []
         self.centros = []
         self.animador.limpiar(pygame.time.get_ticks())
+        self._sonar_animaciones(pygame.time.get_ticks())
         self.pantalla.fill(FONDO)
         self._dibujar_barra_superior(partida)
         self._dibujar_sala(partida)

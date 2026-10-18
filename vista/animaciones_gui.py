@@ -5,7 +5,7 @@ la partida, calcula daño ni programa eventos. Después de cada orden, el Contro
 llama vista.mostrar_partida(partida) y la vista le pasa la partida a Animador.observar,
 que compara lo que ve ahora con lo que vio la vez anterior (solo lectura):
 
-  - el jugador atacó (la última orden fue ATACAR) ...... ataque del jugador
+  - el jugador atacó (la última orden fue ATACAR y se aceptó) ... ataque del jugador
   - un enemigo tiene menos vida que antes ............. daño de ese enemigo (+ número)
   - un enemigo de la sala murió ....................... muerte (se dibuja en su último lugar)
   - el jugador tiene menos vida que antes ............. daño del jugador (+ número)
@@ -43,7 +43,7 @@ REPOSO_MS = 450             # duración de cada cuadro de reposo (respiración)
 CUADROS_MAXIMOS = 3         # ataque y muerte tienen 3 cuadros; daño, 1
 DURACION_NUMERO_MS = 900    # el número de daño flota y desaparece
 CORRER_CUADRO_MS = 80       # la carrera cambia de cuadro más rápido y se repite
-CORRER_MS = 420             # lo que tarda en cruzar desde la puerta (o hasta ella)
+CORRER_MS = 600             # lo que tarda en cruzar (dura igual que pasos.ogg: 2 pasos)
 ABRIR_CUADRO_MS = 160       # cada cuadro de abrir la puerta con la llave
 ABRIR_CUADROS = 4
 ABRIR_MS = ABRIR_CUADRO_MS * ABRIR_CUADROS
@@ -71,6 +71,7 @@ class Animador:
         self._foto = []             # [(enemigo, vida)] de la sala, la vez anterior
         self._vida_jugador = None
         self._total_mensajes = 0
+        self._acciones = 0
         self._sala = None
 
     def reiniciar(self, partida=None):
@@ -98,7 +99,7 @@ class Animador:
             self._agregar(Animacion(jugador, TRAMPA, ahora + retraso, dato=id_trampa))
         if len(trampas) == 0:
             retraso = 0                     # sin trampa, el daño se ve en el momento
-        if ultima_orden == ATACAR:
+        if ultima_orden == ATACAR and partida.acciones > self._acciones:   # solo si se aceptó
             self._agregar(Animacion(jugador, ATAQUE, ahora))
         misma_sala = partida.sala_actual() is self._sala
         for enemigo, vida_antes in self._foto:
@@ -158,6 +159,7 @@ class Animador:
             self._foto.append((enemigo, enemigo.vida))
         self._vida_jugador = partida.jugador.vida
         self._total_mensajes = partida.bitacora.total_historico
+        self._acciones = partida.acciones
         self._sala = partida.sala_actual()
 
     def _agregar(self, animacion):
