@@ -15,11 +15,16 @@ TIMEOUT_DEFECTO = 10
 MAX_REINTENTOS_429 = 5
 ESPERA_429_DEFECTO = 1
 
+# Se genera UNA sola vez por ejecución del programa y lo usan todos los clientes que se
+# creen en ella (la partida y cada repetición): el enunciado exige el mismo
+# X-Cripta-Client-Id en todas las solicitudes de una misma ejecución.
+CLIENT_ID = str(uuid.uuid4())
+
 
 class ClienteHTTP(FuenteDatos):
     def __init__(self, presupuesto=None, base_url=BASE_URL, timeout=TIMEOUT_DEFECTO,
                  sesion=None, dormir=time.sleep, max_reintentos_429=MAX_REINTENTOS_429):
-        self.client_id = str(uuid.uuid4())       # una sola vez por ejecución
+        self.client_id = CLIENT_ID               # el mismo en toda la ejecución
         self.presupuesto = presupuesto if presupuesto is not None else PresupuestoRed()
         self.base_url = base_url
         self.timeout = timeout

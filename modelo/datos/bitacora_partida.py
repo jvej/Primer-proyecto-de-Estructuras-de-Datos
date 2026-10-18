@@ -24,11 +24,16 @@ el log conserva todo lo jugado hasta ese momento.
 
 Al leer, las órdenes quedan en una cola FIFO (cola_fifo.py): la reproducción las
 consume en el mismo orden en que se escribieron.
+
+Solo se conservan las últimas MAX_REPETICIONES bitácoras (podar_logs): al crear una
+nueva se borran las más viejas. listar_logs() las devuelve de la más nueva a la más
+vieja para el menú de repeticiones.
 """
 
 import os
 
 from modelo.estructuras.cola_fifo import ColaFIFO
+from modelo.estructuras.ordenamiento import ordenar
 from controlador.orden import Orden
 
 MARCA = "CRIPTA-LOG"
@@ -36,6 +41,8 @@ VERSION_LOG = 1
 SEPARADOR = "---"
 CAMPOS = ("id_cripta", "version_cripta", "version_catalogo", "semilla", "jugador", "fecha")
 OBLIGATORIOS = ("id_cripta", "version_cripta", "version_catalogo", "semilla")
+EXTENSION = ".log"
+MAX_REPETICIONES = 20          # bitácoras que se conservan en disco
 
 
 class ErrorLog(Exception):
@@ -149,3 +156,54 @@ def leer_log(ruta):
                 raise ErrorLog("línea %d: %s" % (i + 1, error))
         i += 1
     return encabezado, ordenes
+
+
+# ------------------------------------------------------ repeticiones guardadas
+class EntradaLog:
+    """Una partida que se puede repetir: dónde está, de qué cripta, quién y cuándo."""
+    __slots__ = ("ruta", "id_cripta", "jugador", "fecha", "ordenes")
+
+    def __init__(self, ruta, encabezado, ordenes):
+        self.ruta = ruta
+        self.id_cripta = encabezado.id_cripta
+        self.jugador = encabezado.jugador
+        self.fecha = encabezado.fecha          # "AAAA-MM-DD HH:MM:SS"
+        self.ordenes = ordenes                 # cuántas órdenes tiene
+
+
+def _logs_por_antiguedad(carpeta):
+    """[(instante de modificación, ruta)] de los .log de la carpeta, del más nuevo al más viejo."""
+    if not os.path.isdir(carpeta):
+        return []
+    pares = []
+    for nombre in os.listdir(carpeta):
+        ruta = os.path.join(carpeta, nombre)
+        if nombre.endswith(EXTENSION) and os.path.isfile(ruta):
+            pares.append((os.path.getmtime(ruta), ruta))
+    return ordenar(pares, clave=lambda par: par[0], descendente=True)
+
+
+def listar_logs(carpeta, maximo=MAX_REPETICIONES):
+    """Las últimas `maximo` partidas con al menos una orden, de la más nueva a la más
+    vieja. Los archivos dañados se saltan (no impiden ver los demás)."""
+    entradas = []
+    for _instante, ruta in _logs_por_antiguedad(carpeta):
+        if len(entradas) >= maximo:
+            break
+        try:
+            encabezado, ordenes = leer_log(ruta)
+        except (ErrorLog, OSError, UnicodeDecodeError):
+            continue
+        if len(ordenes) > 0:
+            entradas.append(EntradaLog(ruta, encabezado, len(ordenes)))
+    return entradas
+
+
+def podar_logs(carpeta, conservar):
+    """Borra las bitácoras más viejas y deja solo las `conservar` más nuevas."""
+    pares = _logs_por_antiguedad(carpeta)
+    for i in range(max(0, conservar), len(pares)):
+        try:
+            os.remove(pares[i][1])
+        except OSError:
+            pass                   # en uso o sin permiso: se intentará la próxima vez

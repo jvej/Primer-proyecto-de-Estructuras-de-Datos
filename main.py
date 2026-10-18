@@ -32,6 +32,7 @@ from controlador.controlador import Controlador
 from modelo.juego.errores import ErrorCripta
 from modelo.datos.fabrica_fuentes import crear_fuente_datos
 from modelo.datos.persistencia_partida import PersistenciaPartida
+from controlador.repeticiones import ServicioRepeticiones
 from controlador.reproductor import reproducir
 
 CARPETA_PROYECTO = os.path.dirname(os.path.abspath(__file__))
@@ -148,8 +149,13 @@ def correr_interactivo(argumentos):
 
     aplicacion = Aplicacion(fuente, presupuesto, argumentos.datos, argumentos.cache_size,
                             argumentos.semilla, nombre)
+    # cada repetición pide una fuente y un presupuesto nuevos: no gasta los de la partida
+    repeticiones = ServicioRepeticiones(
+        aplicacion, lambda: crear_fuente_datos(argumentos.offline is not None, argumentos.offline),
+        argumentos.datos, argumentos.cache_size)
     controlador = Controlador(vista=vista, persistencia=PersistenciaPartida(aplicacion),
-                              puntajes=aplicacion.puntajes, al_terminar=aplicacion.al_terminar)
+                              puntajes=aplicacion.puntajes, al_terminar=aplicacion.al_terminar,
+                              repeticiones=repeticiones)
     controlador.agregar_observador(aplicacion.registrar_orden)      # log de replay (§4.11)
     try:
         controlador.correr_sesion(aplicacion.listar_criptas, aplicacion.crear_partida)

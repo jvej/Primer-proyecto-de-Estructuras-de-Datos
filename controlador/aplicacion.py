@@ -13,7 +13,7 @@ modelo (Mariano) y la bitácora de replay, los puntajes y el guardado (Axel).
 Archivos que genera, dentro de `carpeta` (por defecto ./datos_cripta):
     catalogo/catalogo_<version>.bin      fichas del catálogo (caché persistente, §4.4)
     criptas/<id>__<version>.bin          generales, esqueleto y contenido (§4.4)
-    partidas/<id>_<fecha>.log            bitácoras de replay (§4.11)
+    partidas/<id>_<fecha>.log            bitácoras de replay (§4.11); solo las últimas 20
     guardados/partida.bin                partida guardada (§4.10)
     puntajes.txt                         tabla de puntajes (§2.12)
 """
@@ -25,7 +25,8 @@ from modelo.datos.almacen_cripta import AlmacenCripta
 from modelo.datos.almacen_fichas import AlmacenFichas
 from modelo.datos.almacen_local_cache import AlmacenLocalCache
 from modelo.juego.bitacora_pantalla import BitacoraPantalla
-from modelo.datos.bitacora_partida import BitacoraPartida, EncabezadoLog
+from modelo.datos.bitacora_partida import (MAX_REPETICIONES, BitacoraPartida, EncabezadoLog,
+                                           podar_logs)
 from controlador.controlador import Controlador
 from modelo.datos.ejecutor_red import EjecutorRed
 from modelo.juego.errores import ErrorCripta
@@ -89,6 +90,7 @@ class Aplicacion:
         self.ejecutor = None
         self.precarga = None
         self.log = None
+        self.ultimo_log = None         # bitácora de la última partida terminada (repetición)
         self.ordenes = []              # órdenes aceptadas de la partida actual (para guardar)
         self.partidas_creadas = 0
         self._presupuesto_listo = False   # ya se reinició para la próxima partida
@@ -228,6 +230,7 @@ class Aplicacion:
 
     def _ruta_log_nueva(self, id_cripta):
         carpeta = os.path.join(self.carpeta, "partidas")
+        podar_logs(carpeta, MAX_REPETICIONES - 1)      # con la nueva quedan 20 como máximo
         base = "%s_%s" % (nombre_seguro(id_cripta), time.strftime("%Y%m%d_%H%M%S"))
         ruta = os.path.join(carpeta, base + ".log")
         n = 2
@@ -251,6 +254,7 @@ class Aplicacion:
             lineas.append("Partida anotada en la tabla de puntajes.")
         if self.log is not None:
             lineas.append("Bitácora de la partida: %s" % self.log.ruta)
+            self.ultimo_log = self.log.ruta
             self.log.cerrar()
             self.log = None
         lineas.append(self.reporte())
@@ -270,6 +274,15 @@ class Aplicacion:
         if self.log is not None:
             self.log.cerrar()
             self.log = None
+        if self.ejecutor is not None:
+            self.ejecutor.cerrar()
+            self.ejecutor = None
+
+    def detener_red(self):
+        """Antes de una repetición: la partida anterior ya terminó, así que su hilo de red
+        se cierra para que no escriba en disco al mismo tiempo que la repetición."""
+        if self.partida is not None and self.partida.estado == "jugando":
+            return
         if self.ejecutor is not None:
             self.ejecutor.cerrar()
             self.ejecutor = None

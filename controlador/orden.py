@@ -39,6 +39,10 @@ AYUDA = "ayuda"
 PUNTAJES = "puntajes"
 SALIR = "salir"
 
+# elegir_cripta() de la Vista puede devolver esto en vez de un id de cripta: el jugador
+# quiere ver las repeticiones (§4.11). No es una Orden: no se ejecuta ni va al log.
+VER_REPETICIONES = "__repeticiones__"
+
 ORDENES_DE_PARTIDA = (MOVER, ABRIR, ATACAR, ESPERAR, RECOGER, USAR, EQUIPAR, SOLTAR, PERGAMINO)
 
 

@@ -21,24 +21,32 @@ Si no se entrega, esas órdenes avisan que aún no están disponibles.
 puntajes (§2.12) es un objeto opcional con listar() -> registros ya ordenados.
 al_terminar(partida) -> str es opcional: se llama al ganar o perder (registrar el
 puntaje, cerrar el log, reporte de red) y su texto se muestra como aviso.
+
+repeticiones (§4.11) es un objeto opcional (controlador/repeticiones.py) con:
+    listar() -> últimas partidas; ultima() -> ruta del log recién terminado o None;
+    preparar(ruta) -> (Reproduccion o None, informe)
+Solo se usa si la vista soporta_repeticion(). La repetición se ejecuta con OTRO
+Controlador sin vista ni observadores: no escribe log ni puntajes y no toca la partida
+del jugador; la vista solo la va mostrando orden por orden.
 """
 
 from modelo.juego.errores import ErrorCripta
 from controlador.orden import (ABRIR, AYUDA, ATACAR, CARGAR, EQUIPAR, ESPERAR, GUARDAR, INV_ANTERIOR,
-                   INV_INICIO, INV_ORDENAR, INV_SIGUIENTE, INVENTARIO, MOVER, Orden,
-                   ORDENES_DE_PARTIDA, PERGAMINO, PUNTAJES, RECOGER, SALIR, SOLTAR, USAR,
-                   clave_de_argumento, es_clave)
+                               INV_INICIO, INV_ORDENAR, INV_SIGUIENTE, INVENTARIO, MOVER, Orden,
+                               ORDENES_DE_PARTIDA, PERGAMINO, PUNTAJES, RECOGER, SALIR, SOLTAR, USAR,
+                               VER_REPETICIONES, clave_de_argumento, es_clave)
 from modelo.juego.sala import DIRECCIONES
 
 
 class Controlador:
     def __init__(self, partida=None, vista=None, persistencia=None, puntajes=None,
-                 al_terminar=None):
+                 al_terminar=None, repeticiones=None):
         self.partida = partida
         self.vista = vista
         self.persistencia = persistencia
         self.puntajes = puntajes
         self.al_terminar = al_terminar
+        self.repeticiones = repeticiones
         self._observadores = []
         self._terminado = False
 
@@ -221,14 +229,83 @@ class Controlador:
             id_cripta = self.vista.elegir_cripta(criptas)
             if id_cripta is None:
                 return
+            if id_cripta == VER_REPETICIONES:
+                self._menu_repeticiones()
+                continue
             try:
                 self.partida = crear_partida(id_cripta)
             except ErrorCripta as error:
                 self.vista.mostrar_aviso(str(error))
                 continue
             self.correr_partida()
+            if (not self._terminado and self.partida.estado != "jugando" and self._hay_repeticiones()
+                    and self.repeticiones.ultima() is not None
+                    and self.vista.confirmar("¿Ver la repetición de esta partida?")):
+                self.ver_repeticion(self.repeticiones.ultima())
             if self._terminado or not self.vista.confirmar("¿Jugar otra cripta?"):
                 return
+
+    # ------------------------------------------------------- repeticiones
+    def _hay_repeticiones(self):
+        return (self.repeticiones is not None and self.vista is not None
+                and self.vista.soporta_repeticion())
+
+    def _menu_repeticiones(self):
+        if not self._hay_repeticiones():
+            return
+        try:
+            entradas = self.repeticiones.listar()
+        except (ErrorCripta, OSError) as error:
+            self.vista.mostrar_aviso("No se pudieron leer las repeticiones: %s" % error)
+            return
+        ruta = self.vista.elegir_repeticion(entradas)
+        if ruta is not None:
+            self.ver_repeticion(ruta)
+
+    def ver_repeticion(self, ruta):
+        """Muestra una partida guardada en su log, orden por orden (solo mirar)."""
+        try:
+            reproduccion, informe = self.repeticiones.preparar(ruta)
+        except ErrorCripta as error:
+            self.vista.mostrar_aviso("No se puede reproducir: %s" % error)
+            return
+        if reproduccion is None:
+            self.vista.fin_de_repeticion(None, informe.lineas)
+            return
+        try:
+            partida = reproduccion.partida
+            ejecutor = Controlador(partida)       # sin vista ni observadores: no deja rastro
+            numero = 0
+            motivo = None
+            while not reproduccion.ordenes.vacia():
+                if partida.estado != "jugando":
+                    motivo = "La partida terminó antes de la orden %d; el resto se ignora." % (numero + 1)
+                    break
+                orden = reproduccion.ordenes.sacar()
+                numero += 1
+                self.vista.mostrar_partida(partida)
+                if not self.vista.paso_de_repeticion(partida, orden, numero, reproduccion.total):
+                    motivo = "Repetición detenida en la orden %d de %d." % (numero, reproduccion.total)
+                    break
+                if not ejecutor.ejecutar(orden):
+                    ultimo = partida.bitacora.ultimos()
+                    motivo = ("DIVERGENCIA en la orden %d (%s): %s. La repetición se detiene."
+                              % (numero, orden.a_texto(), ultimo[-1] if len(ultimo) > 0 else "rechazada"))
+                    break
+            self.vista.mostrar_partida(partida)
+            lineas = ["Partida de %s en %s (%s)." % (reproduccion.encabezado.jugador or "-",
+                                                      reproduccion.encabezado.id_cripta,
+                                                      reproduccion.encabezado.fecha or "sin fecha")]
+            if motivo is not None:
+                lineas.append(motivo)
+            else:
+                lineas.append("Se reprodujeron las %d órdenes." % reproduccion.total)
+            lineas.append("Resultado: %s · tiempo %d · acciones %d · derrotados %d · vida %d/%d" % (
+                _texto_estado(partida.estado), partida.reloj.tiempo_actual, partida.acciones,
+                partida.derrotados, partida.jugador.vida, partida.jugador.vida_max))
+            self.vista.fin_de_repeticion(partida, lineas)
+        finally:
+            reproduccion.cerrar()
 
     # ------------------------------------------------------------ internos
     def _mostrar_puntajes(self):
@@ -253,3 +330,11 @@ class Controlador:
     def _rechazar(self, motivo):
         self.partida.bitacora.agregar(motivo)
         return None
+
+
+def _texto_estado(estado):
+    if estado == "victoria":
+        return "victoria"
+    if estado == "derrota":
+        return "derrota"
+    return "sin terminar"

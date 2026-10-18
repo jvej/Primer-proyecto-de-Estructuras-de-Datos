@@ -13,16 +13,22 @@ Antes de reproducir compara las versiones del log con las que hay disponibles:
 Durante la reproducción, si una orden del log es rechazada, la partida ya se desvió del
 original: se detiene y se informa en qué línea.
 
+Hay dos formas de usarlo:
+  - reproducir(...): todo de una vez, sin vista (--replay en la consola).
+  - preparar_reproduccion(...): deja la partida lista y las órdenes en su cola, para que
+    el Controlador las dé una por una mientras la Vista las muestra (repetición en la
+    ventana). Los pasos 1 y 2 son los mismos en los dos casos.
+
 No imprime: devuelve un ResultadoReplay con las líneas de texto del informe.
 """
 
+from controlador.aplicacion import Aplicacion
+from controlador.controlador import Controlador
 from modelo.datos.almacen_cripta import AlmacenCripta
 from modelo.datos.almacen_fichas import AlmacenFichas
-from controlador.aplicacion import Aplicacion
 from modelo.datos.bitacora_partida import ErrorLog, leer_log
-from controlador.controlador import Controlador
-from modelo.juego.errores import ErrorCripta
 from modelo.datos.fuente_almacen import FuenteAlmacen
+from modelo.juego.errores import ErrorCripta
 
 
 class ResultadoReplay:
@@ -40,14 +46,33 @@ class ResultadoReplay:
         return "\n".join(self.lineas)
 
 
-def reproducir(ruta_log, fuente, presupuesto, carpeta, cache_size=25, mostrar_cada=False):
-    """mostrar_cada: True agrega al informe una línea por cada orden reproducida."""
+class Reproduccion:
+    """Una partida reconstruida desde su log, lista para darle las órdenes una por una."""
+
+    def __init__(self, encabezado, partida, ordenes, aplicacion):
+        self.encabezado = encabezado
+        self.partida = partida
+        self.ordenes = ordenes            # ColaFIFO de Orden, en el orden del log
+        self.total = len(ordenes)
+        self.aplicacion = aplicacion
+
+    def cerrar(self):
+        """Cierra el hilo de red de la aplicación usada para reproducir."""
+        if self.aplicacion is not None:
+            self.aplicacion.cerrar()
+            self.aplicacion = None
+
+
+def preparar_reproduccion(ruta_log, fuente, presupuesto, carpeta, cache_size=25):
+    """Pasos 1 y 2: revisa las versiones y arma la partida inicial con la semilla del log.
+    Devuelve (Reproduccion o None, ResultadoReplay). Si es None, el informe dice por qué.
+    Quien recibe la Reproduccion debe llamar a cerrar() al terminar."""
     resultado = ResultadoReplay()
     try:
         encabezado, ordenes = leer_log(ruta_log)
     except ErrorLog as error:
         resultado.anotar("No se puede reproducir: %s" % error)
-        return resultado
+        return None, resultado
     resultado.anotar("Reproduciendo %s: cripta %s (versión %s), catálogo %s, semilla %d, jugador %s"
                      % (ruta_log, encabezado.id_cripta, encabezado.version_cripta,
                         encabezado.version_catalogo, encabezado.semilla, encabezado.jugador or "-"))
@@ -85,10 +110,10 @@ def reproducir(ruta_log, fuente, presupuesto, carpeta, cache_size=25, mostrar_ca
                          % (encabezado.version_cripta, encabezado.version_catalogo,
                             version_cripta, version_catalogo))
         aplicacion.cerrar()
-        return resultado
+        return None, resultado
     resultado.fiel = True
 
-    # ---------------------------------------------------- 2. reproducir
+    # ---------------------------------------------------- 2. partida inicial
     try:
         partida = aplicacion.crear_partida(encabezado.id_cripta, semilla=encabezado.semilla,
                                            exigir_versiones=(encabezado.version_cripta,
@@ -96,8 +121,36 @@ def reproducir(ruta_log, fuente, presupuesto, carpeta, cache_size=25, mostrar_ca
     except ErrorCripta as error:
         resultado.anotar("No se puede reproducir: %s" % error)
         aplicacion.cerrar()
-        return resultado
+        return None, resultado
     resultado.partida = partida
+    return Reproduccion(encabezado, partida, ordenes, aplicacion), resultado
+
+
+def anotar_final(resultado, partida, aplicacion=None):
+    """Paso 3: el informe con el estado en que quedó la partida."""
+    resultado.anotar("Órdenes reproducidas: %d" % resultado.ordenes)
+    resultado.anotar("Estado final: %s | reloj %d | vida %d/%d | sala %s | acciones %d | "
+                     "enemigos derrotados %d" % (partida.estado, partida.reloj.tiempo_actual,
+                                                 partida.jugador.vida, partida.jugador.vida_max,
+                                                 partida.jugador.sala.id, partida.acciones,
+                                                 partida.derrotados))
+    resultado.anotar("Últimos mensajes:")
+    for mensaje in partida.bitacora.ultimos():
+        resultado.anotar("  " + mensaje)
+    if aplicacion is not None:
+        resultado.anotar(aplicacion.reporte())
+
+
+def reproducir(ruta_log, fuente, presupuesto, carpeta, cache_size=25, mostrar_cada=False):
+    """mostrar_cada: True agrega al informe una línea por cada orden reproducida."""
+    reproduccion, resultado = preparar_reproduccion(ruta_log, fuente, presupuesto, carpeta,
+                                                    cache_size)
+    if reproduccion is None:
+        return resultado
+    partida = reproduccion.partida
+    ordenes = reproduccion.ordenes
+
+    # ---------------------------------------------------- 3. reproducir
     controlador = Controlador(partida)          # sin vista (§6)
     numero = 0
     detenido = False
@@ -123,16 +176,7 @@ def reproducir(ruta_log, fuente, presupuesto, carpeta, cache_size=25, mostrar_ca
                 partida.jugador.sala.id))
     resultado.reproducido = not detenido
 
-    # ---------------------------------------------------- 3. informe
-    resultado.anotar("Órdenes reproducidas: %d" % resultado.ordenes)
-    resultado.anotar("Estado final: %s | reloj %d | vida %d/%d | sala %s | acciones %d | "
-                     "enemigos derrotados %d" % (partida.estado, partida.reloj.tiempo_actual,
-                                                 partida.jugador.vida, partida.jugador.vida_max,
-                                                 partida.jugador.sala.id, partida.acciones,
-                                                 partida.derrotados))
-    resultado.anotar("Últimos mensajes:")
-    for mensaje in partida.bitacora.ultimos():
-        resultado.anotar("  " + mensaje)
-    resultado.anotar(aplicacion.reporte())
-    aplicacion.cerrar()
+    # ---------------------------------------------------- 4. informe
+    anotar_final(resultado, partida, reproduccion.aplicacion)
+    reproduccion.cerrar()
     return resultado
