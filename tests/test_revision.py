@@ -1,16 +1,3 @@
-"""Pruebas de las correcciones pedidas en la revisión del proyecto.
-Ejecutar: python -m tests.test_revision
-
-  2.1  la lista de criptas cuenta en el presupuesto de la partida siguiente
-  2.2/3.2  las respuestas del catálogo no retienen fichas desalojadas de la caché
-  3.1  --cache-size 1, 2 y 3 no se caen al cargar la sala inicial
-  3.3  política explícita cuando todas las fichas están en uso
-  5.1  soltar el objeto del cursor no recorre el inventario (no depende de su posición)
-  5.2  guardar y reabrir no devuelve presupuesto de red
-  2.5  el límite de la cripta anterior no frena las primeras solicitudes de la nueva
-  2.6  la caché no pasa el tope por una ficha que no está en uso
-  4    cargar una partida que no coincide no deja la aplicación a medias
-"""
 import gc
 import os
 import shutil
@@ -29,7 +16,6 @@ from modelo.datos.presupuesto_red import PresupuestoRed
 
 
 class FuenteContada(ClienteOffline):
-    """Paquete offline, pero cada llamada cuenta como solicitud (igual que la red)."""
 
     def __init__(self, carpeta):
         super().__init__(carpeta)
@@ -95,9 +81,9 @@ def test_la_lista_cuenta_en_la_segunda_partida():
     app = Aplicacion(fuente, fuente.presupuesto, os.path.join(base, "datos"), semilla=1)
     app.listar_criptas()
     app.crear_partida(crear_paquete_prueba.ID)
-    assert fuente.presupuesto.realizadas == fuente.llamadas          # primera partida
+    assert fuente.presupuesto.realizadas == fuente.llamadas         
     antes = fuente.llamadas
-    app.listar_criptas()                                           # se pide para la segunda
+    app.listar_criptas()                                       
     app.crear_partida(crear_paquete_prueba.ID)
     assert fuente.presupuesto.realizadas == fuente.llamadas - antes, \
         (fuente.presupuesto.realizadas, fuente.llamadas - antes)
@@ -110,7 +96,7 @@ def test_respuestas_del_catalogo_no_retienen_fichas():
     app = Aplicacion(ClienteOffline(paquete), PresupuestoRed(activo=False),
                      os.path.join(base, "datos"), cache_size=2, semilla=7)
     partida = app.crear_partida(crear_paquete_prueba.ID)
-    partida.resolutor.esperar()                                    # todos los lotes incorporados
+    partida.resolutor.esperar()                                
     assert partida.resolutor.respuestas_retenidas() == 0
     gc.collect()
     ids = []
@@ -120,14 +106,14 @@ def test_respuestas_del_catalogo_no_retienen_fichas():
     vivas = 0
     for objeto in gc.get_objects():
         if isinstance(objeto, dict) and "clase" in objeto and objeto.get("id") in ids:
-            estatica = False                 # el catálogo de ejemplo del módulo de pruebas
+            estatica = False               
             for ficha in crear_paquete_prueba.CATALOGO:
                 if objeto is ficha:
                     estatica = True
             if not estatica:
                 vivas += 1
     cache = app.local.cache
-    assert vivas <= cache.cantidad(), (vivas, cache.cantidad())     # solo lo que guarda la caché
+    assert vivas <= cache.cantidad(), (vivas, cache.cantidad())     
     app.cerrar()
     shutil.rmtree(base, ignore_errors=True)
 
@@ -137,14 +123,11 @@ def test_saturacion_explicita_y_vuelve_al_tope():
     c = Cache(tope=3, en_uso=lambda i: i in usadas)
     for i in usadas:
         c.poner(i, i)
-    # desborde evitable: "d" no está en uso -> no entra a memoria (queda en disco)
     assert c.poner("d", "d") is None and c.cantidad() == 3 and not c.contiene("d")
     assert c.rechazadas == 1 and c.desbordes == 0
-    # desborde inevitable: "d" SÍ está en uso -> entra aunque pase el tope
     usadas.append("d")
     c.poner("d", "d")
     assert c.cantidad() == 4 and c.desbordes == 1
-    # cuando dejan de estar en uso, hasta una simple actualización vuelve al tope
     usadas[:] = []
     c.poner("a", "a2")
     assert c.cantidad() == 3 and c.obtener("a") == "a2"
@@ -154,7 +137,7 @@ def test_el_limite_anterior_no_frena_la_partida_nueva():
     p = PresupuestoRed(limite=1)
     p.registrar("partida anterior")
     p.reiniciar()
-    p.registrar("lista de criptas")          # antes: ErrorPresupuesto por el límite viejo (1)
+    p.registrar("lista de criptas")     
     p.registrar("datos generales")
     p.fijar_limite(10)
     assert p.realizadas == 2 and p.restantes() == 8
@@ -169,18 +152,17 @@ def test_cargar_que_no_coincide_no_cambia_la_partida_actual():
     c.agregar_observador(app.registrar_orden)
     c.ejecutar(Orden(MOVER, "N"))
     PersistenciaPartida(app).guardar(partida)
-    # se daña la foto: el reloj guardado ya no coincide con lo que da la re-simulación
     from modelo.datos.guardado_binario import cargar_todo, guardar
     foto = cargar_todo(app.ruta_guardado)
     foto.reloj += 1
     guardar(app.ruta_guardado, foto)
     log_antes, ordenes_antes, ejecutor_antes = app.log, app.ordenes, app.ejecutor
     archivos_antes = os.listdir(os.path.join(datos, "partidas"))
-    assert not c.ejecutar(Orden("cargar"))                       # se rechaza con aviso
-    assert c.partida is partida and app.partida is partida       # coherentes, sin cambiar
+    assert not c.ejecutar(Orden("cargar"))                  
+    assert c.partida is partida and app.partida is partida  
     assert app.log is log_antes and app.ordenes is ordenes_antes and app.ejecutor is ejecutor_antes
-    assert os.listdir(os.path.join(datos, "partidas")) == archivos_antes   # ni log a medias
-    assert c.ejecutar(Orden(MOVER, "S"))                          # la partida sigue jugable
+    assert os.listdir(os.path.join(datos, "partidas")) == archivos_antes 
+    assert c.ejecutar(Orden(MOVER, "S"))                       
     app.cerrar()
     shutil.rmtree(base, ignore_errors=True)
 
@@ -211,7 +193,7 @@ def test_soltar_desde_el_cursor_no_depende_de_la_posicion():
             esc.cerrar()
     finally:
         lista_doble.ListaDoble.nodos = original
-    assert resultados[0] == resultados[1] == 0, resultados     # ni el primero ni el último recorren
+    assert resultados[0] == resultados[1] == 0, resultados    
 
 
 def test_guardar_y_reabrir_conserva_el_presupuesto_gastado():
@@ -222,13 +204,13 @@ def test_guardar_y_reabrir_conserva_el_presupuesto_gastado():
     app.listar_criptas()
     partida = app.crear_partida(crear_paquete_prueba.ID)
     controlador = Controlador(partida)
-    controlador.agregar_observador(app.registrar_orden)        # así las órdenes van al guardado
+    controlador.agregar_observador(app.registrar_orden)        
     controlador.ejecutar(Orden(MOVER, "N"))
     gastadas = fuente.presupuesto.realizadas
     PersistenciaPartida(app).guardar(partida)
     app.cerrar()
 
-    otra_fuente = FuenteContada(paquete)                       # "se reabre el programa"
+    otra_fuente = FuenteContada(paquete)                  
     otra = Aplicacion(otra_fuente, otra_fuente.presupuesto, datos)
     otra.listar_criptas()
     otra.crear_partida(crear_paquete_prueba.ID)

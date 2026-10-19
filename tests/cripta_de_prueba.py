@@ -1,9 +1,3 @@
-"""Cripta sintética para probar el motor sin red, con la misma forma que las respuestas de la
-API (§3.3), pasando por el cliente real: ejecutor, presupuesto, resolutor, precarga y esqueleto.
-
-El inventario es el de §4.5 (inventario.py, lista doblemente enlazada).
-"""
-
 from modelo.datos.almacen_local import AlmacenLocalMemoria
 from modelo.juego.bitacora_pantalla import BitacoraPantalla
 from modelo.datos.ejecutor_red import EjecutorRed
@@ -47,7 +41,6 @@ DATOS = {"id": "cripta-test", "version": "t1", "sala_inicial": 1, "sala_salida":
 
 
 def esqueleto_linea(n, puertas=()):
-    """Salas 1..n en línea (N sube, S baja). puertas: [(a, a+1, {"cerrada": True, "llave": ...})]."""
     salas = []
     for i in range(1, n + 1):
         salidas = {}
@@ -64,7 +57,6 @@ def esqueleto_linea(n, puertas=()):
 
 
 def entrada(sala, enemigos=(), objetos=(), trampas=()):
-    """enemigos: [(instancia, tipo, vida)]; objetos: [ids]; trampas: [(instancia, tipo)]."""
     return {"sala": sala,
             "enemigos": [{"instancia": i, "tipo": t, "vida": v} for i, t, v in enemigos],
             "objetos": list(objetos),
@@ -118,7 +110,6 @@ class Escenario:
         self.presupuesto = presupuesto
 
     def dar(self, id_ficha):
-        """Mete un objeto del catálogo directo al inventario (atajo para pruebas)."""
         for ficha in CATALOGO:
             if ficha["id"] == id_ficha:
                 objeto = Objeto(ficha)

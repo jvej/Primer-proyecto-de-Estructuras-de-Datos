@@ -60,7 +60,6 @@ assert g.leer("a") == {"x": 1}
 assert g.leer("b") is None
 print("archivo cortado OK")
 
-# muchas fichas
 borrar()
 h = AlmacenFichas(RUTA, "cat-3")
 for i in range(500):

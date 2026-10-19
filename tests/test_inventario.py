@@ -1,9 +1,3 @@
-"""Pruebas de la lista doble y del inventario. Ejecutar: python -m tests.test_inventario
-
-Aisladas: no importan nada del motor (partida, actor, etc.), solo la lista, el
-inventario y el ordenamiento de Kim. El objeto falso `Obj` imita los atributos
-de Objeto (objetos.py) que el inventario usa: clase, nombre, peso y valor.
-"""
 import random
 
 from modelo.juego.inventario import (Inventario, InventarioLleno, ObjetoNoEstaEnInventario)
@@ -39,7 +33,6 @@ def inventario_con(*objetos, capacidad=10):
 
 
 def equipar(inv, objeto):
-    """Lo mismo que hace Partida._inv_al_frente: devuelve cómo deshacerlo."""
     posicion = inv.quitar(objeto)
     inv.agregar_al_frente(objeto)
 
@@ -48,8 +41,6 @@ def equipar(inv, objeto):
         inv.restaurar(objeto, posicion)
     return deshacer
 
-
-# ----------------------------------------------------------- lista doble
 def test_lista_basica():
     lista = ListaDoble()
     assert len(lista) == 0 and lista.primero() is None and lista.ultimo() is None
@@ -73,10 +64,10 @@ def test_lista_quitar_y_reinsertar_en_su_sitio():
     lista.reinsertar(b, anterior)
     assert list(lista) == ["a", "b", "c"]
     lista.quitar(a)
-    lista.reinsertar(a, None)                  # iba de primero
+    lista.reinsertar(a, None)              
     assert list(lista) == ["a", "b", "c"]
     lista.quitar(c)
-    lista.reinsertar(c, b)                     # iba de último
+    lista.reinsertar(c, b)                  
     assert list(lista) == ["a", "b", "c"]
 
 
@@ -98,16 +89,16 @@ def test_lista_reinsertar_cuando_el_vecino_fue_quitado():
     a = lista.agregar_al_final("a")
     b = lista.agregar_al_final("b")
     c = lista.agregar_al_final("c")
-    lista.quitar(c)                 # c iba detrás de b
-    lista.quitar(b)                 # b ya no está
-    lista.reinsertar(c, b)                  # b ya no está: cae detrás de a
+    lista.quitar(c)               
+    lista.quitar(b)             
+    lista.reinsertar(c, b)                  
     assert list(lista) == ["a", "c"]
     lista2 = ListaDoble()
     x = lista2.agregar_al_final("x")
     y = lista2.agregar_al_final("y")
     lista2.quitar(y)
     lista2.quitar(x)
-    lista2.reinsertar(y, x)                 # x ya no está: y queda de primero
+    lista2.reinsertar(y, x)               
     assert list(lista2) == ["y"]
 
 
@@ -128,8 +119,6 @@ def test_lista_errores():
     except ValueError:
         pass
 
-
-# ------------------------------------------------------------ inventario
 def test_capacidad_y_lleno():
     inv = inventario_con(Obj("a"), Obj("b"), capacidad=2)
     assert inv.lleno() and len(inv) == 2
@@ -139,7 +128,7 @@ def test_capacidad_y_lleno():
             assert False
         except InventarioLleno:
             pass
-    assert nombres(inv) == ["a", "b"]           # el rechazo no cambió nada
+    assert nombres(inv) == ["a", "b"]         
     inv.quitar(inv.objeto_actual())
     assert not inv.lleno()
     inv.agregar(Obj("c"))
@@ -177,13 +166,13 @@ def test_inventario_vacio():
 
 def test_soltar_el_objeto_que_se_ve_en_cualquier_posicion():
     inv = inventario_con(Obj("a"), Obj("b"), Obj("c"))
-    inv.siguiente()                                 # viendo b (en medio)
+    inv.siguiente()                             
     inv.quitar(inv.objeto_actual())
     assert nombres(inv) == ["a", "c"] and inv.objeto_actual().nombre == "c"
-    inv.siguiente()                                 # viendo c (último)
+    inv.siguiente()                               
     inv.quitar(inv.objeto_actual())
     assert nombres(inv) == ["a"] and inv.objeto_actual().nombre == "a"
-    inv.quitar(inv.objeto_actual())                 # el único
+    inv.quitar(inv.objeto_actual())              
     assert inv.esta_vacio() and inv.objeto_actual() is None
     inv.agregar(Obj("z"))
     assert inv.objeto_actual().nombre == "z"
@@ -218,19 +207,17 @@ def test_equipar_mueve_al_frente_y_se_deshace():
     inv = inventario_con(llave, daga, pocion)
     deshacer = equipar(inv, daga)
     assert nombres(inv) == ["daga", "llave", "pocion"]
-    assert inv.objeto_actual() is daga          # el cursor sigue al objeto
+    assert inv.objeto_actual() is daga       
     deshacer()
     assert nombres(inv) == ["llave", "daga", "pocion"]
 
 
 def test_pergamino_antes_del_objeto_equipado():
-    # Regresión: con "posición = índice", consumir el pergamino (sin registrar)
-    # antes de deshacer dejaba el orden cambiado: [Cota, Daga] en vez de [Daga, Cota].
     perg, daga, cota = Obj("perg", PERGAMINO), Obj("daga", "arma"), Obj("cota", "armadura")
     inv = inventario_con(perg, daga, cota)
     deshacer = equipar(inv, daga)
     assert nombres(inv) == ["daga", "perg", "cota"]
-    inv.quitar(perg)                            # el pergamino se consume sin registrarse
+    inv.quitar(perg)                         
     deshacer()
     assert nombres(inv) == ["daga", "cota"]
 
@@ -238,25 +225,23 @@ def test_pergamino_antes_del_objeto_equipado():
 def test_pergamino_antes_del_objeto_soltado():
     perg, a, b = Obj("perg", PERGAMINO), Obj("a"), Obj("b")
     inv = inventario_con(perg, a, b)
-    posicion = inv.quitar(a)                    # el jugador suelta a
-    inv.quitar(perg)                            # se consume el pergamino
-    inv.restaurar(a, posicion)                  # deshacer
+    posicion = inv.quitar(a)                 
+    inv.quitar(perg)                           
+    inv.restaurar(a, posicion)               
     assert nombres(inv) == ["a", "b"]
 
 
 def test_dos_acciones_seguidas_con_dos_pergaminos():
-    # Caso que encontró la prueba aleatoria: recordar solo al vecino de adelante
-    # no basta cuando se deshacen dos acciones y el vecino es un pergamino consumido.
     o0, o1, o3 = Obj("o0"), Obj("o1", "arma"), Obj("o3")
     s, s2 = Obj("s", PERGAMINO), Obj("s2", PERGAMINO)
     inv = inventario_con(o0, o1, s, o3, s2)
-    pos_o3 = inv.quitar(o3)                       # acción 1: soltar o3 (iba detrás de s)
-    deshacer_equipar = equipar(inv, o1)           # acción 2: equipar o1 (pasa al frente)
+    pos_o3 = inv.quitar(o3)                   
+    deshacer_equipar = equipar(inv, o1)           
     assert nombres(inv) == ["o1", "o0", "s", "s2"]
-    inv.quitar(s)                                 # pergamino 1 (sin registrar)
-    deshacer_equipar()                            # deshace la acción 2
-    inv.quitar(s2)                                # pergamino 2 (sin registrar)
-    inv.restaurar(o3, pos_o3)                     # deshace la acción 1
+    inv.quitar(s)                                 
+    deshacer_equipar()                        
+    inv.quitar(s2)                            
+    inv.restaurar(o3, pos_o3)              
     assert nombres(inv) == ["o0", "o1", "o3"]
 
 
@@ -302,7 +287,7 @@ def test_objeto_en_e_indice_de():
     inv = inventario_con(a, b, c)
     for i, esperado in enumerate([a, b, c]):
         assert inv.objeto_en(i) is esperado and inv.indice_de(esperado) == i
-    equipar(inv, c)                              # c pasa al frente: las posiciones cambian
+    equipar(inv, c)                              
     assert inv.objeto_en(0) is c and inv.indice_de(a) == 1
     for malo in (-1, 3):
         try:
@@ -321,8 +306,6 @@ def test_contar_clase():
     inv = inventario_con(Obj("p1", PERGAMINO), Obj("llave"), Obj("p2", PERGAMINO))
     assert inv.contar_clase(PERGAMINO) == 2 and inv.contar_clase("arma") == 0
 
-
-# --------------------------------------- prueba aleatoria: deshacer con pergaminos
 def test_aleatoria_deshacer_intervalos_consumiendo_pergaminos():
     """Imita a Partida: hasta 5 acciones (soltar / recoger / equipar) sobre objetos que
     no son pergaminos (o recoger un pergamino, que no se registra); luego, por cada
@@ -348,7 +331,7 @@ def test_aleatoria_deshacer_intervalos_consumiendo_pergaminos():
                 perg_nuevo = Obj("p%d" % len(todos) + "r", PERGAMINO)
                 todos.append(perg_nuevo)
                 recogidos.append(perg_nuevo)
-                inv.agregar(perg_nuevo)               # recoger un pergamino no se registra
+                inv.agregar(perg_nuevo)             
             elif accion == 0 and normales:
                 objeto = azar.choice(normales)
                 posicion = inv.quitar(objeto)
@@ -364,14 +347,13 @@ def test_aleatoria_deshacer_intervalos_consumiendo_pergaminos():
         while intervalos:
             for p in inv.objetos():
                 if p.es_pergamino():
-                    inv.quitar(p)                # consumo sin registrar
+                    inv.quitar(p)              
                     consumidos.append(p)
                     break
             for deshacer in reversed(intervalos.pop()):
                 deshacer()
-        # quedan los consumidos fuera; los demás deben estar en el orden original
         esperado = [o for o in original if o not in consumidos]
-        esperado += [o for o in recogidos if o not in consumidos]   # se quedan, al final
+        esperado += [o for o in recogidos if o not in consumidos]  
         restantes = [o for o in inv.objetos()]
         assert restantes == esperado, (restantes, esperado)
 

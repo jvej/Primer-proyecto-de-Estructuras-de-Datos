@@ -50,8 +50,6 @@ for s in t.salas:
             original = x
     assert igual(s, original)
 print("carga completa OK")
-
-# partida sin salas y con textos con tildes
 v = PartidaGuardada(0, 1, 10, 1)
 v.inventario = ["poción ñ"]
 guardar(RUTA, v)
@@ -59,7 +57,6 @@ assert cargar_general(RUTA).inventario == ["poción ñ"]
 assert leer_sala(RUTA, 1) is None
 print("partida vacía OK")
 
-# versión de formato distinta
 guardar(RUTA, p)
 with open(RUTA, "r+b") as f:
     f.seek(4)
@@ -71,7 +68,6 @@ except ErrorFormato:
     pass
 print("versión incompatible OK")
 
-# archivo que no es una partida
 with open(RUTA, "wb") as f:
     f.write(b"hola esto no es una partida de cripta")
 try:

@@ -1,10 +1,3 @@
-"""Pruebas de la parte de aplicación de Axel: log y replay (§4.11), puntajes (§2.12),
-guardar/cargar (§4.10, camino A), azar reversible y pila acotada del retroceso (§4.6),
-y la corrección del combate con arma/armadura. Ejecutar: python -m tests.test_replay_puntajes
-
-Usan el paquete --offline sintético de crear_paquete_prueba.py en una carpeta temporal:
-no tocan la red ni la carpeta datos_cripta/ del proyecto.
-"""
 import os
 import shutil
 import tempfile
@@ -28,7 +21,6 @@ JUGADAS = [Orden(RECOGER, 0), Orden(RECOGER, 0), Orden(EQUIPAR, 0), Orden(MOVER,
 
 
 class Entorno:
-    """Carpeta temporal con un paquete offline y una carpeta de datos."""
 
     def __init__(self):
         self.base = tempfile.mkdtemp(prefix="cripta_test_")
@@ -70,8 +62,6 @@ def foto(partida):
             partida.acciones, partida.derrotados, partida.estado, inventario,
             partida.bitacora.ultimos())
 
-
-# ------------------------------------------------------------ correcciones del modelo
 def test_combate_suma_arma_y_armadura():
     esc = armar(esqueleto_linea(2), [entrada(1, enemigos=[("e-1", "ent_esqueleto", 10)])], capacidad=6)
     p = esc.partida
@@ -80,7 +70,6 @@ def test_combate_suma_arma_y_armadura():
     vida_antes = p.mapa.enemigos[0].vida
     p.atacar(0)
     dano = vida_antes - p.mapa.enemigos[0].vida
-    # ataque 6 + daga 3 + randint(0..4) - defensa 2  ->  entre 7 y 11 (sin la daga sería 4..8)
     assert 7 <= dano <= 11, dano
     esc.cerrar()
 
@@ -109,15 +98,13 @@ def test_el_pergamino_restaura_tambien_el_azar():
     vida_jugador = p.jugador.vida
     assert p.usar_pergamino()
     p.atacar(0)
-    assert vida - p.mapa.enemigos[0].vida == primer_golpe          # misma tirada
-    assert p.jugador.vida == vida_jugador                          # el contraataque también
+    assert vida - p.mapa.enemigos[0].vida == primer_golpe       
+    assert p.jugador.vida == vida_jugador                      
     esc.cerrar()
 
-
-# ------------------------------------------------------------------ log y replay
 def test_el_log_tiene_encabezado_y_las_ordenes_aceptadas():
     entorno = Entorno()
-    app, controlador = entorno.jugar(JUGADAS + [Orden(ATACAR, 5)])     # la última se rechaza
+    app, controlador = entorno.jugar(JUGADAS + [Orden(ATACAR, 5)])    
     ruta = app.cerrar()
     encabezado, ordenes = leer_log(ruta)
     assert encabezado.id_cripta == crear_paquete_prueba.ID
@@ -127,7 +114,7 @@ def test_el_log_tiene_encabezado_y_las_ordenes_aceptadas():
     leidas = []
     while not ordenes.vacia():
         leidas.append(ordenes.sacar())
-    assert leidas == JUGADAS, leidas                                # incluye el pergamino
+    assert leidas == JUGADAS, leidas                               
     entorno.borrar()
 
 
@@ -167,7 +154,7 @@ def test_replay_detecta_divergencia_y_logs_danados():
     app, controlador = entorno.jugar(JUGADAS[:4])
     ruta = app.cerrar()
     with open(ruta, "a", encoding="utf-8") as f:
-        f.write("atacar 7\n")                       # no hay 8 enemigos: el original no fue así
+        f.write("atacar 7\n")                  
     fuente, presupuesto = crear_fuente_datos(True, entorno.paquete)
     resultado = reproducir(ruta, fuente, presupuesto, entorno.datos)
     assert not resultado.reproducido and "DIVERGENCIA en la orden 5" in resultado.texto()
@@ -180,9 +167,6 @@ def test_replay_detecta_divergencia_y_logs_danados():
     except ErrorLog:
         pass
     entorno.borrar()
-
-
-# ------------------------------------------------------------------ puntajes
 def test_puntajes_se_registran_y_se_ordenan():
     entorno = Entorno()
     tabla = TablaPuntajes(os.path.join(entorno.base, "puntajes.txt"))
@@ -212,7 +196,6 @@ def test_puntajes_se_registran_y_se_ordenan():
 
 def test_ganar_registra_puntaje_y_cierra_el_log():
     entorno = Entorno()
-    # mismas 8 primeras jugadas; luego cota, 4 salas al norte, llave, abrir y salir
     llegar = JUGADAS[:8] + [Orden(RECOGER, 0)] + [Orden(MOVER, "N")] * 4 + \
         [Orden(RECOGER, 0), Orden(MOVER, "N"), Orden("abrir", "N"), Orden(MOVER, "N")]
     app, controlador = entorno.jugar(llegar, semilla=7)
@@ -225,8 +208,6 @@ def test_ganar_registra_puntaje_y_cierra_el_log():
     app.cerrar()
     entorno.borrar()
 
-
-# ------------------------------------------------------------------ guardar y cargar
 def test_guardar_y_cargar_reconstruye_la_misma_partida():
     entorno = Entorno()
     app, controlador = entorno.jugar(JUGADAS)
@@ -240,15 +221,14 @@ def test_guardar_y_cargar_reconstruye_la_misma_partida():
     app.cerrar()
 
     otra = entorno.aplicacion(nombre="Prueba")
-    otra.crear_partida(crear_paquete_prueba.ID)                    # se está jugando otra cosa
+    otra.crear_partida(crear_paquete_prueba.ID)                 
     cargada = PersistenciaPartida(otra).cargar()
     obtenido = foto(cargada)
     assert obtenido[:7] == esperado[:7], (obtenido, esperado)
-    # se puede seguir jugando y el log nuevo empieza con las órdenes ya jugadas
     Controlador(cargada).ejecutar(Orden(ESPERAR))
     ruta = otra.cerrar()
     _encabezado, ordenes = leer_log(ruta)
-    assert len(ordenes) == len(JUGADAS)          # ESPERAR no pasó por el observador aquí
+    assert len(ordenes) == len(JUGADAS)          
     entorno.borrar()
 
 
@@ -266,7 +246,7 @@ def test_cargar_con_otra_version_falla_sin_romper_la_partida_actual():
     except ErrorCarga as error:
         assert "versión" in str(error)
     assert otra.partida is actual and otra.ejecutor is not None
-    assert Controlador(actual).ejecutar(Orden(ESPERAR))           # la partida actual sigue viva
+    assert Controlador(actual).ejecutar(Orden(ESPERAR))       
     otra.cerrar()
     entorno.borrar()
 
@@ -277,8 +257,6 @@ def test_cargar_sin_archivo_devuelve_none():
     assert PersistenciaPartida(app, os.path.join(entorno.base, "no_existe.bin")).cargar() is None
     entorno.borrar()
 
-
-# ------------------------------------------------------------------ main
 def test_main_sin_vista_en_replay_y_bench():
     entorno = Entorno()
     assert main_programa(["--bench", "no_existe"]) == 2

@@ -1,14 +1,3 @@
-"""Pruebas de la interfaz gráfica que NO necesitan Pygame ni ventana.
-Ejecutar: python -m tests.test_gui
-
-  - cada tecla produce la misma Orden que el comando equivalente de la consola;
-  - elegir enemigo u objeto no es una orden (no consume tiempo ni va al log);
-  - el Modelo y el Controlador no importan Pygame (MVC, §6);
-  - --replay y --bench no cargan Pygame;
-  - las animaciones se deducen de la partida sin cambiarla (ataque, daño, muerte, correr,
-    abrir puerta, trampa);
-  - recoger un arma no cambia la imagen del jugador: solo equiparla.
-"""
 import os
 import sys
 
@@ -47,8 +36,8 @@ def test_shift_flecha_abre_y_shift_numero_ordena_descendente():
 def test_seleccion_no_es_una_orden():
     assert orden_para_tecla("tab", False, 0, 0) == SIG_ENEMIGO
     assert orden_para_tecla("f", False, 0, 0) == SIG_SUELO
-    assert orden_para_tecla("space", False, 2, 0).argumento == 2      # ataca al elegido
-    assert orden_para_tecla("g", False, 0, 3).argumento == 3          # recoge el elegido
+    assert orden_para_tecla("space", False, 2, 0).argumento == 2    
+    assert orden_para_tecla("g", False, 0, 3).argumento == 3         
     assert orden_para_tecla("zzz", False, 0, 0) is None
     assert orden_para_tecla("escape", False, 0, 0) == Orden(SALIR)
 
@@ -56,7 +45,7 @@ def test_seleccion_no_es_una_orden():
 def test_seleccion_circular_y_ajuste():
     assert siguiente_posicion(0, 3) == 1 and siguiente_posicion(2, 3) == 0
     assert siguiente_posicion(5, 0) == 0
-    assert ajustar_posicion(4, 2) == 1          # murió un enemigo: la selección sigue válida
+    assert ajustar_posicion(4, 2) == 1         
     assert ajustar_posicion(0, 0) == 0
 
 
@@ -111,7 +100,7 @@ def test_retroceso_no_anima():
     controlador.ejecutar(Orden(ATACAR, 0))
     animador.observar(partida, 0, ATACAR, [])
     animador.activas = []
-    controlador.ejecutar(Orden(PERGAMINO))          # la vida "sube": no es daño ni muerte
+    controlador.ejecutar(Orden(PERGAMINO))       
     animador.observar(partida, 10, PERGAMINO, [])
     assert animador.activas == []
     assert animador.estado(partida.jugador, 10)[0] == REPOSO
@@ -126,7 +115,7 @@ def test_entrar_a_otra_sala_anima_la_carrera():
     assert Controlador(partida).ejecutar(Orden(MOVER, "N"))
     animador.observar(partida, 0, MOVER, [])
     assert animador.estado(partida.jugador, 100)[0] == CORRER
-    assert animador.estado(partida.jugador, 5000)[0] == REPOSO     # luego vuelve al reposo
+    assert animador.estado(partida.jugador, 5000)[0] == REPOSO   
     esc.cerrar()
 
 
@@ -137,13 +126,13 @@ def test_trampa_al_entrar_anima_el_dano_cuando_termina_de_correr():
     animador.reiniciar(partida)
     vida = partida.jugador.vida
     assert Controlador(partida).ejecutar(Orden(MOVER, "N"))
-    assert partida.jugador.vida < vida                               # la trampa sí hizo daño
+    assert partida.jugador.vida < vida                               
     animador.observar(partida, 0, MOVER, [])
-    assert animador.estado(partida.jugador, 100)[0] == CORRER         # primero entra corriendo
-    assert animador.estado(partida.jugador, CORRER_MS + 10)[0] == DANO   # y al llegar, el daño
+    assert animador.estado(partida.jugador, 100)[0] == CORRER        
+    assert animador.estado(partida.jugador, CORRER_MS + 10)[0] == DANO  
     efectos = animador.efectos_trampa(CORRER_MS + 10)
     assert len(efectos) == 1 and efectos[0][1] == "trp_dardos"
-    assert animador.efectos_trampa(100) == []                        # no antes de llegar
+    assert animador.efectos_trampa(100) == []                       
     esc.cerrar()
 
 
@@ -152,18 +141,18 @@ def test_recoger_un_arma_no_la_equipa():
     partida = esc.partida
     controlador = Controlador(partida)
     assert controlador.ejecutar(Orden(RECOGER, 0))
-    assert partida.jugador.arma is None                 # la imagen sigue siendo "sin arma"
+    assert partida.jugador.arma is None               
     assert controlador.ejecutar(Orden(EQUIPAR, None))
-    assert partida.jugador.arma is not None             # ahora sí: imagen con espada
+    assert partida.jugador.arma is not None            
     esc.cerrar()
 
 
 def test_cuadros_de_animacion():
     assert indice_de_cuadro(REPOSO, 0, 2) == 0 and indice_de_cuadro(REPOSO, 460, 2) == 1
-    assert indice_de_cuadro(REPOSO, 920, 2) == 0                 # el reposo se repite
+    assert indice_de_cuadro(REPOSO, 920, 2) == 0               
     assert indice_de_cuadro(MUERTE, 0, 3) == 0 and indice_de_cuadro(MUERTE, 99999, 3) == 2
-    assert indice_de_cuadro(ATAQUE, 0, 0) == -1                  # sin cuadros: imagen estática
-    assert indice_de_cuadro(CORRER, 0, 6) == 0 and indice_de_cuadro(CORRER, 80 * 7, 6) == 1   # se repite
+    assert indice_de_cuadro(ATAQUE, 0, 0) == -1              
+    assert indice_de_cuadro(CORRER, 0, 6) == 0 and indice_de_cuadro(CORRER, 80 * 7, 6) == 1  
     assert indice_de_cuadro(ABRIR_PUERTA, 0, 4) == 0 and indice_de_cuadro(ABRIR_PUERTA, 9999, 4) == 3
     assert indice_de_cuadro(TRAMPA, 0, 4) == 0 and indice_de_cuadro(TRAMPA, 9999, 4) == 3
 
