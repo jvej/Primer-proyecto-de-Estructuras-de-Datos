@@ -1,6 +1,3 @@
-"""Excepciones del proyecto. Todas llevan la operación que falló (§3.1)."""
-
-
 class ErrorCripta(Exception):
     """Base de los errores propios del programa."""
 

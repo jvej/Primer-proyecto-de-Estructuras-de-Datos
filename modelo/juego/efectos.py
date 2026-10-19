@@ -1,16 +1,9 @@
-"""Efectos temporales y del entorno (§2.10). Cada efecto es un evento en la agenda.
-
-Todo cambio pasa por partida.cambiar / partida.programar, así queda registrado
-para el retroceso. Cancelar un efecto es cancelar su evento (§4.1).
-"""
-
 INTERVALO_VENENO = 80
 DURACION_VENENO = 400
 INTERVALO_REGENERACION = 200
 
 
 def aplicar_veneno(partida, actor, dano):
-    """Daño cada 80 unidades durante 400 desde su aplicación (5 pulsos). Reaplicar reinicia."""
     cancelar_veneno(partida, actor)
     inicio = partida.reloj.tiempo_actual
 
@@ -41,7 +34,6 @@ def cancelar_veneno(partida, actor):
 
 
 def iniciar_regeneracion(partida, enemigo):
-    """Recupera enemigo.regeneracion de vida cada 200 unidades, sin pasar de vida_max."""
 
     def programar(tiempo):
         evento = partida.programar(tiempo, pulso, enemigo, "regeneración")
@@ -58,8 +50,6 @@ def iniciar_regeneracion(partida, enemigo):
 
 
 def cambiar_velocidad(partida, actor, delta):
-    """Suma delta a la velocidad y reajusta su próxima acción con la fórmula de §2.3.
-    Devuelve el cambio realmente aplicado (la velocidad nunca baja de 1)."""
     anterior = actor.velocidad
     nueva = max(1, anterior + delta)
     partida.cambiar(actor, "velocidad", nueva)
@@ -105,7 +95,6 @@ def disparar_trampa(partida, trampa):
 
 
 def programar_cierre(partida, salida):
-    """Una salida con cierre automático se cierra sola tras el tiempo indicado."""
 
     def cerrar(ahora):
         partida.cambiar(salida, "estado", "cerrada")

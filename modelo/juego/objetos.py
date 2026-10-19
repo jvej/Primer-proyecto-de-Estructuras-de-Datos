@@ -1,14 +1,7 @@
-"""Objetos y trampas del modelo, creados a partir de la ficha del catálogo (§2.7, §2.10).
-
-La ficha (un dict del JSON) solo se lee aquí, una vez; el modelo trabaja con atributos.
-Varias instancias del mismo tipo comparten ficha pero son objetos distintos.
-"""
-
-
 class Objeto:
     def __init__(self, ficha) -> None:
         self.id = ficha["id"]
-        self.clase = ficha.get("clase", "")   # arma, armadura, pocion, antidoto, llave, antorcha, pergamino_retroceso
+        self.clase = ficha.get("clase", "")  
         self.nombre = ficha.get("nombre", self.id)
         self.peso = ficha.get("peso", 0)
         self.valor = ficha.get("valor", 0)
@@ -18,7 +11,7 @@ class Objeto:
         self.modificador_velocidad = ficha.get("modificador_velocidad", 0)
         self.duracion = ficha.get("duracion", 0)
         self.abre = ficha.get("abre")
-        self.usos = ficha.get("usos", 1)      # antorcha: unidades de uso (por confirmar en el catálogo)
+        self.usos = ficha.get("usos", 1)     
 
     def es_pergamino(self) -> bool:
         return self.clase == "pergamino_retroceso"
@@ -33,8 +26,8 @@ class Trampa:
         self.id = ficha["id"]
         self.nombre = ficha.get("nombre", self.id)
         self.dano = ficha.get("daño", 0)
-        self.veneno = ficha.get("veneno", 0)       # opcional: daño por pulso (por confirmar en el catálogo)
-        self.rearme = ficha.get("rearme", 300)     # §2.10: 300 salvo que la ficha diga otra cosa
+        self.veneno = ficha.get("veneno", 0)     
+        self.rearme = ficha.get("rearme", 300)     
         self.armada = True
 
     def __repr__(self) -> str:
