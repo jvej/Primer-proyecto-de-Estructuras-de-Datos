@@ -7,14 +7,13 @@ DIRECCIONES = ("N", "S", "E", "O")
 
 class Esqueleto:
     def __init__(self):
-        self.ids = []                 # posición -> id de sala
-        self.vecinos = []             # posición -> lista de ids vecinos (orden N, S, E, O)
-        self._indice = ListaOrdenada()    # str(id) -> posición
-        self.nombres = []             # posición -> nombre de la sala
-        self.salidas = []             # posición -> JSON crudo de sus salidas (lo lee el Mapa del motor)
+        self.ids = []            
+        self.vecinos = []           
+        self._indice = ListaOrdenada()    
+        self.nombres = []        
+        self.salidas = []            
 
     def agregar_pagina(self, cuerpo):
-        """cuerpo: JSON de GET /criptas/<id>/salas?pagina=n"""
         for sala in cuerpo["salas"]:
             vecinos = []
             for direccion in DIRECCIONES:
@@ -33,7 +32,6 @@ class Esqueleto:
         return len(self.ids)
 
     def posicion(self, id_sala):
-        """Posición de la sala en las listas paralelas (None si no existe)."""
         return self._indice.buscar(str(id_sala))
 
     def vecinos_de(self, id_sala):

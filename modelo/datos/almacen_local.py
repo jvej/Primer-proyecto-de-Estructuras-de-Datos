@@ -13,8 +13,6 @@ class AlmacenLocal:
 
 
 class AlmacenLocalMemoria(AlmacenLocal):
-    """Implementación simple (sin tope ni disco) para pruebas y para trabajar sin la caché."""
-
     def __init__(self):
         self._tabla = ListaOrdenada()
 

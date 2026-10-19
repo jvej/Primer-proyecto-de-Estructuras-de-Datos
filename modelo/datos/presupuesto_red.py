@@ -1,4 +1,3 @@
-"""Presupuesto de solicitudes de red (§5.1)."""
 import threading
 
 from modelo.juego.errores import ErrorPresupuesto
@@ -19,10 +18,6 @@ class PresupuestoRed:
             self.limite = limite
 
     def reiniciar(self):
-        """Nueva partida: el presupuesto es por partida (§5.1). Se borra también el límite
-        de la partida anterior: hasta que la nueva lo fije con fijar_limite() (al leer sus
-        datos generales) no hay tope conocido, así el límite de la cripta anterior no
-        frena las primeras solicitudes de la nueva."""
         with self._cerrojo:
             self.limite = None
             self.realizadas = 0
@@ -30,15 +25,10 @@ class PresupuestoRed:
             self._credito = 0
 
     def marca(self):
-        """Foto de los contadores, para saber después cuánto se gastó desde aquí."""
         with self._cerrojo:
             return (self.realizadas, self.reservadas)
 
     def continuar(self, previas, marca):
-        """Al cargar una partida guardada (§5.1, §4.10): el presupuesto es de ESA partida,
-        así que cuenta las `previas` solicitudes que ya había gastado antes de guardarse
-        más las que se hicieron desde `marca` (las de la carga). Reabrir el programa no
-        devuelve presupuesto."""
         with self._cerrojo:
             if not self.activo:
                 return
@@ -49,14 +39,12 @@ class PresupuestoRed:
             self._credito = self.reservadas - self.realizadas
 
     def restantes(self):
-        """Solicitudes que aún se pueden planificar (None si no hay tope conocido)."""
         with self._cerrojo:
             if self.limite is None or not self.activo:
                 return None
             return self.limite - self.reservadas
 
     def reservar(self):
-        """Reserva una solicitud futura. False si ya no cabe."""
         with self._cerrojo:
             if not self.activo:
                 return True
@@ -67,7 +55,6 @@ class PresupuestoRed:
             return True
 
     def registrar(self, operacion="solicitud"):
-        """Se llama justo antes de cada solicitud HTTP real (también reintentos)."""
         with self._cerrojo:
             if not self.activo:
                 return
@@ -80,7 +67,6 @@ class PresupuestoRed:
                 self.reservadas += 1
 
     def reporte(self, cache=None):
-        """Texto para mostrar al terminar la partida. cache: objeto con .aciertos y .fallos."""
         limite = "sin dato" if self.limite is None else str(self.limite)
         lineas = ["Solicitudes realizadas: %d" % self.realizadas,
                   "Presupuesto de solicitudes: %s" % limite]

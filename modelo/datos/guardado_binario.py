@@ -2,7 +2,7 @@ import struct
 from modelo.estructuras.ordenamiento import ordenar
 
 MARCA = b"CRPT"
-VERSION_FORMATO = 3      # 2: cripta, versiones, jugador y órdenes; 3: + solicitudes de red gastadas
+VERSION_FORMATO = 3     
 ENCABEZADO = "<4sHIQI"   
 ENTRADA = "<IQI"          
 TAM_ENCABEZADO = struct.calcsize(ENCABEZADO)
@@ -29,13 +29,12 @@ class PartidaGuardada:
         self.sala_actual = sala_actual
         self.inventario = []
         self.salas = []
-        # Para reconstruir la partida exacta (agenda incluida) re-simulando (ver persistencia_partida.py)
         self.id_cripta = id_cripta
         self.version_cripta = version_cripta
         self.version_catalogo = version_catalogo
         self.nombre = nombre
-        self.ordenes = []     # órdenes de partida en texto ("mover N", "recoger 0", ...)
-        self.solicitudes = 0  # solicitudes de red ya gastadas por esta partida (§5.1)
+        self.ordenes = []  
+        self.solicitudes = 0  
 
 
 def _texto(s):

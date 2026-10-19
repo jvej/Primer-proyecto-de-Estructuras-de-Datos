@@ -1,4 +1,3 @@
-"""Cliente HTTP del servicio Cripta (§3.1, §5.1)."""
 import threading
 import time
 import uuid
@@ -15,9 +14,6 @@ TIMEOUT_DEFECTO = 10
 MAX_REINTENTOS_429 = 5
 ESPERA_429_DEFECTO = 1
 
-# Se genera UNA sola vez por ejecución del programa y lo usan todos los clientes que se
-# creen en ella (la partida y cada repetición): el enunciado exige el mismo
-# X-Cripta-Client-Id en todas las solicitudes de una misma ejecución.
 CLIENT_ID = str(uuid.uuid4())
 
 
@@ -49,7 +45,7 @@ class ClienteHTTP(FuenteDatos):
         url = self.base_url + ruta
         reintentos = 0
         while True:
-            self.presupuesto.registrar(operacion)          # cuenta también los reintentos
+            self.presupuesto.registrar(operacion)       
             try:
                 with self._cerrojo:
                     respuesta = self.sesion.get(url, headers=self._cabeceras,
@@ -72,7 +68,7 @@ class ClienteHTTP(FuenteDatos):
                     raise ErrorRed(operacion, "HTTP 429 persistente tras %d reintentos"
                                    % self.max_reintentos_429, 429)
                 self.esperas_429 += 1
-                self.dormir(self._segundos_espera(respuesta))   # tiempo real, no virtual
+                self.dormir(self._segundos_espera(respuesta))  
                 continue
             raise ErrorRed(operacion, "HTTP %d en %s: %s"
                            % (respuesta.status_code, url, respuesta.text[:200]),

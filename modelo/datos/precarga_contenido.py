@@ -27,18 +27,17 @@ class PrecargaContenido:
         self.profundidad = profundidad
         self.reserva = reserva
         self.tam_lote = min(tam_lote, TAM_LOTE_MAX)
-        self._contenidos = ListaOrdenada()      # str(id) -> entrada de contenido incorporada
-        self._solicitadas = ListaOrdenada()     # str(id) -> True (pedida, en vuelo o incorporada)
-        self._solicitud_de = ListaOrdenada()    # str(id) -> _Solicitud
-        self._solicitudes = []              # en orden de envío
-        self._siguiente = 0                 # próxima solicitud por incorporar
-        self.errores = []                   # fallos de precarga especulativa
+        self._contenidos = ListaOrdenada()     
+        self._solicitadas = ListaOrdenada()     
+        self._solicitud_de = ListaOrdenada()   
+        self._solicitudes = []            
+        self._siguiente = 0               
+        self.errores = []                  
         self.lotes_enviados = 0
         self.salas_pedidas_red = 0
         self.salas_desde_disco = 0
         self.esperas_bloqueantes = 0
 
-    # ---------- consultas ----------
     def tiene_contenido(self, id_sala):
         return self._contenidos.contiene(str(id_sala))
 
@@ -50,7 +49,6 @@ class PrecargaContenido:
         return entrada
 
     def sala_lista(self, id_sala):
-        """True si el contenido y las fichas de lo que contiene ya están en memoria/disco."""
         entrada = self._contenidos.buscar(str(id_sala))
         if entrada is None:
             return False
@@ -61,7 +59,6 @@ class PrecargaContenido:
                 return False
         return True
 
-    # ---------- incorporación en orden ----------
     def _incorporar(self, solicitud):
         solicitud.procesada = True
         try:
@@ -71,7 +68,7 @@ class PrecargaContenido:
             solicitud.error = e if isinstance(e, ErrorCripta) else ErrorRed(
                 "contenido de salas", "respuesta con formato inesperado: %r" % (e,))
             for id_ in solicitud.ids:
-                self._solicitadas.eliminar(str(id_))     # podrá pedirse de nuevo
+                self._solicitadas.eliminar(str(id_))  
             self.errores.append(solicitud.error)
             return
         for entrada in entradas:
@@ -87,11 +84,11 @@ class PrecargaContenido:
                 solicitud.error = ErrorRed("contenido de salas",
                                            "el servidor no devolvió la sala %s" % id_)
                 self.errores.append(solicitud.error)
-        solicitud.tarea.resultado = None                 # libera la respuesta cruda
+        solicitud.tarea.resultado = None                
         if self.resolutor is not None:
             try:
-                self.resolutor.lanzar(forzar=False)      # solo lotes completos de 10
-            except ErrorPresupuesto as e:                # reaparecerá en asegurar()
+                self.resolutor.lanzar(forzar=False)     
+            except ErrorPresupuesto as e:                
                 self.errores.append(e)
 
     def sondear(self):
@@ -114,7 +111,6 @@ class PrecargaContenido:
             self._siguiente += 1
             self._incorporar(actual)
 
-    # ---------- planificación ----------
     def _ya_solicitada(self, id_sala):
         return self._solicitadas.contiene(str(id_sala))
 
@@ -166,7 +162,6 @@ class PrecargaContenido:
             ids = [c[0] for c in cercanas]
             return self._enviar_lote(ids, forzado)
 
-    # ---------- API para el controlador ----------
     def al_entrar(self, id_sala):
         self.sondear()
         self._planificar(id_sala, False, self.profundidad)
@@ -184,8 +179,6 @@ class PrecargaContenido:
                 self.errores.append(e)
 
     def asegurar(self, id_sala):
-        """Bloquea hasta que la sala y las fichas de su contenido estén listas.
-        Lanza ErrorRed/ErrorPresupuesto/ErrorDatosNoDisponibles si no es posible."""
         if not self.esqueleto.existe(id_sala):
             raise ErrorDatosNoDisponibles("contenido de sala " + str(id_sala),
                                           "la sala no existe en el esqueleto")
