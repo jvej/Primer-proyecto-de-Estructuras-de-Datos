@@ -1,35 +1,3 @@
-"""Bitácora de partida para reproducción (§4.11). Adaptador de disco: el Modelo no la conoce.
-
-Archivo de texto de SOLO ANEXADO. Formato:
-
-    CRIPTA-LOG 1
-    id_cripta=cripta-01
-    version_cripta=a3f91c
-    version_catalogo=cat-2026-08-01
-    semilla=12345
-    jugador=Axel
-    fecha=2026-10-15 11:53:02
-    ---
-    recoger 0
-    mover N
-    pergamino
-    ...
-
-Una línea por cada orden de partida ACEPTADA, ya resuelta (posiciones concretas,
-nunca "el objeto del cursor"). El pergamino SÍ se anota: aunque no cuenta como acción
-del jugador (§2.11), sin él la reproducción se desviaría.
-
-Cada línea se escribe y se vacía al disco (flush) de inmediato: si el programa se cae,
-el log conserva todo lo jugado hasta ese momento.
-
-Al leer, las órdenes quedan en una cola FIFO (cola_fifo.py): la reproducción las
-consume en el mismo orden en que se escribieron.
-
-Solo se conservan las últimas MAX_REPETICIONES bitácoras (podar_logs): al crear una
-nueva se borran las más viejas. listar_logs() las devuelve de la más nueva a la más
-vieja para el menú de repeticiones.
-"""
-
 import os
 
 from modelo.estructuras.cola_fifo import ColaFIFO
@@ -42,7 +10,7 @@ SEPARADOR = "---"
 CAMPOS = ("id_cripta", "version_cripta", "version_catalogo", "semilla", "jugador", "fecha")
 OBLIGATORIOS = ("id_cripta", "version_cripta", "version_catalogo", "semilla")
 EXTENSION = ".log"
-MAX_REPETICIONES = 20          # bitácoras que se conservan en disco
+MAX_REPETICIONES = 20      
 
 
 class ErrorLog(Exception):
@@ -67,17 +35,11 @@ class EncabezadoLog:
 
 
 def _limpio(texto):
-    """Sin saltos de línea: cada campo ocupa exactamente una línea."""
     return str(texto).replace("\n", " ").replace("\r", " ")
 
 
 class BitacoraPartida:
-    """Escritor del log. Se usa como observador del Controlador: anotar(orden)."""
-
     def __init__(self, ruta, encabezado, ordenes_previas=()):
-        """Crea el archivo con el encabezado. ordenes_previas: órdenes ya jugadas
-        (al cargar una partida guardada, el log nuevo debe contenerlas para poder
-        reproducirla completa desde el principio)."""
         carpeta = os.path.dirname(ruta)
         if carpeta:
             os.makedirs(carpeta, exist_ok=True)
@@ -109,7 +71,6 @@ class BitacoraPartida:
 
 
 def leer_log(ruta):
-    """Devuelve (EncabezadoLog, ColaFIFO de Orden). Lanza ErrorLog si el formato no sirve."""
     if not os.path.exists(ruta):
         raise ErrorLog("no existe el archivo de log: %s" % ruta)
     with open(ruta, "r", encoding="utf-8") as f:
@@ -117,7 +78,6 @@ def leer_log(ruta):
     if len(lineas) == 0 or lineas[0].strip() != MARCA + " " + str(VERSION_LOG):
         raise ErrorLog("%s no es un log de Cripta (versión de log %d)" % (ruta, VERSION_LOG))
 
-    # Encabezado: pares campo=valor en listas paralelas (sin dict), hasta el separador.
     campos = []
     valores = []
     i = 1
@@ -157,22 +117,18 @@ def leer_log(ruta):
         i += 1
     return encabezado, ordenes
 
-
-# ------------------------------------------------------ repeticiones guardadas
 class EntradaLog:
-    """Una partida que se puede repetir: dónde está, de qué cripta, quién y cuándo."""
     __slots__ = ("ruta", "id_cripta", "jugador", "fecha", "ordenes")
 
     def __init__(self, ruta, encabezado, ordenes):
         self.ruta = ruta
         self.id_cripta = encabezado.id_cripta
         self.jugador = encabezado.jugador
-        self.fecha = encabezado.fecha          # "AAAA-MM-DD HH:MM:SS"
-        self.ordenes = ordenes                 # cuántas órdenes tiene
+        self.fecha = encabezado.fecha         
+        self.ordenes = ordenes         
 
 
 def _logs_por_antiguedad(carpeta):
-    """[(instante de modificación, ruta)] de los .log de la carpeta, del más nuevo al más viejo."""
     if not os.path.isdir(carpeta):
         return []
     pares = []
@@ -184,8 +140,6 @@ def _logs_por_antiguedad(carpeta):
 
 
 def listar_logs(carpeta, maximo=MAX_REPETICIONES):
-    """Las últimas `maximo` partidas con al menos una orden, de la más nueva a la más
-    vieja. Los archivos dañados se saltan (no impiden ver los demás)."""
     entradas = []
     for _instante, ruta in _logs_por_antiguedad(carpeta):
         if len(entradas) >= maximo:
@@ -206,4 +160,4 @@ def podar_logs(carpeta, conservar):
         try:
             os.remove(pares[i][1])
         except OSError:
-            pass                   # en uso o sin permiso: se intentará la próxima vez
+            pass      

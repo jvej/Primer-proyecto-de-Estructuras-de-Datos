@@ -8,21 +8,20 @@ class Actor:
                  sala=None, vida_max: Optional[int] = None) -> None:
         self.nombre = nombre
         self.vida_max = vida if vida_max is None else vida_max
-        self.vida = vida                # puede ser menor que vida_max (§2.2)
+        self.vida = vida                
         self.ataque = ataque
         self.defensa = defensa
         self.velocidad = velocidad
         self.velocidad_base = velocidad
         self.sala = None
-        self.evento_pendiente = None    # su próximo turno: sirve para cancelarlo o reprogramarlo
-        self.evento_veneno = None       # próximo pulso de veneno, si está envenenado
+        self.evento_pendiente = None    
+        self.evento_veneno = None       
         self.evento_regeneracion = None
         if sala is not None:
             self.mover_a(sala)
 
     @property
     def tiempo_siguiente(self) -> Optional[int]:
-        """Se lee del evento pendiente para no guardar el mismo dato en dos lugares."""
         if self.evento_pendiente is None or not self.evento_pendiente.valido:
             return None
         return self.evento_pendiente.tiempo_siguiente
@@ -40,8 +39,6 @@ class Actor:
         return self.nombre
 
     def mover_a(self, destino) -> None:
-        """Mueve al actor sin registrar (solo preparación inicial y pruebas).
-        Durante la partida se usa Partida._mover_actor, que sí registra el cambio."""
         if self.sala is not None:
             self.sala.actores.remove(self)
         self.sala = destino
@@ -57,7 +54,7 @@ class Jugador(Actor):
         self.arma = None
         self.armadura = None
         self.antorcha_encendida = False
-        self.abrio_salida = False       # abrió la puerta de salida con su llave (§2.12)
+        self.abrio_salida = False      
 
     def ataque_efectivo(self) -> int:
         return self.ataque + (self.arma.ataque_bonus if self.arma is not None else 0)
@@ -72,12 +69,12 @@ class Enemigo(Actor):
                  sala=None, vida_max: Optional[int] = None,
                  suelta=None, regeneracion: int = 0, tipo: str = "") -> None:
         super().__init__(nombre, vida, ataque, defensa, velocidad, sala, vida_max)
-        self.comportamiento = comportamiento    # "guardian" | "errante" | "rastreador"
-        self.id_instancia = id_instancia        # ej. "e-201"; único dentro de la cripta (§3.3)
-        self.activo = False                     # se activa al entrar el jugador a su sala (§2.4)
-        self.suelta = [] if suelta is None else suelta   # ids de objetos que deja al morir
-        self.regeneracion = regeneracion        # vida que recupera cada 200 unidades (0 = ninguna)
-        self.tipo = tipo                        # id de su ficha de catálogo
+        self.comportamiento = comportamiento  
+        self.id_instancia = id_instancia      
+        self.activo = False                  
+        self.suelta = [] if suelta is None else suelta  
+        self.regeneracion = regeneracion       
+        self.tipo = tipo                      
 
     def etiqueta(self) -> str:
         if self.id_instancia == "":

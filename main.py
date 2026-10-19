@@ -37,18 +37,17 @@ from controlador.reproductor import reproducir
 
 CARPETA_PROYECTO = os.path.dirname(os.path.abspath(__file__))
 
-# (subsistema, archivo) para --bench (§5.3). Cada archivo es ejecutable por separado.
 BENCHES = (
-    ("agenda", "bench_motor.py"),               # §4.1 agenda de eventos y ciclo (§5.2)
-    ("red", "bench_red.py"),                    # §4.2/§4.3 lotes y presupuesto
-    ("cache", "bench_cache.py"),                # §4.4 búsquedas de caché
-    ("fichas", "bench_almacen_fichas.py"),      # §4.4 recuperación de fichas liberadas
-    ("cripta", "bench_almacen_cripta.py"),      # §4.4 esqueleto y contenido persistidos
+    ("agenda", "bench_motor.py"),             
+    ("red", "bench_red.py"),              
+    ("cache", "bench_cache.py"),              
+    ("fichas", "bench_almacen_fichas.py"),    
+    ("cripta", "bench_almacen_cripta.py"),     
     ("lista_ordenada", "bench_lista_ordenada.py"),
-    ("inventario", "bench_inventario.py"),      # §4.5
-    ("historial", "bench_historial.py"),        # §4.6
-    ("ordenamiento", "bench_ordenamiento.py"),  # §4.9
-    ("guardado", "bench_guardado_binario.py"),  # §4.10
+    ("inventario", "bench_inventario.py"),    
+    ("historial", "bench_historial.py"),      
+    ("ordenamiento", "bench_ordenamiento.py"),  
+    ("guardado", "bench_guardado_binario.py"),  
 )
 
 
@@ -74,8 +73,6 @@ def leer_argumentos(argv):
         parser.error("--cache-size debe ser al menos 1")
     return argumentos
 
-
-# ------------------------------------------------------------------ --bench
 def correr_benches(pedidos):
     nombres = []
     for nombre, _archivo in BENCHES:
@@ -94,14 +91,12 @@ def correr_benches(pedidos):
         inicio = time.perf_counter()
         try:
             runpy.run_path(os.path.join(CARPETA_PROYECTO, "bench", archivo), run_name="__main__")
-        except Exception as error:          # un bench roto no impide medir los demás
+        except Exception as error:        
             fallidos += 1
             print("ERROR en %s: %s: %s" % (archivo, type(error).__name__, error))
         print("[%s: %.1f s]" % (nombre, time.perf_counter() - inicio))
     return 1 if fallidos > 0 else 0
 
-
-# ------------------------------------------------------------------ --replay
 def correr_replay(argumentos):
     try:
         fuente, presupuesto = crear_fuente_datos(argumentos.offline is not None, argumentos.offline)
@@ -114,12 +109,11 @@ def correr_replay(argumentos):
     return 0 if resultado.reproducido else 1
 
 
-# ------------------------------------------------------------------ jugar
 def crear_vista(argumentos):
     """Solo el modo interactivo crea una vista. Pygame se importa únicamente con --gui."""
     if argumentos.gui:
         try:
-            import pygame  # noqa: F401
+            import pygame  
         except ImportError:
             print("Falta Pygame. Instálalo con:  python -m pip install pygame")
             return None
@@ -149,14 +143,13 @@ def correr_interactivo(argumentos):
 
     aplicacion = Aplicacion(fuente, presupuesto, argumentos.datos, argumentos.cache_size,
                             argumentos.semilla, nombre)
-    # cada repetición pide una fuente y un presupuesto nuevos: no gasta los de la partida
     repeticiones = ServicioRepeticiones(
         aplicacion, lambda: crear_fuente_datos(argumentos.offline is not None, argumentos.offline),
         argumentos.datos, argumentos.cache_size)
     controlador = Controlador(vista=vista, persistencia=PersistenciaPartida(aplicacion),
                               puntajes=aplicacion.puntajes, al_terminar=aplicacion.al_terminar,
                               repeticiones=repeticiones)
-    controlador.agregar_observador(aplicacion.registrar_orden)      # log de replay (§4.11)
+    controlador.agregar_observador(aplicacion.registrar_orden)      
     try:
         controlador.correr_sesion(aplicacion.listar_criptas, aplicacion.crear_partida)
     except KeyboardInterrupt:

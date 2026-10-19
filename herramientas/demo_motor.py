@@ -1,5 +1,3 @@
-"""Partida de demostración del motor, sobre una cripta simulada (sin red): python -m herramientas.demo_motor"""
-
 from tests.cripta_de_prueba import armar, entrada, esqueleto_linea
 
 
@@ -12,17 +10,17 @@ def main():
     esc = armar(salas, contenido, semilla=42)
     p = esc.partida
 
-    p.recoger(0)                 # llave de bronce
-    p.recoger(0)                 # daga
+    p.recoger(0)                
+    p.recoger(0)              
     p.equipar(esc.inventario.objetos()[1])
     p.abrir("N")
-    p.mover("N")                 # entra a la sala 2: se activa la rata
+    p.mover("N")             
     while p.enemigos_en_sala() and p.estado == "jugando":
         p.atacar(0)
-    p.recoger(0)                 # llave negra
+    p.recoger(0)               
     p.mover("N")
     p.abrir("N")
-    p.mover("N")                 # sala de salida
+    p.mover("N")               
 
     for mensaje in esc.mensajes():
         print(mensaje)

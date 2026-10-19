@@ -1,14 +1,8 @@
-"""Demo jugable en la terminal, sin red: python -m herramientas.demo_consola
-
-Arma la aplicación (Modelo + Vista + Controlador) con la cripta sintética de
-cripta_de_prueba.py. Es también el ejemplo de cómo debe cablear main.py: el
-Controlador recibe listar_criptas() y crear_partida(id), y no sabe de dónde vienen.
-"""
 from controlador.controlador import Controlador
 from tests.cripta_de_prueba import armar, entrada, esqueleto_linea
 from vista.vista_consola import VistaConsola
 
-_escenarios = []   # para cerrar los hilos de red simulada al salir
+_escenarios = []  
 
 
 def listar_criptas():

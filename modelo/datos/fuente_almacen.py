@@ -1,18 +1,3 @@
-"""Fuente de datos que lee SOLO la copia local persistida (§3.4, §4.11).
-
-Implementa el mismo contrato que ClienteHTTP y ClienteOffline (fuente_datos.py), así
-el resto del programa no sabe de dónde vienen los datos.
-
-Se usa para reproducir un log cuya versión de cripta o de catálogo ya no es la que
-publica el servicio, pero de la que existe una copia local compatible (lo que se fue
-guardando en disco mientras se jugó: datos generales, páginas del esqueleto,
-contenido de salas y fichas del catálogo, ver almacen_cripta.py / almacen_fichas.py).
-
-Si falta algo (por ejemplo, una sala que nunca se descargó), lanza
-ErrorDatosNoDisponibles: la reproducción se detiene y lo informa, en vez de seguir
-con datos distintos.
-"""
-
 from modelo.juego.errores import ErrorDatosNoDisponibles
 from modelo.datos.fuente_datos import FuenteDatos, validar_lote
 from modelo.datos.presupuesto_red import PresupuestoRed
@@ -25,8 +10,7 @@ class FuenteAlmacen(FuenteDatos):
         self.version_cripta_local = version_cripta
         self.almacen_catalogo = almacen_catalogo
         self.version_catalogo_local = version_catalogo
-        self.presupuesto = PresupuestoRed(activo=False)     # nada de esto es red
-
+        self.presupuesto = PresupuestoRed(activo=False)   
     def _exigir_cripta(self, id_cripta):
         if str(id_cripta) != str(self.id_cripta):
             raise ErrorDatosNoDisponibles("copia local", "solo hay copia de %s" % self.id_cripta)

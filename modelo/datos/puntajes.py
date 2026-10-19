@@ -1,20 +1,3 @@
-"""Tabla de puntajes local (§2.12). Adaptador de disco: el Modelo no la conoce.
-
-Archivo de texto de solo anexado: una partida terminada por línea, campos separados
-por tabulador:
-
-    nombre  id_cripta  version_cripta  resultado  acciones  derrotados  tiempo_final  fecha
-
-Para mostrarla se lee entera y se ordena con ordenar() de ordenamiento.py (los
-algoritmos propios del proyecto, §4.9). Criterio:
-    1. primero las victorias,
-    2. luego menor tiempo final del reloj virtual,
-    3. luego menos acciones,
-    4. luego más enemigos derrotados.
-La tabla es pequeña y crece de a una línea por partida: el selector de ordenar()
-escoge el algoritmo según su tamaño y desorden.
-"""
-
 import os
 
 from modelo.estructuras.ordenamiento import ordenar
@@ -31,7 +14,7 @@ class RegistroPuntaje:
         self.nombre = nombre
         self.id_cripta = id_cripta
         self.version_cripta = version_cripta
-        self.resultado = resultado          # "victoria" | "derrota"
+        self.resultado = resultado        
         self.acciones = int(acciones)
         self.derrotados = int(derrotados)
         self.tiempo = int(tiempo)
@@ -71,7 +54,6 @@ class TablaPuntajes:
         self.ruta = ruta
 
     def registrar(self, partida, nombre, fecha=""):
-        """Anota una partida terminada (victoria o derrota). Devuelve el registro."""
         registro = RegistroPuntaje(nombre or "Jugador", partida.id_cripta, partida.version_cripta,
                                    partida.estado, partida.acciones, partida.derrotados,
                                    partida.reloj.tiempo_actual, fecha)
@@ -83,7 +65,6 @@ class TablaPuntajes:
         return registro
 
     def listar(self, id_cripta=None):
-        """Registros ordenados (lista nueva). id_cripta: solo los de esa cripta."""
         registros = []
         if not os.path.exists(self.ruta):
             return registros
@@ -91,7 +72,7 @@ class TablaPuntajes:
             for linea in f:
                 registro = RegistroPuntaje.desde_linea(linea.rstrip("\n"))
                 if registro is None:
-                    continue                 # línea dañada: se ignora sin caerse
+                    continue            
                 if id_cripta is None or registro.id_cripta == id_cripta:
                     registros.append(registro)
         return ordenar(registros, clave=_clave)

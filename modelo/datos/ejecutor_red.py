@@ -16,7 +16,6 @@ class Tarea:
         return self._listo.is_set()
 
     def esperar_fin(self):
-        """Espera (tiempo real) sin lanzar el error; el reloj virtual no se mueve."""
         self._listo.wait()
 
     def resultado_o_error(self):
@@ -55,7 +54,7 @@ class EjecutorRed:
                 tarea = self._cola.sacar()
             try:
                 tarea.resultado = tarea.funcion(*tarea.argumentos)
-            except Exception as e:           # el error se re-lanza en el hilo principal
+            except Exception as e:     
                 tarea.error = e
             tarea._listo.set()
 

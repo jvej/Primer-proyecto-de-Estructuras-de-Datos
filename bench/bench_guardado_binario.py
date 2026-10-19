@@ -1,10 +1,3 @@
-"""Bench del guardado (§4.10): binario de formato propio vs el MISMO estado en JSON.
-
-Usa el formato actual (versión 2): además de las salas, el bloque general trae la
-cripta, sus versiones, el jugador y la lista de órdenes jugadas (con eso se reconstruye
-la partida al cargar, ver persistencia_partida.py). Se simula una partida en la que el
-jugador hizo unas 3 órdenes por sala conocida.
-"""
 import json
 import os
 import time

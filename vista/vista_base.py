@@ -1,14 +1,3 @@
-"""Vista: lo que el Controlador necesita de cualquier interfaz (§6).
-
-La consola (vista_consola.py) la implementa hoy; una interfaz gráfica la
-implementaría mañana sin cambiar el Controlador ni el Modelo.
-
-Reglas de la Vista:
-  - Puede LEER el modelo (partida, inventario, bitácora) para mostrarlo.
-  - NO lo modifica: todo lo que el usuario quiera hacer lo devuelve como Orden.
-  - NO conoce al Controlador.
-"""
-
 from abc import ABC, abstractmethod
 
 
@@ -58,9 +47,6 @@ class Vista(ABC):
     def confirmar(self, pregunta):
         """Pregunta de sí/no. Devuelve True o False."""
 
-    # ------------------------------------------------ repeticiones (§4.11)
-    # No son abstractos: una vista que no muestra repeticiones (la consola) no los
-    # necesita; para ella el replay sigue siendo --replay.
     def soporta_repeticion(self):
         """True si esta vista puede mostrar una repetición paso a paso."""
         return False

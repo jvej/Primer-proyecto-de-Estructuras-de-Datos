@@ -9,7 +9,6 @@ from modelo.datos.presupuesto_red import PresupuestoRed
 from modelo.datos.resolutor_catalogo import ResolutorCatalogo
 from tests.test_red import FuenteFalsa
 
-
 class BitacoraConPop:
 
     def __init__(self, capacidad=20):
@@ -30,7 +29,7 @@ def medir_bitacora():
         resultados = []
         for clase in (BitacoraPantalla, BitacoraConPop):
             b = clase(capacidad)
-            for i in range(capacidad):          # se llena primero: se mide en régimen lleno
+            for i in range(capacidad):        
                 b.agregar("m")
             inicio = time.perf_counter()
             for i in range(n):

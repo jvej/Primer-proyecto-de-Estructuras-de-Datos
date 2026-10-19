@@ -34,16 +34,15 @@ class ResolutorCatalogo:
         self.local = local
         self.presupuesto = presupuesto
         self.tam_lote = min(tam_lote, TAM_LOTE_MAX)
-        self.pendientes = []            # ids por enviar, en orden de descubrimiento
-        self._marcados = ListaOrdenada()    # ids pendientes o en vuelo (evita pedir dos veces)
-        self._en_vuelo = []             # [tarea, ids] en orden de envío
+        self.pendientes = []          
+        self._marcados = ListaOrdenada()   
+        self._en_vuelo = []             
         self._siguiente = 0
         self.solicitudes_enviadas = 0
         self.ids_solicitados = 0
         self.ids_ya_locales = 0
 
     def pedir(self, ids):
-        """Registra ids que se necesitarán. No hace red todavía."""
         for id_ in ids:
             if id_ is None or self._marcados.contiene(id_):
                 continue
@@ -70,20 +69,19 @@ class ResolutorCatalogo:
         try:
             cuerpo = tarea.resultado_o_error()
         finally:
-            tarea.resultado = None       # la respuesta cruda no debe retener fichas (§4.4)
+            tarea.resultado = None     
         recibidos = ListaOrdenada()
         for ficha in cuerpo["entidades"]:
             self.local.guardar(ficha["id"], ficha)
             recibidos.insertar(ficha["id"], True)
             if ficha.get("clase") == "enemigo" and "suelta" in ficha:
-                self.pedir(ficha["suelta"])          # lo que suelta también necesita ficha
-        cuerpo = None                    # solo la caché (con su tope) conserva las fichas
+                self.pedir(ficha["suelta"])        
+        cuerpo = None             
         for id_ in grupo:
             if not recibidos.contiene(id_):
                 raise ErrorRed("catálogo", "el servidor no devolvió la ficha " + str(id_))
 
     def sondear(self):
-        """Incorpora, en orden de envío, los lotes ya terminados. No bloquea."""
         while self._siguiente < len(self._en_vuelo):
             tarea, grupo = self._en_vuelo[self._siguiente]
             if not tarea.terminada():
@@ -93,7 +91,6 @@ class ResolutorCatalogo:
             self._incorporar(tarea, grupo)
 
     def esperar(self, ids=None):
-        """Bloquea (tiempo real) hasta que 'ids' (y lo que suelten) estén disponibles."""
         if ids is not None:
             self.pedir(ids)
         while True:
@@ -107,13 +104,9 @@ class ResolutorCatalogo:
             self._incorporar(tarea, grupo)
 
     def _soltar_lote(self, posicion):
-        """Un lote ya incorporado no se vuelve a leer: se suelta su casilla para que la
-        tarea (y su respuesta) no sigan vivas. La lista conserva su largo, así los índices
-        de los lotes siguientes no cambian."""
         self._en_vuelo[posicion] = None
 
     def respuestas_retenidas(self):
-        """Cuántos lotes todavía retienen una respuesta (para pruebas y bench)."""
         total = 0
         for entrada in self._en_vuelo:
             if entrada is not None and entrada[0].resultado is not None:
@@ -124,7 +117,6 @@ class ResolutorCatalogo:
         return self.local.disponible(id_)
 
     def obtener(self, id_):
-        """Ficha lista para usar; si no estuviera disponible se resuelve en este momento."""
         ficha = self.local.obtener(id_)
         if ficha is None:
             self.esperar([id_])

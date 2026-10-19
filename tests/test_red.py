@@ -156,11 +156,11 @@ class TestResolutor(unittest.TestCase):
         local = AlmacenLocalMemoria()
         r = ResolutorCatalogo(f, e, local, p)
         ids = ["itm_%d" % i for i in range(25)]
-        r.pedir(ids + ids[:5])                             # repetidos
+        r.pedir(ids + ids[:5])                           
         r.esperar()
-        self.assertEqual(len(f.lotes_catalogo), 3)         # 10 + 10 + 5
+        self.assertEqual(len(f.lotes_catalogo), 3)       
         self.assertTrue(all(len(l) <= 10 for l in f.lotes_catalogo))
-        r.pedir(ids)                                       # ya disponibles: sin red
+        r.pedir(ids)                                   
         r.esperar()
         self.assertEqual(len(f.lotes_catalogo), 3)
         e.cerrar()
@@ -188,7 +188,7 @@ class TestPrecarga(unittest.TestCase):
         for lote in f.lotes_contenido:
             self.assertLessEqual(len(lote), 10)
             todas += lote
-        self.assertEqual(len(todas), len(set(todas)))      # ninguna sala dos veces
+        self.assertEqual(len(todas), len(set(todas)))    
         e.cerrar()
 
     def test_orden_de_incorporacion_es_el_de_solicitud(self):
@@ -205,7 +205,7 @@ class TestPrecarga(unittest.TestCase):
     def test_presupuesto_agotado_lanza_error(self):
         f, e, r, pre, p = armar(limite=1)
         with self.assertRaises(ErrorPresupuesto):
-            pre.iniciar(1)                                  # contenido (1) + catálogo (no cabe)
+            pre.iniciar(1)                                  
         e.cerrar()
 
 
@@ -260,7 +260,7 @@ class TestServidorLocal(unittest.TestCase):
     def test_flujo_completo_con_429(self):
         import requests
         sesion = requests.Session()
-        sesion.trust_env = False                       # sin proxies del entorno
+        sesion.trust_env = False                      
         p = PresupuestoRed(9)
         c = ClienteHTTP(p, base_url=self.base, sesion=sesion, dormir=lambda s: None)
         self.assertEqual(c.listar_criptas()["criptas"][0]["id"], "c1")
@@ -268,13 +268,13 @@ class TestServidorLocal(unittest.TestCase):
         p.fijar_limite(datos["presupuesto_solicitudes"])
         self.assertEqual(c.contenido_salas("c1", [1, 2, 3])["contenido"][0]["sala"], 1)
         self.assertEqual(c.catalogo(["a", "b"]), {"entidades": []})
-        self.assertEqual(p.realizadas, 5)              # 4 llamadas + 1 reintento por el 429
+        self.assertEqual(p.realizadas, 5)            
         self.assertEqual(c.esperas_429, 1)
         usados = set(i for i in _ManejadorFalso.ids_cliente if i == c.client_id)
-        self.assertEqual(len(usados), 1)               # siempre el mismo UUID
+        self.assertEqual(len(usados), 1)          
         self.assertIn("/v1/criptas/c1/contenido?salas=1,2,3", _ManejadorFalso.rutas)
         with self.assertRaises(ErrorRed) as cm:
-            c.version_catalogo()                       # el servidor falso responde 404
+            c.version_catalogo()                
         self.assertIn("versión del catálogo", str(cm.exception))
 
 

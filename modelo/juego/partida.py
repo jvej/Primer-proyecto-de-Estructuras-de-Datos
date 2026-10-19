@@ -1,19 +1,3 @@
-"""Partida: el modelo del juego (§2, §6). No conoce HTTP, archivos ni interfaz.
-
-Recibe ya armados los adaptadores que sí los conocen:
-  precarga   -> iniciar(id_sala), asegurar(id_sala), al_entrar(id_sala), contenido_de(id_sala)
-  resolutor  -> obtener(id_ficha)                      (ficha de catálogo lista para usar)
-  inventario -> lleno(), objetos(), agregar(o), agregar_al_frente(o),
-                quitar(o) -> posicion, restaurar(o, posicion)       (lo implementa Axel, §4.5)
-  bitacora   -> agregar(mensaje)                       (BitacoraPantalla, §4.8)
-
-El jugador es un actor más de la agenda. Cuando le toca, la partida se detiene
-(esperando = True) y el controlador llama a UNA de sus acciones. Cada acción aceptada:
-cobra su tiempo, aplica su efecto y deja correr a enemigos y efectos hasta la siguiente
-decisión del jugador. Ese tramo completo es un "ciclo" (§5.2) y es lo que revierte un pergamino.
-Una acción rechazada no cobra tiempo ni cambia nada (Apéndice B) y devuelve False.
-"""
-
 from modelo.juego import efectos
 from modelo.juego.actor import Enemigo, Jugador
 from modelo.juego.agenda_eventos import AgendaEventos
@@ -41,7 +25,6 @@ class Partida:
         self.reloj = Reloj()
         self.registro = Registro()
         self.agenda = AgendaEventos(self.registro)
-        # única fuente de azar del modelo (§2.6); el retroceso también restaura su estado (§2.11)
         self.azar = AzarReversible(semilla, self.registro)
         self.semilla = semilla
         self.mapa = Mapa(esqueleto)
@@ -56,12 +39,10 @@ class Partida:
         self.llave_salida = datos["llave_salida"]
         j = datos["jugador"]
         self.jugador = Jugador(j["vida_max"], j["ataque"], j["defensa"], j["velocidad"])
-        self.estado = "jugando"        # "jugando" | "victoria" | "derrota"
-        self.esperando = False         # True cuando le toca decidir al jugador
-        self.acciones = 0              # acciones del jugador (puntaje, §2.12)
-        self.derrotados = 0            # enemigos derrotados (puntaje)
-
-    # ------------------------------------------------------------------ inicio
+        self.estado = "jugando"       
+        self.esperando = False        
+        self.acciones = 0            
+        self.derrotados = 0          
 
     def iniciar(self) -> None:
         """§2.4: el contenido de la sala inicial se carga antes de aceptar la primera acción."""
@@ -71,11 +52,9 @@ class Partida:
         self.jugador.mover_a(sala)
         sala.marcar_visita_jugador(0)
         evento = self.programar(0, self._turno_jugador, self.jugador, "turno del jugador")
-        self.jugador.evento_pendiente = evento      # primero: así gana el empate en t=0
+        self.jugador.evento_pendiente = evento     
         self._activar_sala(sala)
         self._avanzar()
-
-    # ------------------------------------------- punto único de cambio (retroceso)
 
     def cambiar(self, objeto, campo, valor) -> None:
         self.registro.cambiar(objeto, campo, valor)
@@ -120,19 +99,17 @@ class Partida:
             return
         self.bitacora.agregar(f"{actor.etiqueta()} muere.")
         for campo in ("evento_pendiente", "evento_veneno", "evento_regeneracion"):
-            self.cancelar(getattr(actor, campo))     # §4.1: sus eventos futuros ya no ocurren
+            self.cancelar(getattr(actor, campo))    
         self._lista_quitar(actor.sala.actores, actor)
-        for id_ficha in actor.suelta:                # lo que suelta cae al suelo de su sala
+        for id_ficha in actor.suelta:                
             self._lista_agregar(actor.sala.objetos, Objeto(self.resolutor.obtener(id_ficha)))
         self.cambiar(self, "derrotados", self.derrotados + 1)
 
-    # ------------------------------------------------------ bucle de eventos (§2.3)
 
     def _turno_jugador(self, ahora) -> None:
         self.esperando = True
 
     def _avanzar(self) -> None:
-        """Ejecuta eventos en orden hasta que le toque decidir al jugador o termine la partida."""
         while self.estado == "jugando" and not self.esperando:
             evento = self.agenda.siguiente()
             if evento is None:
@@ -145,7 +122,7 @@ class Partida:
         self.registro.abrir_grupo()
         self.registro.inverso(lambda: setattr(self.reloj, "tiempo_actual", ahora))
         self.esperando = False
-        self._marcar_rastro(self.jugador.sala)       # Apéndice B: cada acción refresca el rastro
+        self._marcar_rastro(self.jugador.sala)   
         self.cambiar(self, "acciones", self.acciones + 1)
         siguiente = self.programar(ahora + costo_accion(costo, self.jugador.velocidad),
                                    self._turno_jugador, self.jugador, "turno del jugador")
@@ -164,15 +141,11 @@ class Partida:
     def _puede_actuar(self) -> bool:
         return self.estado == "jugando" and self.esperando
 
-    # --------------------------------------------------- contenido y activación
-
     def _incorporar(self, sala) -> None:
         if not sala.incorporada:
             self.mapa.incorporar(sala, self.precarga.contenido_de(sala.id), self.resolutor)
 
     def _activar_sala(self, sala) -> None:
-        """§2.4: al entrar el jugador se activan los enemigos dormidos de la sala,
-        en orden ascendente de id de instancia (secuencias deterministas)."""
         dormidos = []
         for actor in sala.actores:
             if isinstance(actor, Enemigo) and not actor.activo:
@@ -184,7 +157,6 @@ class Partida:
             if enemigo.regeneracion > 0:
                 efectos.iniciar_regeneracion(self, enemigo)
 
-    # ------------------------------------------------------ acciones del jugador
 
     def mover(self, direccion) -> bool:
         if not self._puede_actuar():
@@ -195,8 +167,8 @@ class Partida:
         if not salida.esta_abierta():
             return self._rechazar("La puerta está cerrada.")
         destino = salida.otro_lado(self.jugador.sala)
-        try:    # §4.2: el contenido debe estar disponible antes de confirmar; la espera es de
-            self.precarga.asegurar(destino.id)       # tiempo real y no mueve el reloj virtual
+        try:  
+            self.precarga.asegurar(destino.id)      
             self._incorporar(destino)
         except ErrorCripta as error:
             return self._rechazar(f"No se pudo cargar la sala {destino.id}: {error}")
@@ -208,14 +180,14 @@ class Partida:
         self._marcar_rastro(destino)
         self.bitacora.agregar(f"Entras a {destino.nombre or destino.id}.")
         self._activar_sala(destino)
-        for trampa in destino.trampas:               # antes de procesar el siguiente evento (§2.10)
+        for trampa in destino.trampas:           
             if trampa.armada and self.estado == "jugando":
                 efectos.disparar_trampa(self, trampa)
         if (self.estado == "jugando" and destino.id == self.sala_salida_id
                 and self.jugador.abrio_salida):
             self.cambiar(self, "estado", "victoria")
             self.bitacora.agregar("¡Has salido de la cripta! Victoria.")
-        self.precarga.al_entrar(destino.id)          # precarga anticipada (no es estado del juego)
+        self.precarga.al_entrar(destino.id)        
 
     def abrir(self, direccion) -> bool:
         if not self._puede_actuar():
@@ -252,7 +224,6 @@ class Partida:
         return True
 
     def atacar(self, indice) -> bool:
-        """indice: posición en enemigos_en_sala()."""
         if not self._puede_actuar():
             return False
         objetivos = self.enemigos_en_sala()
@@ -269,7 +240,6 @@ class Partida:
         return True
 
     def recoger(self, indice) -> bool:
-        """indice: posición en objetos_en_sala()."""
         if not self._puede_actuar():
             return False
         suelo = self.jugador.sala.objetos
@@ -290,7 +260,7 @@ class Partida:
     def soltar(self, objeto) -> bool:
         if not self._puede_actuar():
             return False
-        if not self.inventario.contiene(objeto):      # O(1) si es el del cursor (§4.5)
+        if not self.inventario.contiene(objeto):     
             return self._rechazar("No tienes ese objeto.")
         sala = self.jugador.sala
 
@@ -309,7 +279,7 @@ class Partida:
     def equipar(self, objeto) -> bool:
         if not self._puede_actuar():
             return False
-        if not self.inventario.contiene(objeto):      # O(1) si es el del cursor (§4.5)
+        if not self.inventario.contiene(objeto):     
             return self._rechazar("No tienes ese objeto.")
         if objeto.clase not in ("arma", "armadura"):
             return self._rechazar("Eso no se puede equipar.")
@@ -318,8 +288,8 @@ class Partida:
             return self._rechazar("Ya lo tienes equipado.")
 
         def efecto():
-            self._inv_al_frente(objeto)               # equipar lo mueve al frente (§2.7)
-            self.cambiar(self.jugador, campo, objeto)  # sustituye al anterior, que sigue en el inventario
+            self._inv_al_frente(objeto)             
+            self.cambiar(self.jugador, campo, objeto) 
             self.bitacora.agregar(f"Equipas {objeto.nombre}.")
 
         self._accion(COSTO_USAR_EQUIPAR, efecto)
@@ -328,10 +298,10 @@ class Partida:
     def usar(self, objeto) -> bool:
         if not self._puede_actuar():
             return False
-        if not self.inventario.contiene(objeto):      # O(1) si es el del cursor (§4.5)
+        if not self.inventario.contiene(objeto):    
             return self._rechazar("No tienes ese objeto.")
         if objeto.es_pergamino():
-            return self.usar_pergamino(objeto)     # el seleccionado, sin buscar otro
+            return self.usar_pergamino(objeto)    
         if objeto.clase == "pocion":
             efecto = lambda: self._beber(objeto)
         elif objeto.clase == "antidoto":
@@ -366,16 +336,10 @@ class Partida:
         self.bitacora.agregar("Enciendes la antorcha.")
 
     def usar_pergamino(self, pergamino=None) -> bool:
-        """§2.11: deshace la última acción del jugador y todo lo ocurrido después.
-        No consume tiempo virtual, no cuenta como acción y no se registra en el historial.
-        El pergamino queda fuera del alcance de la reversión.
-
-        pergamino: el que el jugador seleccionó (usar desde el cursor: O(1)). Si es None
-        (orden "retroceso" sin elegir), se busca el primero del inventario."""
         if not self._puede_actuar():
             return False
         if pergamino is None:
-            for objeto in self.inventario:            # recorre sin copiar la lista
+            for objeto in self.inventario:          
                 if objeto.es_pergamino():
                     pergamino = objeto
                     break
@@ -383,13 +347,11 @@ class Partida:
             return self._rechazar("No tienes pergaminos de retroceso.")
         if not self.registro.puede_deshacer():
             return self._rechazar("No hay acciones que deshacer.")
-        self.inventario.quitar(pergamino)        # sin registrar: la reversión no lo devuelve
         self.registro.deshacer_ultimo()
         self.esperando = True
         self.bitacora.agregar("Usas un pergamino de retroceso: el tiempo vuelve atrás.")
         return True
 
-    # ----------------------------------------- inventario con registro de cambios
 
     def _inv_agregar(self, objeto) -> None:
         self.inventario.agregar(objeto)
@@ -411,8 +373,6 @@ class Partida:
 
         self.registro.inverso(deshacer)
 
-    # ------------------------------------------- consultas para la vista y la caché
-
     def sala_actual(self):
         return self.jugador.sala
 
@@ -430,7 +390,6 @@ class Partida:
         return self.jugador.sala.trampas
 
     def salidas_visibles(self) -> list:
-        """[(direccion, estado, id de la sala vecina, llave requerida)]"""
         sala = self.jugador.sala
         resultado = []
         for i in range(len(DIRECCIONES)):
@@ -451,9 +410,6 @@ class Partida:
         return lista
 
     def ficha_en_uso(self, id_ficha) -> bool:
-        """Para la caché (§4.4): una ficha en uso no se puede liberar. Está en uso si la
-        referencia un enemigo vivo, un objeto del inventario o del suelo de la sala actual,
-        o una trampa de la sala actual."""
         for enemigo in self.mapa.enemigos:
             if enemigo.esta_vivo() and enemigo.tipo == id_ficha:
                 return True
@@ -461,7 +417,7 @@ class Partida:
             if objeto.id == id_ficha:
                 return True
         sala = self.jugador.sala
-        if sala is None:                 # carga inicial: el jugador aún no está en ninguna sala
+        if sala is None:                
             return False
         for objeto in sala.objetos:
             if objeto.id == id_ficha:

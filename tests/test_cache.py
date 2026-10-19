@@ -37,9 +37,9 @@ c = Cache(tope=3, en_uso=en_uso)
 c.poner("a", 1)
 c.poner("b", 2)
 c.poner("c", 3)
-assert c.poner("d", 4) is None        # "d" no está en uso: queda solo en disco
+assert c.poner("d", 4) is None       
 assert c.cantidad() == 3 and not c.contiene("d") and c.rechazadas == 1
-usadas.append("d")                    # si la nueva SÍ está en uso, entra aunque pase el tope
+usadas.append("d")                
 assert c.poner("d", 4) is None
 assert c.cantidad() == 4 and c.desbordes == 1
 print("todas en uso OK")

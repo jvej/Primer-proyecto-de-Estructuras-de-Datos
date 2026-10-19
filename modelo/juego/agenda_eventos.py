@@ -1,12 +1,3 @@
-"""Agenda de eventos (§4.1): un heap binario propio sobre una lista.
-
-list sí se permite como almacenamiento contiguo (§7); lo que no se permite
-es heapq ni dict. La cancelación es perezosa: marcar un evento inválido es
-O(1), y el descarte real pasa cuando ese evento llega a la cima del heap.
-
-Si recibe un Registro, anota cómo deshacer cada cambio de la agenda (§4.6).
-"""
-
 from typing import List, Optional
 
 from modelo.juego.evento import Evento
@@ -26,17 +17,15 @@ class AgendaEventos:
             self.registro.inverso(deshacer)
 
     def nueva_secuencia(self) -> int:
-        """Números de secuencia crecientes para desempatar; nunca retroceden."""
         self._siguiente_secuencia += 1
         return self._siguiente_secuencia
 
     def agendar(self, evento: Evento) -> None:
         self._heap.append(evento)
         self._subir(len(self._heap) - 1)
-        self._inverso(lambda: setattr(evento, "valido", False))   # deshacer = invalidarlo
+        self._inverso(lambda: setattr(evento, "valido", False)) 
 
     def cancelar(self, evento: Evento) -> None:
-        """O(1): no hay que recorrer la agenda para cancelar un evento futuro."""
         if evento.valido:
             evento.valido = False
             self._inverso(lambda: setattr(evento, "valido", True))
@@ -48,15 +37,6 @@ class AgendaEventos:
         velocidad_anterior: int,
         velocidad_nueva: int,
     ) -> Evento:
-        """Reescala el tiempo restante de una acción ya programada (§2.3).
-
-        restante_nuevo = max(1, (tiempo_siguiente - t) * velocidad_anterior // velocidad_nueva)
-        tiempo_siguiente = t + restante_nuevo
-
-        Cancela el evento viejo y agenda uno nuevo con número de secuencia nuevo.
-        Si el evento viejo era el turno pendiente de su actor, el actor pasa a
-        apuntar al nuevo, para que una cancelación posterior (muerte) lo alcance.
-        """
         restante = evento.tiempo_siguiente - tiempo_actual
         restante_nuevo = max(1, restante * velocidad_anterior // velocidad_nueva)
 
@@ -65,7 +45,7 @@ class AgendaEventos:
             tiempo_siguiente=tiempo_actual + restante_nuevo,
             secuencia=self.nueva_secuencia(),
             actor=evento.actor,
-            accion=evento.accion,   # seguro: la acción lee el reloj al ejecutarse
+            accion=evento.accion,  
             descripcion=evento.descripcion,
         )
         self.agendar(reagendado)
@@ -82,12 +62,10 @@ class AgendaEventos:
         """Extrae y devuelve el próximo evento válido, o None si no queda ninguno."""
         while self._heap:
             evento = self._extraer_minimo()
-            self._inverso(lambda e=evento: self.agendar(e))       # deshacer = volver a meterlo
+            self._inverso(lambda e=evento: self.agendar(e))     
             if evento.valido:
                 return evento
         return None
-
-    # --- operaciones internas del heap ---
 
     def _extraer_minimo(self) -> Evento:
         raiz = self._heap[0]

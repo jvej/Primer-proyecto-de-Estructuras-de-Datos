@@ -1,17 +1,9 @@
-"""Mapa de la cripta: construye el modelo (salas, puertas, actores) a partir de los datos.
-
-El motor no sabe de dónde vienen los datos (red, disco u offline, §3.4): recibe el
-esqueleto ya descargado y, por sala, el contenido y las fichas del catálogo.
-Para buscar una sala por id usa el índice del Esqueleto (posición en listas paralelas).
-"""
-
 from modelo.juego.actor import Enemigo
 from modelo.juego.objetos import Objeto, Trampa
 from modelo.juego.sala import DIRECCIONES, Sala
 
 
 def _id_de(elemento):
-    """Un objeto del contenido puede venir como id o como {"tipo": id}."""
     if isinstance(elemento, str):
         return elemento
     return elemento.get("tipo", elemento.get("id"))
@@ -21,7 +13,7 @@ class Mapa:
     def __init__(self, esqueleto) -> None:
         self.esqueleto = esqueleto
         self.salas = []
-        self.enemigos = []          # todos los enemigos creados (para saber qué fichas siguen en uso)
+        self.enemigos = []         
         for p in range(esqueleto.cantidad()):
             self.salas.append(Sala(esqueleto.ids[p], esqueleto.nombres[p]))
         for p in range(len(self.salas)):
@@ -29,7 +21,7 @@ class Mapa:
             detalle = esqueleto.salidas[p]
             for i in range(len(DIRECCIONES)):
                 if DIRECCIONES[i] not in detalle or origen.salidas[i] is not None:
-                    continue    # no existe, o ya la creó la sala del otro lado
+                    continue    
                 datos = detalle[DIRECCIONES[i]]
                 destino = self.sala(datos["sala"])
                 if destino is None:
@@ -45,8 +37,6 @@ class Mapa:
         return self.salas[p]
 
     def incorporar(self, sala, entrada, resolutor) -> None:
-        """Crea los enemigos (dormidos), objetos y trampas de la sala (§2.4, §3.2).
-        Cada tipo se convierte en su ficha con resolutor.obtener(id)."""
         if sala.incorporada:
             return
         for e in entrada.get("enemigos", []):

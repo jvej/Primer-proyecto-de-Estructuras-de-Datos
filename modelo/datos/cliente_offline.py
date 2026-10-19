@@ -17,7 +17,7 @@ def _seguro(texto):
 class ClienteOffline(FuenteDatos):
     def __init__(self, carpeta):
         self.carpeta = carpeta
-        self.presupuesto = PresupuestoRed(activo=False)   # nada cuenta como solicitud
+        self.presupuesto = PresupuestoRed(activo=False)  
 
     def _ruta_criptas(self):
         return os.path.join(self.carpeta, "criptas.json")
