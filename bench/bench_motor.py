@@ -1,9 +1,3 @@
-"""Mediciones del motor (§5.3, §8): agenda de eventos y ciclo completo entre decisiones.
-
-Uso: python -m bench.bench_motor
-La alternativa descartada para la agenda se mide con la misma carga que el heap.
-"""
-
 import random
 import time
 
@@ -14,9 +8,6 @@ from modelo.juego.evento import Evento
 
 
 class AgendaListaOrdenada:
-    """Alternativa descartada 1: lista ordenada de mayor a menor; el mínimo sale por el final.
-    Extraer es O(1), pero cada inserción desplaza elementos: O(n)."""
-
     def __init__(self):
         self._lista = []
         self._secuencia = 0
@@ -27,7 +18,7 @@ class AgendaListaOrdenada:
 
     def agendar(self, evento):
         lo, hi = 0, len(self._lista)
-        while lo < hi:                      # búsqueda binaria de la posición
+        while lo < hi:                 
             medio = (lo + hi) // 2
             if evento < self._lista[medio]:
                 lo = medio + 1
@@ -40,8 +31,6 @@ class AgendaListaOrdenada:
 
 
 class AgendaSinOrden:
-    """Alternativa descartada 2: lista sin orden; cada extracción busca el mínimo: O(n)."""
-
     def __init__(self):
         self._lista = []
         self._secuencia = 0
@@ -65,9 +54,6 @@ class AgendaSinOrden:
 
 
 def medir_agenda(clase, pendientes, pasos):
-    """Carga que imita al juego: cada actor tiene UN evento pendiente y, al ejecutarlo, agenda el
-    siguiente unas 100 unidades después. Los pendientes quedan repartidos en una ventana corta
-    alrededor del reloj, así que cada inserción cae hacia el medio de la agenda."""
     azar = random.Random(1)
     agenda = clase()
     nada = lambda ahora: None
