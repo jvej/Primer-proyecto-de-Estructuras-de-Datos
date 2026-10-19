@@ -30,7 +30,6 @@ from controlador.orden import (ABRIR, AYUDA, ATACAR, CARGAR, EQUIPAR, ESPERAR, G
 SIG_ENEMIGO = "sig_enemigo"
 SIG_SUELO = "sig_suelo"
 
-# (tecla, texto) en el orden en que se muestran en la barra de botones de la ventana.
 BOTONES = (
     ("space", "Atacar"), ("x", "Esperar"), ("g", "Recoger"), ("u", "Usar"),
     ("q", "Equipar"), ("t", "Soltar"), ("r", "Retroceso"), ("f5", "Guardar"),
@@ -87,7 +86,7 @@ def orden_para_tecla(tecla, shift, enemigo_elegido, objeto_elegido):
     if tecla == "home":
         return Orden(INV_INICIO)
     if tecla == "u":
-        return Orden(USAR, None)            # None = el objeto del cursor (§4.5)
+        return Orden(USAR, None)            
     if tecla == "q":
         return Orden(EQUIPAR, None)
     if tecla == "t":
@@ -111,14 +110,12 @@ def orden_para_tecla(tecla, shift, enemigo_elegido, objeto_elegido):
 
 
 def siguiente_posicion(actual, cantidad):
-    """Selección circular: 0, 1, ..., cantidad-1, 0. Con cantidad 0 queda en 0."""
     if cantidad <= 0:
         return 0
     return (actual + 1) % cantidad
 
 
 def ajustar_posicion(actual, cantidad):
-    """Si la lista se achicó (un enemigo murió), la selección vuelve a un valor válido."""
     if cantidad <= 0 or actual < 0:
         return 0
     if actual >= cantidad:

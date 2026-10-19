@@ -41,14 +41,12 @@ def _direccion(texto):
 
 
 def _numero(texto):
-    """Número desde 1 -> posición desde 0. None si no es un número válido."""
     if not texto.isdigit() or int(texto) < 1:
         return None
     return int(texto) - 1
 
 
 def interpretar(linea, partida):
-    """Convierte una línea escrita en una Orden, o en un texto con el motivo si no se entiende."""
     partes = linea.strip().lower().split()
     if len(partes) == 0:
         return "Escribe un comando (o 'ayuda')."
@@ -118,7 +116,7 @@ def _con_posicion(tipo, argumentos, cantidad, que):
         return Orden(tipo, _numero(argumentos[0]))
     if len(argumentos) == 0:
         if cantidad <= 1:
-            return Orden(tipo, 0)       # si no hay ninguno, el modelo lo rechaza con su mensaje
+            return Orden(tipo, 0)     
         return "Hay %d %s: indica el número (por ejemplo '%s 1')." % (cantidad, que, tipo)
     return "Uso: %s [número]" % tipo
 
@@ -143,7 +141,6 @@ class VistaConsola(Vista):
         self._entrada = entrada
         self._salida = salida
 
-    # ------------------------------------------------------------- entrada
     def elegir_cripta(self, criptas):
         self._salida("\nCriptas disponibles:")
         i = 1
@@ -184,13 +181,11 @@ class VistaConsola(Vista):
         return texto.strip().lower() in ("s", "si", "sí", "y", "yes")
 
     def _leer(self, indicacion):
-        """Una línea del usuario, o None si la entrada se cerró (Ctrl+D / Ctrl+C)."""
         try:
             return self._entrada(indicacion)
         except (EOFError, KeyboardInterrupt):
             return None
 
-    # -------------------------------------------------------------- salida
     def mostrar_partida(self, partida):
         jugador = partida.jugador
         sala = partida.sala_actual()
@@ -277,7 +272,6 @@ class VistaConsola(Vista):
             partida.acciones, partida.derrotados, partida.reloj.tiempo_actual))
         self._salida("*" * 64)
 
-    # ------------------------------------------------------------ internos
     def _texto_salidas(self, partida):
         textos = []
         for direccion, estado, id_vecino, llave in partida.salidas_visibles():

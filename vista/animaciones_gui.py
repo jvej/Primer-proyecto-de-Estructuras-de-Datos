@@ -1,33 +1,3 @@
-"""Animaciones de la interfaz gráfica: QUÉ animar y CUÁNDO (sin Pygame, §6).
-
-Las animaciones solo DIBUJAN resultados que el Modelo ya calculó. Nada de aquí cambia
-la partida, calcula daño ni programa eventos. Después de cada orden, el Controlador
-llama vista.mostrar_partida(partida) y la vista le pasa la partida a Animador.observar,
-que compara lo que ve ahora con lo que vio la vez anterior (solo lectura):
-
-  - el jugador atacó (la última orden fue ATACAR y se aceptó) ... ataque del jugador
-  - un enemigo tiene menos vida que antes ............. daño de ese enemigo (+ número)
-  - un enemigo de la sala murió ....................... muerte (se dibuja en su último lugar)
-  - el jugador tiene menos vida que antes ............. daño del jugador (+ número)
-  - el jugador murió .................................. muerte del jugador (queda tendido)
-  - un mensaje nuevo dice "<enemigo> te ataca" ......... ataque de ese enemigo
-  - el jugador entró a otra sala (última orden MOVER) .. correr desde la puerta
-  - el jugador abrió una puerta (la vista lo pide) ..... correr de vuelta desde ella
-  - un mensaje nuevo dice "¡Trampa! ..." .............. efecto de la trampa sobre el jugador
-                                                         y su daño; si acaba de entrar a la
-                                                         sala, ambos empiezan cuando termina
-                                                         de correr (llega y entonces salta)
-La animación de ABRIR la puerta con la llave la dibuja la vista ANTES de entregar la
-orden (como correr hasta la puerta): es solo dibujo y el Modelo decide si se abre.
-
-Los tiempos son de la VENTANA (milisegundos reales), no del reloj virtual: a 30 o 60
-FPS la partida es la misma, solo cambia la suavidad del dibujo. Tras un retroceso o una
-carga no se anima nada (el estado "salta", no ocurrió una acción).
-
-Sin diccionarios: las animaciones activas y la foto anterior son listas pequeñas
-(los actores de una sala), recorridas linealmente.
-"""
-
 from controlador.orden import ATACAR, CARGAR, MOVER, PERGAMINO
 
 REPOSO = "reposo"
@@ -38,17 +8,17 @@ CORRER = "correr"
 ABRIR_PUERTA = "abrir"
 TRAMPA = "trampa"
 
-CUADRO_MS = 140             # duración de cada cuadro de ataque / daño / muerte
-REPOSO_MS = 450             # duración de cada cuadro de reposo (respiración)
-CUADROS_MAXIMOS = 3         # ataque y muerte tienen 3 cuadros; daño, 1
-DURACION_NUMERO_MS = 900    # el número de daño flota y desaparece
-CORRER_CUADRO_MS = 80       # la carrera cambia de cuadro más rápido y se repite
-CORRER_MS = 600             # carrera por defecto; la vista pasa la de cada puerta (misma velocidad)
-ABRIR_CUADRO_MS = 160       # cada cuadro de abrir la puerta con la llave
+CUADRO_MS = 140           
+REPOSO_MS = 450            
+CUADROS_MAXIMOS = 3         
+DURACION_NUMERO_MS = 900    
+CORRER_CUADRO_MS = 80       
+CORRER_MS = 600          
+ABRIR_CUADRO_MS = 160       
 ABRIR_CUADROS = 4
 ABRIR_MS = ABRIR_CUADRO_MS * ABRIR_CUADROS
-DESTELLO_MS = 700           # brillo de la puerta recién abierta
-TRAMPA_CUADRO_MS = 120      # cada cuadro del efecto de una trampa
+DESTELLO_MS = 700         
+TRAMPA_CUADRO_MS = 120     
 TRAMPA_CUADROS = 4
 TRAMPA_MS = TRAMPA_CUADRO_MS * TRAMPA_CUADROS
 
@@ -59,23 +29,22 @@ class Animacion:
     def __init__(self, actor, tipo, inicio, centro=None, cantidad=0, dato=None):
         self.actor = actor
         self.tipo = tipo
-        self.inicio = inicio        # ms de la ventana en que empieza (puede ser futuro)
-        self.centro = centro        # dónde dibujarla si el actor ya no está en la sala
-        self.cantidad = cantidad    # daño recibido (para el número flotante)
-        self.dato = dato            # trampa: id de la trampa que saltó; correr: su duración en ms
+        self.inicio = inicio       
+        self.centro = centro        
+        self.cantidad = cantidad   
+        self.dato = dato           
 
 
 class Animador:
     def __init__(self):
-        self.activas = []           # [Animacion]
-        self._foto = []             # [(enemigo, vida)] de la sala, la vez anterior
+        self.activas = []           
+        self._foto = []          
         self._vida_jugador = None
         self._total_mensajes = 0
         self._acciones = 0
         self._sala = None
 
     def reiniciar(self, partida=None):
-        """Nueva partida o partida cargada: se toma la foto sin animar nada."""
         self.activas = []
         self._foto = []
         self._vida_jugador = None
@@ -85,8 +54,6 @@ class Animador:
 
     # ------------------------------------------------------------ detección
     def observar(self, partida, ahora, ultima_orden, centros, correr_ms=CORRER_MS):
-        """centros: [(actor, (x, y))] donde se dibujó cada actor en el último cuadro.
-        correr_ms: lo que tarda en entrar a la sala nueva (depende de la puerta)."""
         if self._vida_jugador is None or ultima_orden in (PERGAMINO, CARGAR):
             self._tomar_foto(partida)
             return
@@ -94,13 +61,13 @@ class Animador:
         retraso = 0
         if ultima_orden == MOVER and partida.sala_actual() is not self._sala:
             self._agregar(Animacion(jugador, CORRER, ahora, dato=correr_ms))
-            retraso = correr_ms             # la trampa salta cuando termina de entrar
+            retraso = correr_ms 
         trampas = self._trampas_disparadas(partida)
         for id_trampa in trampas:
             self._agregar(Animacion(jugador, TRAMPA, ahora + retraso, dato=id_trampa))
         if len(trampas) == 0:
-            retraso = 0                     # sin trampa, el daño se ve en el momento
-        if ultima_orden == ATACAR and partida.acciones > self._acciones:   # solo si se aceptó
+            retraso = 0               
+        if ultima_orden == ATACAR and partida.acciones > self._acciones: 
             self._agregar(Animacion(jugador, ATAQUE, ahora))
         misma_sala = partida.sala_actual() is self._sala
         for enemigo, vida_antes in self._foto:
@@ -122,7 +89,6 @@ class Animador:
         self._tomar_foto(partida)
 
     def correr(self, actor, ahora, correr_ms=CORRER_MS):
-        """La vista pide una carrera (por ejemplo, volver de la puerta que acaba de abrir)."""
         self._agregar(Animacion(actor, CORRER, ahora, dato=correr_ms))
 
     def _mensajes_nuevos(self, partida):
@@ -135,7 +101,6 @@ class Animador:
         return resultado
 
     def _trampas_disparadas(self, partida):
-        """Ids de las trampas que saltaron en esta orden ("¡Trampa! <nombre>." en la bitácora)."""
         ids = []
         for mensaje in self._mensajes_nuevos(partida):
             if not mensaje.startswith("¡Trampa!"):
@@ -164,8 +129,6 @@ class Animador:
         self._sala = partida.sala_actual()
 
     def _agregar(self, animacion):
-        """Una animación por actor y tipo: la nueva reemplaza a la anterior del mismo tipo.
-        La muerte reemplaza a cualquier otra del mismo actor."""
         restantes = []
         for vieja in self.activas:
             mismo = vieja.actor is animacion.actor
@@ -175,14 +138,13 @@ class Animador:
         restantes.append(animacion)
         self.activas = restantes
 
-    # ------------------------------------------------------------ consulta
     def estado(self, actor, ahora):
         """(tipo, ms_desde_que_empezó) de lo que el actor está haciendo ahora.
         Prioridad: muerte > daño > correr > ataque > reposo."""
         elegida = None
         for animacion in self.activas:
             if animacion.actor is not actor or animacion.inicio > ahora:
-                continue                    # de otro actor, o todavía no empieza
+                continue          
             if elegida is None or _prioridad(animacion.tipo) > _prioridad(elegida.tipo):
                 elegida = animacion
         if elegida is None:
@@ -193,7 +155,6 @@ class Animador:
         return elegida.tipo, transcurrido
 
     def fantasmas(self, ahora):
-        """Enemigos que murieron y todavía están cayendo: [(actor, centro, ms)]."""
         resultado = []
         for animacion in self.activas:
             if (animacion.tipo == MUERTE and animacion.centro is not None
@@ -202,7 +163,6 @@ class Animador:
         return resultado
 
     def numeros(self, ahora):
-        """Números de daño flotando: [(actor, centro_o_None, cantidad, ms)]."""
         resultado = []
         for animacion in self.activas:
             transcurrido = ahora - animacion.inicio
@@ -211,7 +171,6 @@ class Animador:
         return resultado
 
     def efectos_trampa(self, ahora):
-        """Trampas que están saltando ahora: [(actor, id_trampa, ms)]."""
         resultado = []
         for animacion in self.activas:
             transcurrido = ahora - animacion.inicio
@@ -220,7 +179,6 @@ class Animador:
         return resultado
 
     def limpiar(self, ahora):
-        """Quita las animaciones terminadas (la muerte del jugador se queda: sigue tendido)."""
         vigentes = []
         for animacion in self.activas:
             transcurrido = ahora - animacion.inicio
@@ -238,19 +196,17 @@ def duracion(tipo):
     if tipo == TRAMPA:
         return TRAMPA_MS
     if tipo == DANO:
-        return CUADRO_MS * 2            # el único cuadro de daño se sostiene un poco más
+        return CUADRO_MS * 2       
     return CUADRO_MS * CUADROS_MAXIMOS
 
 
 def _duracion_de(animacion):
-    """Duración de esa animación: la carrera trae la suya (según la puerta)."""
     if animacion.tipo == CORRER and animacion.dato:
         return animacion.dato
     return duracion(animacion.tipo)
 
 
 def indice_de_cuadro(tipo, transcurrido, cantidad_cuadros):
-    """Qué cuadro mostrar. Reposo se repite; los demás avanzan y se quedan en el último."""
     if cantidad_cuadros <= 0:
         return -1
     if tipo == REPOSO:

@@ -1,9 +1,3 @@
-"""Prueba de integración: el Inventario real dentro de la Partida de Mariano.
-
-Reemplaza el InventarioDePrueba que arma cripta_de_prueba.armar() por el Inventario
-de §4.5, así que sirve tanto con cripta_de_prueba.py original como ya modificado.
-Ejecutar: python -m tests.test_inventario_partida
-"""
 from tests.cripta_de_prueba import armar, entrada, esqueleto_linea
 from modelo.juego.inventario import Inventario
 from modelo.estructuras.ordenamiento import ordenar
@@ -53,7 +47,7 @@ def probar_equipar_arma_sustituye_y_se_deshace():
     esc.dar("itm_pergamino")
     assert p.equipar(cota) and nombres(esc)[0] == "Cota" and p.jugador.defensa_efectivo() == 4
     assert p.equipar(daga) and nombres(esc)[:2] == ["Daga", "Cota"]
-    assert p.usar_pergamino()                       # deshace equipar(daga)
+    assert p.usar_pergamino()                      
     assert nombres(esc) == ["Cota", "Daga"] and p.jugador.arma is None
     assert p.jugador.armadura is cota
     esc.cerrar()
@@ -64,9 +58,9 @@ def probar_inventario_lleno_y_cursor_en_la_partida():
                                capacidad=1)
     p = esc.partida
     assert p.recoger(0) and esc.inventario.lleno()
-    assert not p.recoger(0)                         # lleno: rechazado sin consumir tiempo
+    assert not p.recoger(0)                       
     assert p.reloj.tiempo_actual == 25
-    assert p.soltar(esc.inventario.objeto_actual())  # soltar el que se está viendo
+    assert p.soltar(esc.inventario.objeto_actual())  
     assert esc.inventario.esta_vacio() and len(p.objetos_en_sala()) == 2
     esc.cerrar()
 

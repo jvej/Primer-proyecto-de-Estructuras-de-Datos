@@ -1,22 +1,3 @@
-"""Medición del inventario (§4.5, §5.3): lista doblemente enlazada contra las alternativas
-descartadas. Ejecutar: python -m bench.bench_inventario
-
-Estructuras comparadas (todas con el mismo contenido y las mismas operaciones):
-    lista doble ... Inventario de inventario.py (la que usa el programa)
-    arreglo ....... list de Python con del/insert (corrimiento de elementos)
-    pila .......... list usada solo por su tope (el tope es el frente del inventario)
-
-Operaciones (cada una incluye su deshacer, para que el tamaño no cambie):
-    soltar+deshacer   quitar el objeto que se está viendo y volver a ponerlo
-    equipar+deshacer  llevar el objeto al frente y devolverlo a su lugar
-en tres posiciones: primero, medio y último. Más recorrer todo el inventario.
-
-La lista doble se mide dos veces: con el cursor sobre el objeto (lo que hace la
-interfaz: O(1)) y sin cursor (quitar() debe buscar el objeto: O(n)).
-
-Los tamaños 10, 100, 1000 y 10000 muestran cómo escala cada una; en el juego
-real el tamaño es inventario_max (una decena de objetos, §3.3).
-"""
 import time
 
 from modelo.juego.inventario import Inventario
@@ -55,8 +36,6 @@ def repeticiones(n, costo_relativo):
 def posiciones(n):
     return (("primero", 0), ("medio", n // 2), ("último", n - 1))
 
-
-# ---------------------------------------------------------------- lista doble
 def preparar_lista(n):
     inv = Inventario(n)
     objetos = [Obj(i) for i in range(n)]
@@ -76,7 +55,7 @@ def lista_soltar(n, indice, con_cursor):
         posicion = inv.quitar(objetivo)
         inv.restaurar(objetivo, posicion)
         if not con_cursor:
-            inv.ir_al_inicio()      # restaurar() deja el cursor en el objeto: se aparta (O(1))
+            inv.ir_al_inicio()   
     return operacion
 
 
@@ -95,9 +74,6 @@ def lista_equipar(n, indice, con_cursor):
         if not con_cursor:
             inv.ir_al_inicio()
     return operacion
-
-
-# -------------------------------------------------------------------- arreglo
 def arreglo_soltar(n, indice):
     a = [Obj(i) for i in range(n)]
 
@@ -118,8 +94,6 @@ def arreglo_equipar(n, indice):
         a.insert(indice, objeto)
     return operacion
 
-
-# ----------------------------------------------------------------------- pila
 def _sacar(pila, k):
     """Saca k elementos del tope (el tope es el frente del inventario)."""
     temporal = []
@@ -134,7 +108,6 @@ def _devolver(pila, temporal):
 
 
 def pila_preparar(n):
-    # el tope (final de la lista) es el frente: el objeto de índice i queda a profundidad i
     return [Obj(i) for i in range(n - 1, -1, -1)]
 
 
@@ -158,15 +131,13 @@ def pila_equipar(n, indice):
         temporal = _sacar(pila, indice)
         objeto = pila.pop()
         _devolver(pila, temporal)
-        pila.append(objeto)                     # al frente (tope)
-        pila.pop()                              # deshacer: bajarlo de nuevo
+        pila.append(objeto)                    
+        pila.pop()                           
         temporal = _sacar(pila, indice)
         pila.append(objeto)
         _devolver(pila, temporal)
     return operacion
 
-
-# -------------------------------------------------------------------- recorrer
 def recorrer_lista(n):
     inv, _ = preparar_lista(n)
 

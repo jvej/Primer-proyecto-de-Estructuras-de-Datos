@@ -1,13 +1,3 @@
-"""Crea un paquete --offline de prueba con la cripta sintética de cripta_de_prueba.py.
-
-    python -m tests.crear_paquete_prueba [carpeta]        (por defecto: paquete_prueba/)
-    python main.py --offline paquete_prueba/
-
-Sirve para probar el programa completo (main, replay, guardar/cargar, puntajes) sin
-red mientras no se tenga el paquete oficial del curso. La estructura de carpetas es la
-que lee cliente_offline.py; si el paquete oficial usa otra, se ajusta ese archivo.
-"""
-
 import json
 import os
 import sys
@@ -20,7 +10,6 @@ VERSION_CATALOGO = "cat-prueba-2"
 
 
 def salas_y_contenido():
-    # 8 salas en línea; la puerta 7 -> 8 (salida) se abre con la llave negra y se cierra sola.
     salas = esqueleto_linea(8, [(7, 8, {"cerrada": True, "llave": "itm_llave_negra",
                                         "cierre_automatico": 300})])
     contenido = [

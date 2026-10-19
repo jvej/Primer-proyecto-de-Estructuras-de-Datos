@@ -1,4 +1,3 @@
-"""Prueba rápida contra la API real: python -m herramientas.probar_api [id_cripta]"""
 import sys
 
 from modelo.datos.cliente_http import ClienteHTTP

@@ -1,27 +1,3 @@
-"""Reproducción de una partida desde su log (§4.11): --replay partida.log
-
-Sin vista interactiva (§6): usa el Controlador con vista=None y le da las órdenes del
-log, en orden, sacándolas de una cola FIFO.
-
-Antes de reproducir compara las versiones del log con las que hay disponibles:
-  1. Si la fuente actual (red u --offline) publica las mismas versiones -> se usa.
-  2. Si no, pero existe una copia local con esas versiones -> se usa la copia
-     (fuente_almacen.py) y se avisa.
-  3. Si no hay ninguna de las dos -> NO se reproduce: se informa que no se puede
-     garantizar una reproducción fiel (no se juega en silencio contra datos distintos).
-
-Durante la reproducción, si una orden del log es rechazada, la partida ya se desvió del
-original: se detiene y se informa en qué línea.
-
-Hay dos formas de usarlo:
-  - reproducir(...): todo de una vez, sin vista (--replay en la consola).
-  - preparar_reproduccion(...): deja la partida lista y las órdenes en su cola, para que
-    el Controlador las dé una por una mientras la Vista las muestra (repetición en la
-    ventana). Los pasos 1 y 2 son los mismos en los dos casos.
-
-No imprime: devuelve un ResultadoReplay con las líneas de texto del informe.
-"""
-
 from controlador.aplicacion import Aplicacion
 from controlador.controlador import Controlador
 from modelo.datos.almacen_cripta import AlmacenCripta
@@ -33,8 +9,8 @@ from modelo.juego.errores import ErrorCripta
 
 class ResultadoReplay:
     def __init__(self):
-        self.reproducido = False     # True si se ejecutaron todas las órdenes
-        self.fiel = False            # True si los datos tenían las versiones del log
+        self.reproducido = False   
+        self.fiel = False           
         self.ordenes = 0
         self.partida = None
         self.lineas = []
@@ -47,26 +23,20 @@ class ResultadoReplay:
 
 
 class Reproduccion:
-    """Una partida reconstruida desde su log, lista para darle las órdenes una por una."""
-
     def __init__(self, encabezado, partida, ordenes, aplicacion):
         self.encabezado = encabezado
         self.partida = partida
-        self.ordenes = ordenes            # ColaFIFO de Orden, en el orden del log
+        self.ordenes = ordenes          
         self.total = len(ordenes)
         self.aplicacion = aplicacion
 
     def cerrar(self):
-        """Cierra el hilo de red de la aplicación usada para reproducir."""
         if self.aplicacion is not None:
             self.aplicacion.cerrar()
             self.aplicacion = None
 
 
 def preparar_reproduccion(ruta_log, fuente, presupuesto, carpeta, cache_size=25):
-    """Pasos 1 y 2: revisa las versiones y arma la partida inicial con la semilla del log.
-    Devuelve (Reproduccion o None, ResultadoReplay). Si es None, el informe dice por qué.
-    Quien recibe la Reproduccion debe llamar a cerrar() al terminar."""
     resultado = ResultadoReplay()
     try:
         encabezado, ordenes = leer_log(ruta_log)
@@ -77,7 +47,6 @@ def preparar_reproduccion(ruta_log, fuente, presupuesto, carpeta, cache_size=25)
                      % (ruta_log, encabezado.id_cripta, encabezado.version_cripta,
                         encabezado.version_catalogo, encabezado.semilla, encabezado.jugador or "-"))
 
-    # ---------------------------------------------------- 1. ¿qué datos usar?
     aplicacion = Aplicacion(fuente, presupuesto, carpeta, cache_size, nombre=encabezado.jugador,
                             registrar_log=False, registrar_puntajes=False)
     try:
@@ -113,7 +82,6 @@ def preparar_reproduccion(ruta_log, fuente, presupuesto, carpeta, cache_size=25)
         return None, resultado
     resultado.fiel = True
 
-    # ---------------------------------------------------- 2. partida inicial
     try:
         partida = aplicacion.crear_partida(encabezado.id_cripta, semilla=encabezado.semilla,
                                            exigir_versiones=(encabezado.version_cripta,
@@ -150,8 +118,7 @@ def reproducir(ruta_log, fuente, presupuesto, carpeta, cache_size=25, mostrar_ca
     partida = reproduccion.partida
     ordenes = reproduccion.ordenes
 
-    # ---------------------------------------------------- 3. reproducir
-    controlador = Controlador(partida)          # sin vista (§6)
+    controlador = Controlador(partida)        
     numero = 0
     detenido = False
     while not ordenes.vacia():
@@ -176,7 +143,6 @@ def reproducir(ruta_log, fuente, presupuesto, carpeta, cache_size=25, mostrar_ca
                 partida.jugador.sala.id))
     resultado.reproducido = not detenido
 
-    # ---------------------------------------------------- 4. informe
     anotar_final(resultado, partida, reproduccion.aplicacion)
     reproduccion.cerrar()
     return resultado

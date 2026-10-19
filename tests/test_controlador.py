@@ -1,9 +1,3 @@
-"""Pruebas de la Vista de consola y el Controlador. Ejecutar: python -m tests.test_controlador
-
-Usan la cripta sintética de cripta_de_prueba.py (sin red) y una vista guionada: se
-le da la lista de líneas que "escribe el usuario" y se captura lo que imprime.
-Al final hay pruebas que vigilan las reglas de MVC leyendo el código fuente.
-"""
 import os
 import re
 
@@ -40,8 +34,6 @@ def jugar(esc, lineas):
     controlador.correr_partida()
     return controlador, "\n".join(salida)
 
-
-# ------------------------------------------------------------ interpretar
 def test_interpretar_movimiento_y_acciones():
     esc = armar(esqueleto_linea(2))
     p = esc.partida
@@ -71,13 +63,11 @@ def test_atacar_y_recoger_sin_numero():
     esc = armar(esqueleto_linea(2), [entrada(1, enemigos=[("e-1", "ent_esqueleto", 10), ("e-2", "ent_esqueleto", 10)],
                                              objetos=["itm_daga"])])
     p = esc.partida
-    assert isinstance(interpretar("atacar", p), str)          # hay dos: hay que elegir
+    assert isinstance(interpretar("atacar", p), str)         
     assert interpretar("atacar 2", p) == Orden(ATACAR, 1)
-    assert interpretar("recoger", p) == Orden("recoger", 0)   # hay uno solo
+    assert interpretar("recoger", p) == Orden("recoger", 0)   
     esc.cerrar()
 
-
-# ------------------------------------------- controlador sin vista (replay)
 def test_controlador_sin_vista_ejecuta_y_rechaza():
     esc = armar(esqueleto_linea(2))
     c = Controlador(esc.partida)
@@ -88,7 +78,7 @@ def test_controlador_sin_vista_ejecuta_y_rechaza():
     assert esc.mensajes()[-1] == "El inventario está vacío."
     assert not c.ejecutar(Orden(SOLTAR, 4))
     assert esc.mensajes()[-1] == "No tienes ese objeto."
-    assert esc.partida.reloj.tiempo_actual == 100            # los rechazos no consumen tiempo
+    assert esc.partida.reloj.tiempo_actual == 100           
     esc.cerrar()
 
 
@@ -97,16 +87,15 @@ def test_observadores_reciben_ordenes_resueltas_y_solo_las_aceptadas():
     c = Controlador(esc.partida)
     vistas = []
     c.agregar_observador(vistas.append)
-    c.ejecutar(Orden(INV_SIGUIENTE))                         # cursor en el 2.º (no es de partida)
-    assert c.ejecutar(Orden(SOLTAR, None))                   # "el actual" -> etiqueta de su nodo
-    assert not c.ejecutar(Orden(ATACAR, 0))                  # no hay enemigos: rechazada
+    c.ejecutar(Orden(INV_SIGUIENTE))                      
+    assert c.ejecutar(Orden(SOLTAR, None))                 
+    assert not c.ejecutar(Orden(ATACAR, 0))                  
     assert c.ejecutar(Orden(ESPERAR))
     assert vistas == [Orden(SOLTAR, "@2"), Orden(ESPERAR)], vistas
     esc.cerrar()
 
 
 def test_replay_reproduce_el_mismo_estado():
-    # Lo registrado por un observador, dado a otro controlador, da la misma partida.
     def nueva():
         return armar(esqueleto_linea(3), [entrada(2, enemigos=[("e-201", "ent_rata", 12)]),
                                           entrada(1, objetos=["itm_daga", "itm_pergamino"])], capacidad=6)
@@ -155,8 +144,6 @@ def test_guardar_y_cargar_sin_y_con_persistencia():
     esc.cerrar()
     otra.cerrar()
 
-
-# ------------------------------------------------------- sesiones con vista
 def test_partida_completa_hasta_la_victoria():
     salas = esqueleto_linea(4, [(3, 4, {"cerrada": True, "llave": "itm_llave_negra"})])
     esc = armar(salas, [entrada(1, objetos=["itm_llave_negra"])])
@@ -170,12 +157,11 @@ def test_inventario_cursor_equipar_y_vista_ordenada():
     esc = sala_con_objetos("itm_daga", "itm_cota", "itm_pocion")
     controlador, texto = jugar(esc, ["inv", "sig", "equipar", "inv", "ordenar peso desc", "ordenar valor", "salir", "s"])
     assert esc.partida.jugador.armadura.nombre == "Cota"
-    assert [o.nombre for o in esc.inventario.objetos()] == ["Cota", "Daga", "Poción menor"]   # equipar -> al frente
+    assert [o.nombre for o in esc.inventario.objetos()] == ["Cota", "Daga", "Poción menor"]  
     assert "[equipado]" in texto and "ordenado por peso (descendente)" in texto
-    # la vista ordenada por peso descendente: Cota (8), Daga (2), Poción (1), con sus números reales
     bloque = texto.split("ordenado por peso (descendente)")[1].split("Inventario ordenado por valor")[0]
     assert bloque.index("Cota") < bloque.index("Daga") < bloque.index("Poción")
-    assert esc.partida.acciones == 1                                 # solo equipar fue acción
+    assert esc.partida.acciones == 1                             
     esc.cerrar()
 
 
@@ -208,13 +194,13 @@ def test_los_comandos_de_consulta_no_cambian_la_partida():
 def test_salir_pide_confirmacion():
     esc = armar(esqueleto_linea(2))
     controlador, texto = jugar(esc, ["salir", "n", "esperar", "salir", "s"])
-    assert controlador.terminado and esc.partida.acciones == 1       # no salió al decir 'n'
+    assert controlador.terminado and esc.partida.acciones == 1  
     esc.cerrar()
 
 
 def test_entrada_cerrada_termina_sin_error():
     esc = armar(esqueleto_linea(2))
-    controlador, texto = jugar(esc, [])                              # EOF inmediato
+    controlador, texto = jugar(esc, [])                          
     assert controlador.terminado
     esc.cerrar()
 
@@ -239,7 +225,7 @@ def test_sesion_elegir_cripta_jugar_y_no_repetir():
         escenarios.append(esc)
         return esc.partida
 
-    vista, salida = vista_guionada(["9", "2", "n", "n"])            # opción inválida, elegir 2, morir en la trampa, no repetir
+    vista, salida = vista_guionada(["9", "2", "n", "n"])           
     controlador = Controlador(vista=vista)
     controlador.correr_sesion(listar, crear)
     texto = "\n".join(salida)
@@ -251,9 +237,6 @@ def test_sesion_elegir_cripta_jugar_y_no_repetir():
 def test_sesion_salir_en_el_menu_de_criptas():
     vista, salida = vista_guionada(["salir"])
     Controlador(vista=vista).correr_sesion(lambda: [{"id": "a", "nombre": "x"}], lambda i: None)
-
-
-# --------------------------------------------------------- reglas de MVC
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODELO = ("modelo/juego/partida.py", "modelo/juego/actor.py", "modelo/juego/sala.py", "modelo/juego/mapa.py",
           "modelo/juego/efectos.py", "modelo/juego/registro.py", "modelo/juego/inventario.py",
@@ -271,7 +254,6 @@ def _fuente(nombre):
 
 
 def _imports(texto):
-    # "from vista.vista_consola import x" -> "vista_consola": el módulo, no el paquete
     return [m.split(".")[-1] for m in re.findall(r"^\s*(?:from|import)\s+([A-Za-z_][\w.]*)", texto, re.M)]
 
 

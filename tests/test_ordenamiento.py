@@ -1,4 +1,3 @@
-# sorted() se usa SOLO para verificar resultados. El programa no lo usa.
 import random
 from modelo.estructuras.ordenamiento import ordenar, ordenar_insercion, ordenar_merge
 

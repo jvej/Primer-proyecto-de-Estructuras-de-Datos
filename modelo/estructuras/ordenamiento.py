@@ -84,7 +84,6 @@ def ordenar_merge(datos, clave=None, descendente=False):
 #Selector automático
 
 def _porcentaje_desordenado_lejos(pares, descendente):
-    """Fracción de pares a distancia SALTO que están fuera de orden."""
     total = len(pares) - SALTO
     if total <= 0:
         return 0.0
@@ -108,7 +107,6 @@ def elegir_algoritmo(pares, descendente, comparacion_costosa=False):
 
 
 def ordenar(datos, clave=None, descendente=False, comparacion_costosa=False):
-    """Función que usa el resto del programa. Devuelve una lista NUEVA."""
     pares = _armar_pares(datos, clave)
     if elegir_algoritmo(pares, descendente, comparacion_costosa) == "insercion":
         pares = _insercion_pares(pares, descendente)

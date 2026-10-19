@@ -1,22 +1,3 @@
-"""Orden: el vocabulario común entre la Vista y el Controlador (MVC, §6).
-
-Una Orden es un dato simple: qué quiere hacer el jugador, sin lógica ni
-dependencias. La Vista traduce lo que el usuario escribe a una Orden; el
-Controlador la ejecuta sobre el Modelo. Como no depende de ninguna vista, el
-replay (§4.11) puede dar las mismas órdenes leyéndolas de un log, sin interfaz.
-
-Los argumentos son siempre datos serializables:
-    MOVER, ABRIR ............ dirección "N" | "S" | "E" | "O"
-    ATACAR .................. posición (desde 0) en la lista de enemigos de la sala
-    RECOGER ................. posición (desde 0) en la lista de objetos del suelo
-    USAR, EQUIPAR, SOLTAR ... posición (desde 0) en el orden real del inventario;
-                              None = "el objeto que el cursor está viendo";
-                              "@<clave>" = ese objeto identificado por la etiqueta fija de
-                              su nodo (así se resuelve "el del cursor" en O(1), §4.5)
-    INV_ORDENAR ............. criterio "peso" | "valor" | "nombre" (extra: descendente)
-"""
-
-# --- órdenes que cambian la partida (van al log de replay) ---
 MOVER = "mover"
 ABRIR = "abrir"
 ATACAR = "atacar"
@@ -27,7 +8,6 @@ EQUIPAR = "equipar"
 SOLTAR = "soltar"
 PERGAMINO = "pergamino"
 
-# --- órdenes de consulta o de interfaz (no cambian la partida, no van al log) ---
 INVENTARIO = "inventario"
 INV_SIGUIENTE = "inv_siguiente"
 INV_ANTERIOR = "inv_anterior"
@@ -39,8 +19,6 @@ AYUDA = "ayuda"
 PUNTAJES = "puntajes"
 SALIR = "salir"
 
-# elegir_cripta() de la Vista puede devolver esto en vez de un id de cripta: el jugador
-# quiere ver las repeticiones (§4.11). No es una Orden: no se ejecuta ni va al log.
 VER_REPETICIONES = "__repeticiones__"
 
 ORDENES_DE_PARTIDA = (MOVER, ABRIR, ATACAR, ESPERAR, RECOGER, USAR, EQUIPAR, SOLTAR, PERGAMINO)
@@ -64,7 +42,6 @@ class Orden:
     def __repr__(self):
         return "Orden(%r, %r, %r)" % (self.tipo, self.argumento, self.extra)
 
-    # ---------------------------------------------- texto para el log de replay (§4.11)
     def a_texto(self):
         """Una línea del log: 'mover N', 'recoger 0', 'esperar'... Solo órdenes de partida
         ya resueltas (el argumento es una dirección, una posición o nada)."""
