@@ -43,6 +43,8 @@ def semilla_nueva():
 
 
 class ErrorVersion(ErrorCripta):
+    """Los datos de la cripta o del catálogo ya no son los de la partida a reconstruir."""
+
 
 class Aplicacion:
     def __init__(self, fuente, presupuesto, carpeta=CARPETA_DEFECTO, cache_size=CACHE_DEFECTO,
@@ -60,15 +62,15 @@ class Aplicacion:
 
         self.version_catalogo = None
         self.almacen_catalogo = None
-        self.local = None          
+        self.local = None           
         self.partida = None
         self.ejecutor = None
         self.precarga = None
         self.log = None
-        self.ultimo_log = None        
-        self.ordenes = []             
+        self.ultimo_log = None       
+        self.ordenes = []            
         self.partidas_creadas = 0
-        self._presupuesto_listo = False   
+        self._presupuesto_listo = False  
         os.makedirs(carpeta, exist_ok=True)
 
     def listar_criptas(self):
@@ -117,9 +119,9 @@ class Aplicacion:
             self.partida, self.ejecutor, self.precarga, self.log, self.ordenes = anterior
             raise
         if anterior[1] is not None:
-            anterior[1].cerrar()                     
+            anterior[1].cerrar()                      
         if anterior[3] is not None:
-            anterior[3].cerrar()                   
+            anterior[3].cerrar()                      
         return partida
 
     def _armar(self, id_cripta, semilla, ordenes_previas, exigir_versiones, partida_nueva,
@@ -159,13 +161,13 @@ class Aplicacion:
             semilla = self.semilla_fija if self.semilla_fija is not None else semilla_nueva()
 
         partida = Partida(datos, esqueleto, precarga, resolutor, inventario, bitacora, semilla)
-        self.partida = partida       
+        self.partida = partida         
         self.precarga = precarga
         partida.iniciar()
 
         self.ordenes = []
         if ordenes_previas:
-            reconstructor = Controlador(partida)      
+            reconstructor = Controlador(partida)       
             numero = 0
             for orden in ordenes_previas:
                 numero += 1
@@ -184,17 +186,16 @@ class Aplicacion:
 
     def _ruta_log_nueva(self, id_cripta):
         carpeta = os.path.join(self.carpeta, "partidas")
-        podar_logs(carpeta, MAX_REPETICIONES - 1)    
+        podar_logs(carpeta, MAX_REPETICIONES - 1)  
         base = "%s_%s" % (nombre_seguro(id_cripta), time.strftime("%Y%m%d_%H%M%S"))
         ruta = os.path.join(carpeta, base + ".log")
         n = 2
-        while os.path.exists(ruta):           
+        while os.path.exists(ruta):        
             ruta = os.path.join(carpeta, "%s_%d.log" % (base, n))
             n += 1
         return ruta
 
     def registrar_orden(self, orden):
-        """Cada orden de partida ACEPTADA (ya resuelta) llega aquí."""
         self.ordenes.append(orden)
         if self.log is not None:
             self.log.anotar(orden)
@@ -237,13 +238,11 @@ class Aplicacion:
             self.ejecutor = None
 
     def cerrar(self):
-        """Salida controlada: cierra el log (lo jugado queda guardado) y el hilo de red."""
         ruta = self.log.ruta if self.log is not None else None
         self._cerrar_partida_actual()
         return ruta
 
     def versiones_actuales(self, id_cripta):
-        """(version_cripta, version_catalogo) que publica hoy la fuente. 2 consultas livianas."""
         version = str(self.fuente.version_cripta(id_cripta)["version"])
         catalogo = str(self.fuente.version_catalogo()["version"])
         return version, catalogo
