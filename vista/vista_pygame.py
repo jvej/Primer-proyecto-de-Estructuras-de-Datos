@@ -87,7 +87,6 @@ FPS = 30
 CARPETA_SPRITES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Poses personajes")
 CARPETA_SONIDOS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Sonidos")
 
-# ------------------------------------------------------------------ colores
 FONDO = (18, 15, 20)
 PANEL = (34, 29, 36)
 BORDE = (92, 74, 58)
@@ -107,7 +106,6 @@ COLOR_ERRANTE = (190, 70, 60)
 COLOR_RASTREADOR = (150, 90, 200)
 COLOR_ENEMIGO = (160, 160, 160)
 
-# --------------------------------------------------------------- distribución
 SALA = pygame.Rect(30, 92, 820, 430)
 INVENTARIO = pygame.Rect(870, 74, 390, 300)
 MENSAJES = pygame.Rect(870, 384, 390, 326)
@@ -115,23 +113,22 @@ BOTONERA_Y = 536
 AVISOS_Y = 624
 
 ALTO_SPRITE = 120
-SUELO_Y = SALA.y + 190      # altura del centro de los personajes en la sala
-GROSOR_MURO = 46            # grosor de la pared en la imagen de la sala (ya escalada)
-ANCHO_PUERTA = 130          # ancho de la imagen de la puerta (el alto sale de la imagen)
-LARGO_PUERTA = 120          # puerta sin imagen: largo en las paredes de arriba y abajo
-ALTO_PUERTA_LATERAL = 100   # puerta sin imagen: largo en las paredes izquierda y derecha
+SUELO_Y = SALA.y + 190
+GROSOR_MURO = 46
+ANCHO_PUERTA = 130
+LARGO_PUERTA = 120
+ALTO_PUERTA_LATERAL = 100
 DIRECCIONES_PUERTA = ("N", "S", "E", "O")
-GIRO_PUERTA = (0, 180, -90, 90)   # grados para que la puerta de arriba quede en cada pared
-TAMANO_ICONO = 52           # lado del icono de un objeto del suelo
+GIRO_PUERTA = (0, 180, -90, 90)
+TAMANO_ICONO = 52
 MAX_ENEMIGOS_DIBUJADOS = 8
 MAX_OBJETOS_DIBUJADOS = 6
 DURACION_AVISO_MS = 7000
 MAX_AVISOS = 6
-PASO_REPETICION_MS = 900    # tiempo entre órdenes de la repetición a velocidad x1
+PASO_REPETICION_MS = 900
 VELOCIDADES = (1, 2, 4)
 VOLUMEN_EFECTOS = 0.8
 VOLUMEN_MUSICA = 0.35
-# (comienzo del mensaje de la bitácora, sonido): acciones del jugador que no tienen animación
 SONIDOS_DE_MENSAJE = (("Recoges", "recoger"), ("Equipas", "equipar"), ("Bebes", "beber"),
                       ("Tomas el antídoto", "beber"), ("Enciendes la antorcha", "antorcha"),
                       ("Usas un pergamino", "pergamino"))
@@ -170,12 +167,9 @@ class Hoja:
 
 
 class Sprites:
-    """Carga cada imagen una sola vez y la reutiliza. Sin diccionarios: una lista de
-    pares (nombre, Hoja) con búsqueda lineal (son 8 personajes)."""
 
     PERSONAJES = ("jugador", "jugador_espada", "jugador_antorcha", "jugador_armado",
                   "guardian", "errante", "rastreador", "enemigo")
-    # si falta la versión pedida del jugador, se usa la primera de esta lista que exista
     RESPALDO_JUGADOR = ("jugador", "jugador_espada", "jugador_antorcha", "jugador_armado")
     ANIMACIONES = (REPOSO, ATAQUE, DANO, MUERTE, CORRER)
     MAXIMO_CUADROS = 8
@@ -186,7 +180,7 @@ class Sprites:
         if not os.path.isdir(carpeta):
             self.avisos.append("Sin carpeta de sprites (%s): se usan figuras simples." % carpeta)
         for nombre in self.PERSONAJES:
-            voltear = not nombre.startswith("jugador")      # los enemigos miran al jugador
+            voltear = not nombre.startswith("jugador")
             hoja = Hoja()
             hoja.estatica = self._cargar(carpeta, nombre + ".png", alto, voltear)
             for tipo in self.ANIMACIONES:
@@ -196,7 +190,7 @@ class Sprites:
                         break
                     hoja.cuadros(tipo).append(imagen)
             self.hojas.append((nombre, hoja))
-        self.abrir = []                 # jugador_abrir_N.png: una sola versión para todas
+        self.abrir = []
         for numero in range(1, self.MAXIMO_CUADROS + 1):
             imagen = self._cargar(carpeta, "jugador_abrir_%d.png" % numero, alto, False)
             if imagen is None:
@@ -204,8 +198,8 @@ class Sprites:
             self.abrir.append(imagen)
         self.carpeta = carpeta
         self.alto = alto
-        self.iconos = []                # [(archivo, imagen o None)]: cada icono se carga una vez
-        self.trampas = []               # [(id_trampa, [cuadros])]: se cargan la primera vez
+        self.iconos = []
+        self.trampas = []
 
     def _cargar(self, carpeta, archivo, alto, voltear):
         ruta = os.path.join(carpeta, archivo)
@@ -243,7 +237,6 @@ class Sprites:
         return None
 
     def icono(self, objeto):
-        """Icono del objeto: objeto_<id>.png; si no existe, objeto_<clase>.png; si no, None."""
         imagen = self._icono("objeto_%s.png" % objeto.id)
         if imagen is None:
             imagen = self._icono("objeto_%s.png" % objeto.clase)
@@ -268,7 +261,6 @@ class Sprites:
         return imagen
 
     def cuadro_trampa(self, id_trampa, transcurrido):
-        """Cuadro del efecto de la trampa: trampa_<id>_N.png o, si no hay, trampa_N.png."""
         cuadros = self._cuadros_trampa(id_trampa)
         if len(cuadros) == 0:
             cuadros = self._cuadros_trampa("")
@@ -290,12 +282,11 @@ class Sprites:
         return cuadros
 
     def imagen(self, nombre, tipo, transcurrido):
-        """El cuadro que toca ahora, o None si ese personaje no tiene ninguna imagen."""
         if tipo == ABRIR_PUERTA:
             i = indice_de_cuadro(tipo, transcurrido, len(self.abrir))
             if i >= 0:
                 return self.abrir[i]
-            tipo = REPOSO                   # sin cuadros de abrir: se queda en reposo
+            tipo = REPOSO
         hoja = self.hoja(nombre)
         if hoja is None:
             return None
@@ -311,9 +302,6 @@ class Sprites:
 
 
 class Sonidos:
-    """Efectos (pygame.mixer.Sound, se cargan una vez) y música de fondo (pygame.mixer.music,
-    se lee del disco mientras suena). Sin diccionarios: lista de pares (nombre, sonido).
-    Si no hay tarjeta de sonido o falta un archivo, simplemente no suena: nunca se cae."""
 
     def __init__(self, carpeta):
         self.carpeta = carpeta
@@ -346,8 +334,6 @@ class Sonidos:
         return None
 
     def tocar(self, nombre, respaldo=None, durante=0):
-        """Toca el efecto; si no existe, el de respaldo (por ejemplo dano_enemigo).
-        durante > 0: lo repite hasta cumplir esos ms y lo corta (los pasos de una carrera)."""
         if not self.activo:
             return
         sonido = self._buscar(nombre)
@@ -363,7 +349,6 @@ class Sonidos:
                 pass
 
     def musica(self, nombre):
-        """Música de fondo en bucle; None la apaga. Si ya está sonando esa, no la reinicia."""
         if not self.activo or nombre == self.musica_actual:
             return
         self.musica_actual = nombre
@@ -386,7 +371,7 @@ class Sonidos:
 class VistaPygame(Vista):
     def __init__(self, carpeta_sprites=CARPETA_SPRITES, fps=FPS, carpeta_sonidos=CARPETA_SONIDOS):
         try:
-            pygame.mixer.pre_init(44100, -16, 2, 512)   # poco retraso entre la acción y su sonido
+            pygame.mixer.pre_init(44100, -16, 2, 512)
         except (pygame.error, AttributeError):
             pass
         pygame.init()
@@ -400,45 +385,44 @@ class VistaPygame(Vista):
         self.fuente_grande = _fuente(34, True)
         self.sprites = Sprites(carpeta_sprites, ALTO_SPRITE)
         self.sonidos = Sonidos(carpeta_sonidos)
-        self.sonadas = []               # animaciones cuyo sonido ya se tocó
-        self.mensajes_oidos = 0         # mensajes de la bitácora ya revisados para sonidos
+        self.sonadas = []
+        self.mensajes_oidos = 0
         self.animador = Animador()
-        self.ultima_orden = None        # tipo de la última orden entregada (para animar)
-        self.centros = []               # [(actor, (x, y))] dónde se dibujó cada actor
+        self.ultima_orden = None
+        self.centros = []
         self.halo = self._crear_halo()
         self.fondo_menu, self.fondos_nivel = self._cargar_fondos(carpeta_sprites)
-        self.pisos = self._cargar_pisos(carpeta_sprites)      # sala_N.png
-        self.avisos = []                # [texto, instante_real_en_que_desaparece]
-        self.fin = None                 # partida terminada cuyo resumen se muestra
+        self.pisos = self._cargar_pisos(carpeta_sprites)
+        self.avisos = []
+        self.fin = None
         self.resumen_fin = []
-        self.puertas = self._cargar_puertas(carpeta_sprites)  # [cuadros] por pared (N, S, E, O)
-        self.fondo_nivel = None         # el fondo elegido al azar para la pantalla de criptas
-        self.azar = random.Random()     # propio de la vista: no toca el azar del Modelo
-        self.saliendo = None            # (dirección, inicio_ms, duración_ms) mientras corre a una puerta
-        self.entrando_ms = CORRER_MS    # lo que tarda la carrera de entrada (según la puerta)
-        self.volver_de = None           # puerta recién abierta: el jugador vuelve corriendo
-        self.entrando_por = None        # dirección de la puerta por la que acaba de entrar
-        self.abriendo = None            # (dirección, inicio_ms) mientras usa la llave
-        self.destello = None            # (dirección, inicio_ms) brillo de la puerta abierta
+        self.puertas = self._cargar_puertas(carpeta_sprites)
+        self.fondo_nivel = None
+        self.azar = random.Random()
+        self.saliendo = None
+        self.entrando_ms = CORRER_MS
+        self.volver_de = None
+        self.entrando_por = None
+        self.abriendo = None
+        self.destello = None
         self.partida = None
         self.enemigo_elegido = 0
         self.objeto_elegido = 0
-        self.zonas = []                 # [(rect, accion)] zonas clicables del cuadro actual
+        self.zonas = []
         self.resaltar_inventario_hasta = 0
-        self.repitiendo = None          # (número, total, texto de la orden) durante una repetición
+        self.repitiendo = None
         self.velocidad = 1
         self.en_pausa = False
         self.cerrada = False
         for texto in self.sprites.avisos:
             self.mostrar_aviso(texto)
 
-    # ================================================================ entrada
     def elegir_cripta(self, criptas):
         self.partida = None
         self.fin = None
         self.animador.reiniciar()
         self.fondo_nivel = None
-        if len(self.fondos_nivel) > 0:              # uno distinto al azar cada vez
+        if len(self.fondos_nivel) > 0:
             self.fondo_nivel = self.fondos_nivel[self.azar.randrange(len(self.fondos_nivel))]
         self.sonidos.musica("musica_menu")
         elegida = 0
@@ -510,20 +494,18 @@ class VistaPygame(Vista):
             return orden_para_tecla(accion[1], False, self.enemigo_elegido, self.objeto_elegido)
         if accion[0] == "puerta":
             return Orden(ABRIR if accion[2] == "cerrada" else MOVER, accion[1])
-        if accion[0] == "enemigo":          # primer clic elige, segundo clic ataca
+        if accion[0] == "enemigo":
             if self.enemigo_elegido == accion[1]:
                 return Orden(ATACAR, accion[1])
             self.enemigo_elegido = accion[1]
             return None
-        if accion[0] == "suelo":            # primer clic elige, segundo clic recoge
+        if accion[0] == "suelo":
             if self.objeto_elegido == accion[1]:
                 return Orden(RECOGER, accion[1])
             self.objeto_elegido = accion[1]
         return None
 
     def _entregar(self, orden):
-        """Antes de devolver una orden que puede esperar a la red (entrar a una sala nueva,
-        cargar), se deja dibujado un aviso: la espera es de tiempo real, no virtual."""
         self.ultima_orden = orden.tipo
         if orden.tipo == MOVER:
             self._correr_hacia(orden.argumento)
@@ -536,8 +518,6 @@ class VistaPygame(Vista):
         return orden
 
     def _correr_hacia(self, direccion):
-        """Antes de entregar MOVER, el jugador corre hasta la puerta (solo dibujo, tiempo
-        real). Si la salida no existe o está cerrada no corre: el Modelo la rechazará."""
         if self.partida is None or self._salida(direccion) not in ("abierta",):
             return
         correr_ms = _duracion_carrera(direccion)
@@ -547,9 +527,6 @@ class VistaPygame(Vista):
         self.saliendo = None
 
     def _abrir_puerta(self, direccion):
-        """Antes de entregar ABRIR: corre hasta la puerta y usa la llave (solo dibujo).
-        Solo se anima si la puerta está cerrada y el jugador lleva la llave que la abre;
-        si no, el Modelo rechazará la orden con su mensaje y aquí no se dibuja nada."""
         if self.partida is None:
             return
         estado, llave = self._salida(direccion, con_llave=True)
@@ -561,15 +538,15 @@ class VistaPygame(Vista):
         self._esperar_dibujando(self.saliendo[1], correr_ms)
         self.saliendo = None
         self.abriendo = (direccion, pygame.time.get_ticks())
-        self.sonidos.tocar("puerta_abrir")          # solo aquí: tiene la llave y la usa
+        self.sonidos.tocar("puerta_abrir")
         self._esperar_dibujando(self.abriendo[1], ABRIR_MS)
         self.abriendo = None
         self.destello = (direccion, pygame.time.get_ticks())
-        self.volver_de = direccion              # al mostrar la partida, corre de vuelta
+        self.volver_de = direccion
 
     def _esperar_dibujando(self, inicio, duracion_ms):
         while not self.cerrada and pygame.time.get_ticks() - inicio < duracion_ms:
-            if len(pygame.event.get(pygame.QUIT)) > 0:   # las teclas quedan en cola, no se pierden
+            if len(pygame.event.get(pygame.QUIT)) > 0:
                 self.cerrada = True
             self._dibujar_partida(self.partida)
             self._mostrar_cuadro()
@@ -642,18 +619,17 @@ class VistaPygame(Vista):
             self._mostrar_cuadro()
         return True
 
-    # ================================================================ salida
     def mostrar_partida(self, partida):
-        if partida is not self.partida:             # partida nueva o cargada: sin animar
+        if partida is not self.partida:
             self.animador.reiniciar(partida)
             self.mensajes_oidos = partida.bitacora.total_historico
         else:
-            if self.entrando_por is not None:       # misma velocidad por cualquier puerta
+            if self.entrando_por is not None:
                 self.entrando_ms = _duracion_carrera(self.entrando_por)
             self.animador.observar(partida, pygame.time.get_ticks(), self.ultima_orden, self.centros,
                                    self.entrando_ms)
             self._sonar_mensajes(partida)
-        if self.volver_de is not None:              # vuelve corriendo desde la puerta que abrió
+        if self.volver_de is not None:
             self.entrando_por = self.volver_de
             self.entrando_ms = _duracion_carrera(self.volver_de)
             self.animador.correr(partida.jugador, pygame.time.get_ticks(), self.entrando_ms)
@@ -693,13 +669,13 @@ class VistaPygame(Vista):
         self._modal("Tabla de puntajes", lineas)
 
     def mostrar_aviso(self, texto):
-        print(texto)                    # también en la consola, por si la ventana se cierra
+        print(texto)
         fin = pygame.time.get_ticks() + DURACION_AVISO_MS
         for linea in str(texto).splitlines():
             if linea.strip() == "":
                 continue
             self.avisos.append([linea, fin])
-            if self.fin is not None:    # el resumen final no se borra con el tiempo
+            if self.fin is not None:
                 self.resumen_fin.append(linea)
         while len(self.avisos) > MAX_AVISOS:
             self.avisos.pop(0)
@@ -712,11 +688,9 @@ class VistaPygame(Vista):
         self.fin = partida
         self.sonidos.musica(None)
         self.sonidos.tocar("victoria" if partida.estado == "victoria" else "derrota")
-        self.resumen_fin = []           # lo que avise la aplicación al terminar (puntaje, log)
+        self.resumen_fin = []
 
     def cerrar(self):
-        """Antes de cerrar la ventana, si quedó algún aviso (por ejemplo un error al
-        cargar las criptas) se muestra para que no se pierda."""
         if not self.cerrada and self.partida is None and len(self.avisos) > 0:
             lineas = []
             for texto, _fin in self.avisos:
@@ -725,12 +699,10 @@ class VistaPygame(Vista):
         self.sonidos.musica(None)
         pygame.quit()
 
-    # ============================================================ repeticiones
     def soporta_repeticion(self):
         return True
 
     def elegir_repeticion(self, entradas):
-        """Lista de las últimas partidas (fecha y hora, jugador, cripta, órdenes)."""
         self.sonidos.musica("musica_menu")
         elegida = 0
         while not self.cerrada:
@@ -748,7 +720,7 @@ class VistaPygame(Vista):
                 elif evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
                     accion = self._zona_en(evento.pos)
                     if accion is not None and accion[0] == "repeticion":
-                        if accion[1] == elegida:             # primer clic elige, segundo abre
+                        if accion[1] == elegida:
                             return entradas[elegida].ruta
                         elegida = accion[1]
                     elif accion is not None and accion[0] == "volver":
@@ -758,14 +730,11 @@ class VistaPygame(Vista):
         return None
 
     def paso_de_repeticion(self, partida, orden, numero, total):
-        """Espera el tiempo de un paso (o la tecla del usuario) y anima la orden que sigue.
-        No ejecuta nada: eso lo hace el Controlador al volver de aquí."""
-        self.partida = partida
         self.fin = None
         self.sonidos.musica("musica_cripta")
         self.repitiendo = (numero, total, _texto_de_orden(orden))
         if orden.tipo == ATACAR and isinstance(orden.argumento, int):
-            self.enemigo_elegido = orden.argumento        # se ve a quién ataca
+            self.enemigo_elegido = orden.argumento
         if orden.tipo == RECOGER and isinstance(orden.argumento, int):
             self.objeto_elegido = orden.argumento
         inicio = pygame.time.get_ticks()
@@ -794,7 +763,7 @@ class VistaPygame(Vista):
         if self.cerrada:
             self.repitiendo = None
             return False
-        self.ultima_orden = orden.tipo              # para que se anime igual que al jugar
+        self.ultima_orden = orden.tipo
         if orden.tipo == MOVER:
             self._correr_hacia(orden.argumento)
             self.entrando_por = _opuesta(orden.argumento)
@@ -809,7 +778,7 @@ class VistaPygame(Vista):
         self.fin = None
         self._modal("Fin de la repetición" if partida is not None else "No se puede repetir",
                     list(lineas))
-        self.partida = None                         # se vuelve a los menús
+        self.partida = None
         self.animador.reiniciar()
 
     def _dibujar_lista_repeticiones(self, entradas, elegida):
@@ -844,7 +813,6 @@ class VistaPygame(Vista):
         self._texto(self.fuente, "Volver (Esc)", TEXTO, volver.centerx, volver.y + 9, centro=True)
         self.zonas.append((volver, ("volver",)))
 
-    # ============================================================ eventos y cuadro
     def _eventos(self):
         eventos = pygame.event.get()
         for evento in eventos:
@@ -862,10 +830,7 @@ class VistaPygame(Vista):
                 return accion
         return None
 
-    # ================================================================ sonidos
     def _sonar_animaciones(self, ahora):
-        """Cada animación suena una sola vez, en el instante en que empieza a dibujarse
-        (la trampa y su daño, por ejemplo, suenan cuando el jugador termina de entrar)."""
         jugador = self.partida.jugador if self.partida is not None else None
         vigentes = []
         for animacion in self.animador.activas:
@@ -877,7 +842,7 @@ class VistaPygame(Vista):
                 vigentes.append(animacion)
                 continue
             if animacion.inicio > ahora:
-                continue                            # todavía no empieza
+                continue
             vigentes.append(animacion)
             self._sonar(animacion, jugador)
         self.sonadas = vigentes
@@ -898,8 +863,6 @@ class VistaPygame(Vista):
             self.sonidos.tocar("pasos", durante=animacion.dato or CORRER_MS)
 
     def _sonar_mensajes(self, partida):
-        """Recoger, equipar, beber, antorcha y pergamino no tienen animación: suenan según el
-        mensaje que dejó la acción en la bitácora (solo los mensajes nuevos)."""
         nuevos = partida.bitacora.total_historico - self.mensajes_oidos
         self.mensajes_oidos = partida.bitacora.total_historico
         mensajes = partida.bitacora.ultimos()
@@ -909,7 +872,6 @@ class VistaPygame(Vista):
                     self.sonidos.tocar(sonido)
 
     def _modal(self, titulo, lineas):
-        """Ventana encima del juego hasta que se pulse una tecla o se haga clic."""
         while not self.cerrada:
             for evento in self._eventos():
                 if evento.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
@@ -928,7 +890,6 @@ class VistaPygame(Vista):
                         caja.centerx, caja.bottom - 26, centro=True)
             self._mostrar_cuadro()
 
-    # ================================================================ dibujo
     def _dibujar_menu(self, criptas, elegida):
         self.zonas = []
         self._pintar_fondo(self.fondo_nivel)
@@ -990,7 +951,7 @@ class VistaPygame(Vista):
                     TEXTO, 910, 38, ancho_max=350)
 
     def _dibujar_sala(self, partida):
-        if len(self.pisos) > 0:                     # cada sala, siempre el mismo piso
+        if len(self.pisos) > 0:
             piso = self.pisos[_numero_de_sala(partida.sala_actual().id) % len(self.pisos)]
             self.pantalla.blit(piso, SALA.topleft)
         else:
@@ -1009,7 +970,7 @@ class VistaPygame(Vista):
             y += 18
         jugador = partida.jugador
         centro_jugador, hacia = self._posicion_jugador(jugador)
-        if jugador.antorcha_encendida:              # la antorcha se ve como un halo de luz
+        if jugador.antorcha_encendida:
             self.pantalla.blit(self.halo, self.halo.get_rect(center=centro_jugador))
         self._dibujar_actor(jugador, self._version_jugador(jugador), COLOR_JUGADOR,
                             centro_jugador, "Tú", False, hacia)
@@ -1020,24 +981,21 @@ class VistaPygame(Vista):
         self._dibujar_suelo(partida.objetos_en_sala())
 
     def _dibujar_trampas_activas(self, jugador, centro):
-        """Efecto de la trampa que acaba de saltar, encima del jugador (solo dibujo)."""
         for actor, id_trampa, transcurrido in self.animador.efectos_trampa(pygame.time.get_ticks()):
             if actor is not jugador:
                 continue
             imagen = self.sprites.cuadro_trampa(id_trampa, transcurrido)
             if imagen is not None:
                 self.pantalla.blit(imagen, imagen.get_rect(center=centro))
-            else:                                   # sin imágenes: un destello rojo
+            else:
                 rect = pygame.Rect(0, 0, 110, 120)
                 rect.center = centro
                 self._destello(rect)
 
     def _posicion_jugador(self, jugador):
-        """Dónde se dibuja el jugador y hacia dónde mira (1 derecha, -1 izquierda).
-        Al salir corre del centro a la puerta; al entrar, de la puerta al centro."""
         centro = CENTRO_JUGADOR
         ahora = pygame.time.get_ticks()
-        if self.abriendo is not None:               # junto a la puerta, usando la llave
+        if self.abriendo is not None:
             puerta = _punto_de_puerta(self.abriendo[0])
             return puerta, (-1 if puerta[0] < centro[0] else 1)
         if self.saliendo is not None:
@@ -1052,7 +1010,6 @@ class VistaPygame(Vista):
         return centro, 1
 
     def _version_jugador(self, jugador):
-        """Qué imagen del jugador usar según lo que lleva: arma equipada y/o antorcha encendida."""
         con_arma = jugador.arma is not None
         if con_arma and jugador.antorcha_encendida:
             return "jugador_armado"
@@ -1063,8 +1020,6 @@ class VistaPygame(Vista):
         return "jugador"
 
     def _dibujar_puerta(self, direccion, estado, id_vecino, llave):
-        """Con imágenes: la puerta cerrada (cuadro 1), abierta (cuadro 4) o abriéndose con la
-        llave (1 a 4). Sin imágenes: un rectángulo verde (abierta) o rojo (cerrada)."""
         color = ABIERTA if estado != "cerrada" else CERRADA
         imagen = self._cuadro_de_puerta(direccion, estado)
         if imagen is not None:
@@ -1081,7 +1036,7 @@ class VistaPygame(Vista):
             etiqueta = (rect.right + 70, rect.centery - 8)
         if (self.destello is not None and self.destello[0] == direccion and estado != "cerrada"
                 and pygame.time.get_ticks() - self.destello[1] < DESTELLO_MS):
-            brillo = rect.inflate(30, 30)                 # la puerta recién abierta brilla
+            brillo = rect.inflate(30, 30)
             velo = pygame.Surface((brillo.w, brillo.h), pygame.SRCALPHA)
             velo.fill((250, 210, 90, 110))
             self.pantalla.blit(velo, brillo)
@@ -1103,7 +1058,7 @@ class VistaPygame(Vista):
         for i in _orden_de_dibujo(min(len(enemigos), MAX_ENEMIGOS_DIBUJADOS)):
             enemigo = enemigos[i]
             columna = i % 4
-            fila = i // 4                       # la segunda fila queda detrás, más arriba
+            fila = i // 4
             centro = (SALA.x + 330 + columna * 112 + fila * 56, SUELO_Y - fila * 70)
             tipo = _tipo_de_enemigo(enemigo.comportamiento)
             color = self._color_de(tipo)
@@ -1115,7 +1070,6 @@ class VistaPygame(Vista):
                         TEXTO, SALA.right - 160, SALA.y + 20)
 
     def _dibujar_actor(self, actor, nombre_sprite, color, centro, etiqueta, elegido, hacia):
-        """hacia: 1 si mira a la derecha (jugador), -1 si mira a la izquierda (enemigos)."""
         self.centros.append((actor, centro))
         ahora = pygame.time.get_ticks()
         tipo, transcurrido = self.animador.estado(actor, ahora)
@@ -1124,7 +1078,7 @@ class VistaPygame(Vista):
         if self.abriendo is not None and actor is self.partida.jugador:
             tipo, transcurrido = ABRIR_PUERTA, ahora - self.abriendo[1]
         dibujo = centro
-        if tipo == ATAQUE and transcurrido < duracion(ATAQUE):    # embestida hacia el rival
+        if tipo == ATAQUE and transcurrido < duracion(ATAQUE):
             dibujo = (centro[0] + hacia * 16, centro[1])
         voltear = hacia < 0 and nombre_sprite.startswith("jugador")
         rect = self._dibujar_cuerpo(nombre_sprite, color, dibujo, tipo, transcurrido, voltear)
@@ -1137,8 +1091,6 @@ class VistaPygame(Vista):
         return rect.inflate(20, 50)
 
     def _dibujar_cuerpo(self, nombre_sprite, color, centro, tipo, transcurrido, voltear=False):
-        """El sprite del cuadro que toca o, si no hay imágenes, la figura provisional.
-        voltear: el jugador mira a la izquierda (corre hacia la puerta oeste)."""
         imagen = self.sprites.imagen(nombre_sprite, tipo, transcurrido)
         if imagen is not None and voltear:
             imagen = pygame.transform.flip(imagen, True, False)
@@ -1146,19 +1098,18 @@ class VistaPygame(Vista):
             rect = imagen.get_rect(center=centro)
             self.pantalla.blit(imagen, rect)
             if tipo == DANO and len(self.sprites.hoja(nombre_sprite).dano) == 0:
-                self._destello(rect)                # sin cuadro de daño: destello rojo
+                self._destello(rect)
             return rect
         rect = pygame.Rect(0, 0, 70, 70)
         rect.center = centro
         if tipo == MUERTE:
-            rect = pygame.Rect(rect.x - 10, rect.bottom - 24, 90, 24)     # figura "tendida"
+            rect = pygame.Rect(rect.x - 10, rect.bottom - 24, 90, 24)
             pygame.draw.rect(self.pantalla, TEXTO_TENUE, rect)
             return rect
         self._figura(nombre_sprite, VIDA if tipo == DANO else color, rect)
         return rect
 
     def _dibujar_caidos(self):
-        """Enemigos que acaban de morir: su animación de muerte en el último lugar donde estaban."""
         ahora = pygame.time.get_ticks()
         for actor, centro, transcurrido in self.animador.fantasmas(ahora):
             tipo = _tipo_de_enemigo(actor.comportamiento)
@@ -1184,7 +1135,6 @@ class VistaPygame(Vista):
         self.pantalla.blit(velo, rect)
 
     def _cargar_pisos(self, carpeta):
-        """sala_1.png, sala_2.png ...: el piso de la sala, escalado una vez al área de juego."""
         pisos = []
         for numero in range(1, 21):
             piso = _cargar_cubriendo(os.path.join(carpeta, "sala_%d.png" % numero), SALA.w, SALA.h)
@@ -1194,9 +1144,6 @@ class VistaPygame(Vista):
         return pisos
 
     def _cargar_puertas(self, carpeta):
-        """puerta_1.png ... puerta_4.png (la de la pared de arriba). Se escalan una vez y se
-        giran para cada pared: [cuadros N, cuadros S, cuadros E, cuadros O]. Si falta alguna,
-        no se usan imágenes de puerta."""
         originales = []
         for numero in range(1, 5):
             ruta = os.path.join(carpeta, "puerta_%d.png" % numero)
@@ -1218,7 +1165,6 @@ class VistaPygame(Vista):
         return puertas
 
     def _cuadro_de_puerta(self, direccion, estado):
-        """Qué cuadro toca: abriéndose con la llave, cerrada (el primero) o abierta (el último)."""
         if len(self.puertas) == 0:
             return None
         cuadros = self.puertas[DIRECCIONES_PUERTA.index(direccion)]
@@ -1230,8 +1176,6 @@ class VistaPygame(Vista):
         return cuadros[len(cuadros) - 1]
 
     def _cargar_fondos(self, carpeta):
-        """fondo_menu.png (nombre) y fondo_sala_N.png (elegir cripta), a pantalla completa.
-        Se escalan una sola vez, recortando lo que sobre para no deformarlos."""
         menu = _cargar_cubriendo(os.path.join(carpeta, "fondo_menu.png"), ANCHO, ALTO)
         niveles = []
         for numero in range(1, 21):
@@ -1243,7 +1187,6 @@ class VistaPygame(Vista):
         return menu, niveles
 
     def _pintar_fondo(self, fondo):
-        """Fondo de una pantalla de menú, oscurecido para que el texto se lea."""
         if fondo is None:
             self.pantalla.fill(FONDO)
             return
@@ -1273,8 +1216,6 @@ class VistaPygame(Vista):
         pygame.draw.rect(self.pantalla, FONDO, rect, 1)
 
     def _dibujar_suelo(self, objetos):
-        """Objetos del suelo: el nombre arriba y el icono debajo (o la clase en texto si no
-        hay icono). Primer clic elige, segundo clic recoge."""
         if len(objetos) == 0:
             return
         self._texto(self.fuente_chica, "En el suelo (F o clic: elegir · G o 2º clic: recoger)",
@@ -1336,14 +1277,13 @@ class VistaPygame(Vista):
         self._texto(self.fuente_media, "Últimos mensajes", DORADO, MENSAJES.x + 14, MENSAJES.y + 8)
         mensajes = partida.bitacora.ultimos()
         y = MENSAJES.y + 38
-        for i in range(max(0, len(mensajes) - 20), len(mensajes)):     # los 20 más recientes
+        for i in range(max(0, len(mensajes) - 20), len(mensajes)):
             color = TEXTO if i >= len(mensajes) - 3 else TEXTO_TENUE
             self._texto(self.fuente_chica, _acortar_ids(mensajes[i]), color, MENSAJES.x + 10, y,
                         ancho_max=MENSAJES.w - 20)
             y += 14
 
     def _dibujar_controles_repeticion(self):
-        """En la repetición no hay botones de juego: qué orden va, la velocidad y las teclas."""
         numero, total, texto = self.repitiendo
         caja = pygame.Rect(SALA.x, BOTONERA_Y, SALA.w, 78)
         pygame.draw.rect(self.pantalla, PANEL, caja)
@@ -1423,9 +1363,8 @@ class VistaPygame(Vista):
         caja = self._caja_centrada(420, 70, ALTO // 2)
         self._texto(self.fuente_media, texto, DORADO, caja.centerx, caja.y + 22, centro=True)
         pygame.display.flip()
-        pygame.event.pump()             # la ventana sigue respondiendo al sistema
+        pygame.event.pump()
 
-    # ============================================================== utilidades
     def _caja_centrada(self, ancho, alto, centro_y):
         caja = pygame.Rect(0, 0, ancho, alto)
         caja.center = (ANCHO // 2, centro_y)
@@ -1464,19 +1403,15 @@ class VistaPygame(Vista):
 
 
 def _tipo_de_enemigo(comportamiento):
-    """Nombre de sprite del comportamiento: sin tildes, en minúsculas y sin espacios
-    ("Guardián" -> "guardian"). Solo para dibujar; el Modelo no cambia."""
     texto = unicodedata.normalize("NFD", str(comportamiento or "")).strip().lower()
     limpio = ""
     for letra in texto:
-        if unicodedata.category(letra) != "Mn":      # Mn = tilde u otra marca sobre la letra
+        if unicodedata.category(letra) != "Mn":
             limpio += letra
     return limpio
 
 
 def _acortar_ids(texto):
-    """Para mostrar: 'Rata gigante [e-rata-cripta-02-4] te ataca' -> 'Rata gigante #4 te ataca'.
-    Si el id no termina en número, se quita entero. El Modelo y el log no cambian."""
     resultado = ""
     i = 0
     while i < len(texto):
@@ -1495,7 +1430,6 @@ def _acortar_ids(texto):
 
 
 def _fecha_legible(fecha):
-    """'2026-10-15 11:53:02' -> '15/10/2026 11:53'. Si no tiene ese formato, tal cual."""
     texto = str(fecha or "").strip()
     if len(texto) < 16 or texto[4] != "-" or texto[7] != "-":
         return texto or "sin fecha"
@@ -1503,7 +1437,6 @@ def _fecha_legible(fecha):
 
 
 def _texto_de_orden(orden):
-    """La orden del log en palabras, para el letrero de la repetición."""
     argumento = orden.argumento
     numero = argumento + 1 if isinstance(argumento, int) else None
     if orden.tipo == MOVER:
@@ -1528,7 +1461,6 @@ def _texto_de_orden(orden):
 
 
 def _rect_de_puerta(direccion):
-    """Puerta sin imagen: centrada en su pared y del grosor del muro."""
     if direccion == "N":
         return pygame.Rect(SALA.centerx - LARGO_PUERTA // 2, SALA.y, LARGO_PUERTA, GROSOR_MURO)
     if direccion == "S":
@@ -1542,7 +1474,6 @@ def _rect_de_puerta(direccion):
 
 
 def _rect_de_imagen_puerta(direccion, imagen):
-    """Dónde va la imagen de la puerta: pegada al borde de su pared y centrada en ella."""
     rect = imagen.get_rect()
     if direccion == "N":
         rect.x, rect.y = SALA.centerx - rect.w // 2, SALA.y
@@ -1556,7 +1487,6 @@ def _rect_de_imagen_puerta(direccion, imagen):
 
 
 def _numero_de_sala(id_sala):
-    """Número para elegir el piso de una sala (los ids pueden ser números o textos)."""
     if isinstance(id_sala, int):
         return max(0, id_sala - 1)
     total = 0
@@ -1566,7 +1496,6 @@ def _numero_de_sala(id_sala):
 
 
 def _opuesta(direccion):
-    """Si sale por el norte, entra a la sala nueva por el sur, etc."""
     if direccion == "N":
         return "S"
     if direccion == "S":
@@ -1577,7 +1506,6 @@ def _opuesta(direccion):
 
 
 def _punto_de_puerta(direccion):
-    """Dónde se para el jugador junto a cada puerta de la sala dibujada."""
     if direccion == "N":
         return (SALA.centerx, SALA.y + 110)
     if direccion == "S":
@@ -1588,9 +1516,6 @@ def _punto_de_puerta(direccion):
 
 
 def _duracion_carrera(direccion):
-    """Ms que tarda en correr entre el centro y esa puerta a velocidad constante: la de ir
-    a la puerta de arriba en CORRER_MS. Así cruzar hasta la puerta del este (más lejos)
-    tarda más y la del oeste (más cerca) menos, pero siempre se ve igual de rápido."""
     return max(120, int(_distancia(CENTRO_JUGADOR, _punto_de_puerta(direccion)) / VELOCIDAD_CORRER))
 
 
@@ -1604,8 +1529,6 @@ def _entre(desde, hasta, avance):
 
 
 def _cargar_cubriendo(ruta, ancho, alto):
-    """Carga una imagen y la escala para cubrir ancho x alto sin deformarla (recorta los
-    bordes que sobren). None si no existe o no se puede abrir."""
     if not os.path.exists(ruta):
         return None
     try:
@@ -1630,5 +1553,5 @@ def _orden_de_dibujo(cantidad):
     return orden
 
 
-CENTRO_JUGADOR = (SALA.x + 170, SUELO_Y)     # donde se para el jugador en la sala
-VELOCIDAD_CORRER = _distancia(CENTRO_JUGADOR, _punto_de_puerta("N")) / CORRER_MS   # px por ms
+CENTRO_JUGADOR = (SALA.x + 170, SUELO_Y)
+VELOCIDAD_CORRER = _distancia(CENTRO_JUGADOR, _punto_de_puerta("N")) / CORRER_MS
