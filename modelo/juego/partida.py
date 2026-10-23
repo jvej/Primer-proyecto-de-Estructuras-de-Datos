@@ -347,6 +347,7 @@ class Partida:
             return self._rechazar("No tienes pergaminos de retroceso.")
         if not self.registro.puede_deshacer():
             return self._rechazar("No hay acciones que deshacer.")
+        self._inv_quitar(pergamino)              # se consume sin registrar: no vuelve al deshacer
         self.registro.deshacer_ultimo()
         self.esperando = True
         self.bitacora.agregar("Usas un pergamino de retroceso: el tiempo vuelve atrás.")
