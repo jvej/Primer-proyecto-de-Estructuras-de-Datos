@@ -3,3 +3,4 @@
 .pytest_cache/
 datos_cripta/
 paquete_prueba/
+venv/
