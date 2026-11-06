@@ -8,35 +8,77 @@ CRIPTA es un juego de mazmorra dirigido por eventos, escrito en Python. Lo que s
 
 ## Antes de empezar
 
-Necesitás Python 3.11 o superior (el equipo trabaja con 3.13). Verificá con:
-
-```
-python --version
-```
+El proyecto usa **Python 3.13** (cualquier 3.13.x; el enunciado pide 3.11 o superior). Todo el grupo usa la misma versión para que las pruebas y las mediciones de `--bench` sean comparables. No usen 3.14 todavía: pygame puede no tener instalador para esa versión. La versión queda fijada en `.python-version`.
 
 Las dependencias son:
 - `requests>=2.31` — para hablar con la API
 - `pygame>=2.5` — solo si vas a usar la interfaz gráfica (`--gui`)
 
+Herramientas de proceso (no son dependencias del programa):
+- [uv](https://docs.astral.sh/uv/) — instala Python 3.13 y spec-kit
+- **spec-kit `v1.0.10`** (`specify-cli`) — versión fija para todo el grupo
+- **Google Antigravity** (IDE v2.0.0 o superior) — agente de programación; en spec-kit su clave es `agy`
+
 ---
 
 ## Instalación
 
-Cloná el repositorio y desde su raíz creá un entorno virtual limpio.
+Instalá uv (Windows, PowerShell):
+```
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+En macOS/Linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`. Cerrá y abrí la terminal y verificá con `uv --version`.
+
+Desde la raíz del repositorio, creá el entorno con Python 3.13:
 
 **Windows:**
 ```
-python -m venv venv
+uv python install 3.13
+uv venv --python 3.13 venv
 venv\Scripts\activate
-python -m pip install -r requirements.txt
+uv pip install -r requirements.txt
+python --version
 ```
 
 **Linux/macOS:**
 ```
-python3 -m venv venv
+uv python install 3.13
+uv venv --python 3.13 venv
 source venv/bin/activate
-python -m pip install -r requirements.txt
+uv pip install -r requirements.txt
+python --version
 ```
+
+`python --version` debe decir 3.13.x. Prueba rápida: `python -m tests.test_partida` debe terminar con "Todas las pruebas pasaron".
+
+---
+
+## Desarrollo dirigido por especificaciones (spec-kit)
+
+La segunda parte se desarrolla con [GitHub spec-kit](https://github.com/github/spec-kit), versión fija **v1.0.10**, y el agente **Google Antigravity** (`agy`).
+
+Instalar spec-kit (cada integrante, la misma versión):
+```
+uv tool install specify-cli --from git+https://github.com/github/spec-kit.git@v1.0.10
+specify version
+```
+
+El repositorio ya está inicializado con:
+```
+specify init --here --integration agy --script ps --ignore-agent-tools --extension git
+```
+(no hace falta repetirlo). Lo que genera se versiona:
+
+| Ruta | Contenido |
+|---|---|
+| `.specify/memory/constitution.md` | Constitución del proyecto |
+| `.specify/templates/`, `.specify/scripts/powershell/` | Plantillas y scripts de spec-kit |
+| `.specify/extensions/git/` | Extensión que crea la rama `NNN-...` de cada especificación (auto-commit desactivado) |
+| `.agents/skills/speckit-*/` | Comandos de spec-kit para Antigravity |
+| `.agents/rules/cripta.md` | Reglas del proyecto que el agente aplica siempre |
+| `specs/NNN-capacidad/` | `spec.md`, `plan.md`, `tasks.md` y artefactos de cada capacidad |
+
+En el chat de Antigravity (workspace abierto en la raíz del repositorio) los comandos se invocan con guion: `/speckit-constitution`, `/speckit-specify`, `/speckit-clarify`, `/speckit-plan`, `/speckit-tasks`, `/speckit-analyze`, `/speckit-implement`. El agente no hace commits: el orden en Git es especificación → plan y tareas → código. Cada prompt se registra en `PROMPTS_LLM.md`.
 
 ---
 
