@@ -1,4 +1,4 @@
-# Bitácora de uso de LLM 
+﻿# Bitácora de uso de LLM 
 
 | | |
 |---|---|
@@ -404,6 +404,102 @@ Utilicé Claude como herramienta de apoyo para comprender los requisitos, obtene
 #### 20. Comprender los requisitos de la bitácora de uso de LLM — 18/10/2026
 
 > Explícame qué exige §10.3 sobre la bitácora de prompts, incluyendo fecha aproximada, herramienta, texto del prompt y propósito de uso. Oriéntame para crear una plantilla en Markdown que pueda completar con mis prompts reales. Revisa después mi borrador y señala qué campos faltan, sin inventar registros.
+
+
+#### 21. Especificación de terreno, cazador e invalidación de rutas (Capacidad 001) — 07/11/2026
+
+- **Integrante**: Mariano
+- **Fecha**: 07/11/2026
+- **Herramienta**: Google Antigravity (IDE v2.0)
+- **Modelo**: Gemini 3.8 Flash / Claude Opus 4.6
+- **Uso de la respuesta**: Generar la especificación formal specs/001-terreno-cazador/spec.md para la capacidad 001 de CRIPTA Parte II según el flujo de spec-kit, la constitución y las reglas del proyecto, y preparar la fase de aclaración previa a la planificación.
+
+> Soy Mariano, responsable de la capacidad 001 de CRIPTA Parte II:
+> terreno, cazador e invalidación de rutas.
+> 
+> Leé el enunciado oficial de la segunda parte, las reglas del proyecto
+> y .specify/memory/constitution.md. Revisá las especificaciones
+> existentes para usar el número 001 si continúa disponible.
+> 
+> Guiame mediante spec-kit para crear la especificación de esta capacidad.
+> La redacción debe ser clara, propia de estudiantes de segundo año y
+> centrada en comportamientos observables. Las decisiones sobre
+> estructuras, clases y archivos se definirán durante la planificación.
+> 
+> Mi objetivo interno es terminar el 11 de noviembre de 2026.
+> El 15 de noviembre es el límite de respaldo.
+> 
+> Incluí estos requisitos funcionales con identificadores FR estables:
+> 
+> 1. Cada salida admite un costo entero mayor o igual que 1. Cuando
+>    se omite, el costo es 100 y es igual en ambos sentidos.
+> 
+> 2. El movimiento de cualquier actor tarda:
+>    max(1, costo_salida * 100 // velocidad).
+>    Los costos de las demás acciones conservan las reglas vigentes.
+>    Errantes y rastreadores conservan su comportamiento de elección
+>    de movimiento.
+> 
+> 3. En su turno, el cazador ataca si comparte sala con el jugador.
+>    En caso contrario, determina el costo mínimo hasta la sala actual
+>    del jugador utilizando únicamente salidas abiertas.
+> 
+> 4. Si falta una ruta o su costo mínimo supera el rango del cazador,
+>    espera con costo base 100. Si el costo iguala el rango, puede avanzar.
+> 
+> 5. Si existe una ruta dentro del rango, avanza un paso por una ruta
+>    de costo mínimo. La acción usa el costo de la salida atravesada.
+> 
+> 6. Cuando varias primeras vecinas permiten alcanzar el mismo costo
+>    mínimo, elige la vecina de menor ID.
+> 
+> 7. El cazador conoce el esqueleto completo y las puertas reales.
+>    La niebla del jugador y la descarga del contenido de las salas
+>    no condicionan su decisión. El cazador no abre puertas.
+> 
+> 8. Cada decisión debe coincidir con un cálculo desde cero en ese
+>    instante. Contemplar apertura y cierre de puertas, movimiento
+>    del jugador, cambios de velocidad, otros actores y retroceso.
+> 
+> Incluí los siete escenarios obligatorios con dado, cuando y entonces:
+> 
+> - Cazador sin ruta abierta.
+> - Ruta mínima más cara que el rango, incluyendo la prueba del límite.
+> - Ruta con más pasos y menor costo frente a otra con menos pasos y
+>   mayor costo.
+> - Empate entre dos primeras vecinas, resuelto por menor ID.
+> - Puerta de la ruta cerrada entre dos turnos.
+> - Actor con velocidad alta atravesando una salida de costo 1.
+> - Cambio de velocidad durante una salida costosa, aplicando la regla
+>   vigente de reprogramación del tiempo restante.
+> 
+> Agregá escenarios para ataque al compartir sala, costo predeterminado,
+> simetría del costo, una puerta que abre una ruta antes imposible y
+> restauración de puertas mediante retroceso.
+> 
+> Definí criterios SC medibles para:
+> 
+> - Ciclo entre decisiones del jugador inferior a 20 ms en la cripta
+>   de referencia con decenas de cazadores activos.
+> - Búsqueda acotada al alcance del cazador.
+> - Comparación de cálculo individual y compartido.
+> - Comparación de reutilización y recálculo con puertas estables
+>   e inestables.
+> - Reproducción determinista con la misma cripta, semilla y acciones.
+> 
+> Separá los resultados esperados de las mediciones pendientes.
+> 
+> Después de generar la especificación, guiame por la fase de aclaración.
+> Preguntá únicamente por ambigüedades que los documentos no resuelvan.
+> Mostrame los archivos generados y el comando de commit de la spec
+> para que yo lo ejecute antes de continuar con el plan.
+> 
+> Mi primera implementación posterior será el costo de movimiento
+> para todos los actores, con pruebas vinculadas a los FR.
+> 
+> Registrá esta solicitud de manera textual en PROMPTS_LLM.md junto
+> con mi nombre, la fecha real, la herramienta, el modelo si se conoce
+> y el uso de la respuesta.
 
 ---
 
