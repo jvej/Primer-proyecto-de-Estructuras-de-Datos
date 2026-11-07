@@ -581,8 +581,111 @@ Utilicé Claude como herramienta de apoyo para comprender los requisitos, obtene
 > 
 > Mostrame los cambios y cualquier ambigüedad pendiente.
 > Registrá este prompt textual en PROMPTS_LLM.md.
-> Prepará el comando para que yo confirme la especificación
-> corregida en Git antes de continuar con la planificación.
+
+
+
+#### 23. Planificación, investigación, modelo de datos y tareas de 001-terreno-cazador — 07/11/2026
+
+- **Integrante**: Mariano
+- **Fecha**: 07/11/2026
+- **Herramienta**: Google Antigravity (IDE v2.0)
+- **Modelo**: Gemini 3.8 Flash / Claude Opus 4.6
+- **Uso de la respuesta**: Generar los artefactos de la fase de planificación de spec-kit (plan.md, esearch.md, data-model.md, 	asks.md) y el reporte de análisis de consistencia para la capacidad 001 (terreno, cazador e invalidación de rutas), estructurados en cuatro bloques técnicos (costos de movimiento, contrato C2 de puertas, contrato C3 del cazador e invalidación/benchmarking) bajo las restricciones de la constitución.
+
+> Continuemos con la planificación de mi capacidad
+> 001-terreno-cazador.
+> 
+> Leé la constitución, la especificación actual, el enunciado
+> oficial y el código existente del motor.
+> 
+> Primero aplicá tres ajustes puntuales al spec.md:
+> 
+> 1. En el caso borde del jugador moviéndose hacia el cazador,
+>    indicá que si ambos comparten sala al comenzar el turno
+>    del cazador, este ataca, independientemente del orden
+>    de los movimientos anteriores.
+> 
+> 2. En SC-004, exigí registrar el máximo observado y la cantidad
+>    de ciclos que exceden 20 ms. Los percentiles serán
+>    información complementaria.
+> 
+> 3. Presentá las mediciones como criterios que requieren
+>    validación empírica. El límite de rendimiento es un
+>    requisito y la ventaja de las optimizaciones debe medirse.
+> 
+> Después, ejecutá las fases de planificación, tareas y análisis
+> de spec-kit disponibles en esta instalación.
+> 
+> Prepará plan.md, research.md, data-model.md y tasks.md.
+> La implementación quedará para la siguiente etapa, después
+> de confirmar la especificación y el plan en Git.
+> 
+> Usá estas condiciones para el plan:
+> 
+> - Trabajaremos sobre el proyecto actual, conservando MVC
+>   y las convenciones de sus pruebas.
+> - Usaremos Python 3.13, arreglos y estructuras propias.
+>   No usaremos tablas hash ni dependencias nuevas.
+> - Inspeccioná los llamadores antes de cambiar firmas.
+>   Los datos anteriores sin costo deben seguir usando 100.
+> - Cada tarea debe citar sus FR y especificar cómo se verifica.
+> 
+> Organizá el trabajo en estos bloques:
+> 
+> BLOQUE 1. COSTOS DE MOVIMIENTO
+> 
+> Revisá sala.py, mapa.py, costos.py, partida.py,
+> comportamiento.py, motor_enemigos.py y agenda_eventos.py.
+> 
+> Planificá:
+> - Incorporar y validar costo en las salidas compartidas.
+> - Mantener compatibilidad con los argumentos existentes.
+> - Usar el costo de la salida para el jugador.
+> - Hacer que la resolución del turno enemigo comunique el
+>   costo base de la acción realmente ejecutada.
+> - Programar el siguiente turno con ese costo.
+> - Conservar las elecciones de errantes y rastreadores.
+> - Reutilizar la fórmula de cambio de velocidad vigente.
+> 
+> Primero deben escribirse pruebas de FR-001 y FR-002,
+> incluyendo costos predeterminados, simetría, intervalo
+> mínimo, acciones sin movimiento y reprogramación a t=500.
+> 
+> BLOQUE 2. PUERTAS Y CONTRATO C2
+> 
+> Revisá apertura, cierre automático y retroceso.
+> Definí un punto común de modificación y los avisos que
+> requieren rutas, conocimiento e historia.
+> Explicá cómo evitar avisos o registros duplicados durante
+> el retroceso y qué acuerdos requieren Kim y Axel.
+> 
+> BLOQUE 3. CAZADOR Y CONTRATO C3
+> 
+> Revisá qué búsqueda de rutas está disponible.
+> Kim es responsable del montículo y la búsqueda compartida.
+> Documentá la interfaz necesaria y las dependencias pendientes.
+> 
+> Compará búsqueda individual acotada y cálculo compartido
+> desde el jugador. Explicá el desempate por la primera
+> vecina de menor ID y el uso de índices de sala para arreglos.
+> Considerá cómo evitar reiniciar arreglos del tamaño de
+> toda la cripta en cada búsqueda.
+> 
+> BLOQUE 4. INVALIDACIÓN Y MEDICIONES
+> 
+> Justificá qué cambios invalidan las distancias y cuáles
+> permiten reutilizarlas. Incluí apertura de rutas antes
+> inaccesibles y restauración mediante pergamino.
+> 
+> Planificá comparar decisiones con recálculo desde cero,
+> medir puertas estables e inestables, probar distintos
+> rangos y cantidades de cazadores y repetir bench_motor.
+> 
+> Al terminar, mostrame:
+> - Los archivos que cambiará cada bloque.
+> - Las tareas que puedo empezar sin depender de compañeros.
+> - Los acuerdos pendientes con Kim, Jeferson y Axel.
+> - Las inconsistencias encontradas por el análisis.
 
 ---
 

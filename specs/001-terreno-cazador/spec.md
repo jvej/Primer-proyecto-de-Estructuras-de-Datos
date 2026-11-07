@@ -141,7 +141,7 @@ Como árbitro del juego y evaluador de determinismo, quiero que cada decisión d
 - **Cazador sin salidas disponibles**: Si un cazador se encuentra en una sala sin salidas o donde todas sus salidas conectadas están cerradas, la distancia hacia el jugador es inalcanzable (infinita); el cazador debe esperar con costo base 100 sin generar errores de ejecución.
 - **Empate múltiple de rutas de igual costo**: Si existen 3 o más salas vecinas que permiten llegar al jugador con el mismo costo mínimo total $d$, el desempate debe elegir de manera estricta y determinista la vecina con el menor ID numérico entero.
 - **Puerta que cambia de estado repetidamente (cierre automático)**: Si una puerta se abre y se cierra automáticamente entre turnos, el cazador solo debe considerar el estado en el instante exacto en que le corresponde actuar.
-- **Jugador en movimiento hacia el cazador**: Si el jugador y el cazador se mueven en direcciones opuestas por la misma salida, al completarse el evento que los ubica en la misma sala, en el siguiente turno del cazador este debe atacar y no intentar cruzar la salida de nuevo.
+- **Jugador en movimiento hacia el cazador**: Si el jugador y el cazador se desplazan en direcciones opuestas por la misma salida o convergen hacia el mismo espacio, si ambos comparten sala al comenzar el turno del cazador, este ataca inmediatamente (según FR-003), independientemente del orden o la secuencia de los movimientos anteriores.
 - **Rango cero o menor que cualquier salida**: Si un cazador tiene un rango asignado menor que el costo de la salida más económica que sale de su sala, no podrá avanzar y deberá esperar en cada turno.
 
 ---
