@@ -491,8 +491,6 @@ Utilicé Claude como herramienta de apoyo para comprender los requisitos, obtene
 > 
 > Después de generar la especificación, guiame por la fase de aclaración.
 > Preguntá únicamente por ambigüedades que los documentos no resuelvan.
-> Mostrame los archivos generados y el comando de commit de la spec
-> para que yo lo ejecute antes de continuar con el plan.
 > 
 > Mi primera implementación posterior será el costo de movimiento
 > para todos los actores, con pruebas vinculadas a los FR.
@@ -500,6 +498,91 @@ Utilicé Claude como herramienta de apoyo para comprender los requisitos, obtene
 > Registrá esta solicitud de manera textual en PROMPTS_LLM.md junto
 > con mi nombre, la fecha real, la herramienta, el modelo si se conoce
 > y el uso de la respuesta.
+
+
+
+#### 22. Revisión y corrección de la especificación de terreno, cazador e invalidación de rutas (Capacidad 001) — 07/11/2026
+
+- **Integrante**: Mariano
+- **Fecha**: 07/11/2026
+- **Herramienta**: Google Antigravity (IDE v2.0)
+- **Modelo**: Gemini 3.8 Flash / Claude Opus 4.6
+- **Uso de la respuesta**: Corregir y afinar la especificación formal specs/001-terreno-cazador/spec.md según los 10 puntos de ajuste solicitados: costos exactos de acciones no de movimiento, límites y condiciones de SC-004 a SC-006, búsqueda acotada SC-002, desempate entero por ID, semántica temporal de agenda, escenario cuantitativo de reprogramación de velocidad, escenario de movimiento del jugador y clarificación de alcance por responsabilidades.
+
+> Revisá y corregí specs/001-terreno-cazador/spec.md usando el
+> enunciado oficial y la constitución. Conservá los identificadores
+> FR y SC existentes y aplicá los siguientes ajustes.
+> 
+> 1. Corregí FR-002. El movimiento utiliza:
+>    max(1, costo_salida * 100 // velocidad).
+> 
+>    Las demás acciones conservan sus costos vigentes de P1:
+>    atacar y esperar 100, usar/equipar 50, recoger/soltar 25
+>    y abrir puertas 50.
+> 
+>    Revisá esos valores contra el proyecto y el enunciado.
+>    Agregá un escenario que compruebe que introducir costos
+>    de terreno conserva los costos de las demás acciones.
+> 
+> 2. Corregí SC-004 para reflejar el límite de 20 ms por ciclo
+>    entre decisiones del jugador, medido en el equipo local,
+>    sin red ni renderizado y con decenas de cazadores activos
+>    en la cripta de referencia.
+> 
+>    La evaluación debe permitir detectar ciclos que excedan
+>    el límite. La media por sí sola es insuficiente.
+>    La metodología de medición se detallará en plan.md.
+> 
+> 3. Reformulá SC-005 para exigir la comparación entre cálculo
+>    individual y compartido con distintos números de cazadores
+>    y rangos. La elección final y las condiciones donde conviene
+>    cada alternativa deben justificarse mediante resultados reales.
+> 
+> 4. Reformulá SC-006 para exigir la comparación de reutilización
+>    frente a recálculo en escenarios de puertas estables e
+>    inestables, comprobando siempre equivalencia observable.
+>    La mejora de rendimiento queda sujeta a medición.
+> 
+> 5. Reformulá SC-002 como propiedad observable de rendimiento.
+>    Para un cazador de rango pequeño, el trabajo de búsqueda
+>    debe depender de la región pertinente dentro de su alcance.
+>    El plan definirá cómo cumplirlo y medirlo, incluyendo el
+>    caso de cálculos compartidos con rangos diferentes.
+> 
+> 6. Eliminá la ambigüedad de “ID alfanumérico/numérico”.
+>    Usá el orden de los identificadores definido por el contrato
+>    de datos del proyecto. Si el contrato deja una duda real,
+>    señalala para aclaración.
+> 
+> 7. Revisá las frases sobre “llegar al destino” o “completar el
+>    movimiento”. Conservá la semántica temporal de la primera
+>    parte y especificá cómo el costo determina el intervalo
+>    hasta la siguiente actuación del actor.
+> 
+> 8. Concretá el escenario de cambio de velocidad.
+>    Una acción de costo 300 iniciada en t=0 con velocidad 100
+>    tiene su siguiente evento en t=300. Si en t=100 cambia a
+>    velocidad 50, el tiempo restante pasa de 200 a 400 y el
+>    evento queda programado para t=500.
+>    Contrastá el ejemplo con la regla vigente de P1.
+> 
+> 9. Agregá un escenario explícito de movimiento del jugador
+>    entre turnos del cazador, vinculado a FR-008.
+>    La nueva decisión debe dirigirse a su posición actual y
+>    coincidir con recalcular desde cero.
+> 
+> 10. Ajustá la aclaración de alcance.
+>     Mariano es responsable de las reglas del motor para 001,
+>     sus pruebas, benchmarks, integración de mediciones y
+>     documentación. La presentación visual corresponde al
+>     reparto acordado con Axel y Kim.
+>     Expresá esto en términos de responsabilidades y dejá
+>     las rutas de archivos y decisiones técnicas para el plan.
+> 
+> Mostrame los cambios y cualquier ambigüedad pendiente.
+> Registrá este prompt textual en PROMPTS_LLM.md.
+> Prepará el comando para que yo confirme la especificación
+> corregida en Git antes de continuar con la planificación.
 
 ---
 
