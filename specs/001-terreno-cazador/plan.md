@@ -7,7 +7,7 @@
 
 La capacidad 001 incorpora el costo variable de terreno en todas las salidas ($\ge 1$, por defecto 100), calcula el intervalo temporal de movimiento de todos los actores en el reloj virtual (`max(1, costo_salida * 100 // velocidad)`), introduce el enemigo cazador con búsqueda de ruta de costo mínimo acotada a su rango hacia el jugador con desempate determinista por menor ID de sala vecina, e implementa la invalidación reactiva de rutas ante eventos del entorno (puertas, desplazamientos del jugador, retroceso). 
 
-El enfoque técnico se basa en un cálculo compartido de Dijkstra acotado al rango máximo activo desde la posición del jugador, empleando un montículo binario propio sin `heapq` (contrato C3 con Kim), arreglos preasignados indexados por posición contigua de sala con marcas de búsqueda $O(1)$ sin reinicialización global, y un despachador unificado de cambios de estado de puertas (contrato C2) para la invalidación selectiva y sincronización con Axel y Kim.
+El enfoque técnico se basa en un cálculo compartido de Dijkstra acotado al rango máximo activo desde la posición del jugador, empleando un montículo binario propio sin `heapq` (contrato C3 con Kim, **PENDIENTE**), arreglos preasignados indexados por posición contigua de sala con marcas de búsqueda $O(1)$ sin reinicialización global, y un despachador unificado de cambios de estado de puertas (contrato C2) para la invalidación selectiva y sincronización con Axel y Kim.
 
 ---
 
@@ -15,7 +15,7 @@ El enfoque técnico se basa en un cálculo compartido de Dijkstra acotado al ran
 
 **Language/Version**: Python 3.13  
 **Primary Dependencies**: `requests >= 2.31`, `pygame >= 2.5` (ninguna biblioteca nueva; `requirements.txt` se mantiene intacto).  
-**Storage**: Persistencia propia y archivos binarios existentes; sin bases de datos externas.  
+**Storage**: Persistencia propia y archivos binarios existentes; sin bases de datos externas. Coordinación con Kim para compatibilidad de guardado v4.  
 **Testing**: Conjunto de pruebas unitarias y de integración ejecutadas con `python -m tests.<modulo>`.  
 **Target Platform**: Multiplataforma (Windows 11 / Linux / macOS), ejecución en consola para pruebas y `--bench`.  
 **Project Type**: Motor de juego por eventos (arquitectura MVC).  
@@ -49,7 +49,7 @@ El enfoque técnico se basa en un cálculo compartido de Dijkstra acotado al ran
 ```text
 specs/001-terreno-cazador/
 ├── spec.md              # Especificación funcional y de rendimiento
-├── plan.md              # Este plan de implementación técnica
+├── plan.md              # Este plan de implementación técnica corregido
 ├── research.md          # Investigación de alternativas, pruebas matemáticas y contratos
 ├── data-model.md        # Modelo de entidades, campos, validaciones y ciclos de vida
 └── tasks.md             # Desglose de tareas por historia de usuario
@@ -58,17 +58,20 @@ specs/001-terreno-cazador/
 ### Código fuente afectado
 ```text
 modelo/juego/
-├── sala.py              # Campo costo en Salida, Sala.indice contiguo
-├── mapa.py              # Lectura de costo, asignación de indices, normalización de cazador
+├── sala.py              # Campo costo (validación estricta entero >= 1) en Salida, Sala.indice contiguo
+├── mapa.py              # Lectura de costo, asignación de indices, normalización con tildes/espacios
+├── actor.py             # Campo rango en Enemigo (compatible con P1)
 ├── costos.py            # Preservación de costos base vigentes de P1
 ├── partida.py           # mover con costo, punto único de cambio de puertas (C2), caché de rutas
-├── comportamiento.py    # Retorno de costo de acción, comportamiento cazador y desempate
+├── comportamiento.py    # Retorno de costo de acción en todas las ramas, comportamiento cazador
 ├── motor_enemigos.py    # Programación de turno con costo retornado
 ├── agenda_eventos.py    # Validación de reprogramación de velocidad con costo alto
 └── cazador.py           # (O módulo de apoyo) Lógica de cálculo compartido e invalidación
 
+main.py                  # Integración del comando --bench cazador
+
 modelo/estructuras/
-└── monticulo_min.py     # Montículo binario propio provisto por Kim (Contrato C3)
+└── monticulo_min.py     # Montículo binario propio provisto por Kim (Contrato C3 - PENDIENTE)
 
 tests/
 ├── test_terreno_cazador.py  # Pruebas de aceptación automatizadas vinculadas a FR-001..FR-008
@@ -84,19 +87,20 @@ bench/
 ## Plan de Trabajo por Bloques Técnicos
 
 ### Bloque 1: Costos de Movimiento (FR-001, FR-002)
-1. **Modificación de Salida y Sala (`sala.py`)**:
-   - `Salida.__init__`: Agregar parámetro `costo: int = 100`, con validación `costo >= 1`.
-   - `Sala.conectar`: Agregar parámetro `costo: int = 100` y pasarlo a `Salida`. Al compartir la misma instancia de `Salida`, la simetría es absoluta ($costo(A \to B) == costo(B \to A)$).
-   - `Sala.__init__`: Agregar campo `self.indice = None` para indexación contigua.
-2. **Carga en Mapa (`mapa.py`)**:
+1. **Validación Estricta de Costo en Salida y Sala (`sala.py`)**:
+   - `Salida.__init__(sala_a, sala_b, estado="abierta", llave=None, cierre_automatico=None, costo=100)`: El parámetro `costo` se añade al final para preservar todos los llamadores posicionales existentes.
+   - Validación de tipo y rango estricta: `if type(costo) is not int or costo < 1: raise ValueError(...)` (rechaza explícitamente `bool` ya que `isinstance(True, int)` es verdadero, decimales, cadenas, cero y negativos). Si se omite, toma 100 por defecto.
+   - `Sala.conectar(..., costo=100)`: Recibe `costo` al final y lo delega a `Salida`. La simetría es total al compartir la instancia única.
+   - `Sala.__init__`: Incorpora `self.indice = None` asignado contiguamente durante la carga del esqueleto.
+2. **Carga en Mapa y Normalización Robusta (`mapa.py`)**:
    - Asignar `sala.indice = p` para cada sala en `esqueleto.ids`.
-   - Leer `datos.get("costo", 100)` y validar `costo >= 1` al conectar salas.
-   - Normalizar `ficha.get("comportamiento", "guardian").lower().strip()` para aceptar `"cazador"` sin problemas de mayúsculas ni tildes.
+   - Leer `datos.get("costo", 100)` y validar al conectar salas.
+   - Normalización de comportamiento de enemigos: transformar a minúsculas, eliminar espacios y remover tildes (ej. `" Guardián "` $\to$ `"guardian"`, `"Cazador"` $\to$ `"cazador"`), resolviendo el pendiente histórico de P1.
 3. **Movimiento del Jugador (`partida.py`)**:
    - En `mover(direccion)`: sustituir `COSTO_MOVER` por `salida.costo`.
 4. **Costo Real de Acción en Enemigos (`comportamiento.py` y `motor_enemigos.py`)**:
    - `resolver_turno(partida, enemigo, ahora) -> int`:
-     - Retornar 100 al atacar o esperar.
+     - Retornar 100 al atacar o esperar (sin salidas o sin rastro).
      - Retornar `salida.costo` al desplazarse (errantes y rastreadores).
    - En `motor_enemigos.agendar_turno`: agendar siguiente turno con `ahora + costo_accion(costo_real, enemigo.velocidad)`.
 5. **Verificación de Reprogramación de Velocidad (`agenda_eventos.py`)**:
@@ -108,30 +112,41 @@ bench/
    - Modificar `partida.abrir()` y `efectos.programar_cierre()` para utilizar este método único.
 2. **Registro de Notificaciones (Desacoplamiento)**:
    - Proveer lista de callbacks en `Partida` para que Kim (conocimiento) y Axel (línea de tiempo) se suscriban cuando implementen sus capacidades.
-3. **Manejo de Pergamino de Retroceso**:
-   - Durante `registro.deshacer()`, silenciar avisos individuales duplicados e invalidar completamente la caché de rutas al finalizar la reversión (`self.cache_rutas.invalidar_todo()`).
+3. **Manejo de Pergamino de Retroceso y `deshacer_ultimo()`**:
+   - El retroceso en `registro.py` opera mediante `deshacer_ultimo()`, ejecutando los inversos registrados.
+   - Para evitar avisos duplicados o deltas erróneos en la línea de tiempo de Axel durante el retroceso, `Partida` silencia notificaciones individuales durante la ejecución de `deshacer_ultimo()` y emite una invalidación global de la caché de rutas al finalizar la reversión (`self.cache_rutas.invalidar_todo()`).
 
 ### Bloque 3: Cazador y Contrato C3 (FR-003, FR-004, FR-005, FR-006, FR-007)
-1. **Acuerdo con Kim (Contrato C3)**:
-   - Kim provee `modelo/estructuras/monticulo_min.py` y la función genérica `dijkstra_acotado`.
+1. **Extensión de Enemigo y Coordinación C5 / Persistencia con Kim**:
+   - Agregar parámetro opcional `rango: int = 0` al final del constructor de `Enemigo` (`modelo/juego/actor.py`), compatible con todos los enemigos de P1.
+   - En `mapa.incorporar`: leer `ficha.get("rango", 0)` y validar entero $\ge 0$.
+   - **Coordinación con Kim**: En el guardado binario v4 (`guardado_binario.py`), coordinar si los enemigos cazadores persisten `rango` o si la carga v4 lo reconstruye desde el catálogo (Contrato C7).
+2. **Dependencia de Kim (Contrato C3 - PENDIENTE)**:
+   - Kim provee `modelo/estructuras/monticulo_min.py` y `dijkstra_acotado`.
    - Se acordó la firma con filtro de salidas (`filtro_salida(salida) -> bool`), cota máxima de rango y arreglos reutilizables con marcas de búsqueda.
-2. **Cálculo Compartido desde el Jugador**:
-   - Realizar una única búsqueda Dijkstra desde la sala del jugador acotada a $R_{\max} = \max(\{c.rango\})$.
+3. **Cálculo Compartido desde el Jugador**:
+   - Realizar una única búsqueda Dijkstra desde la sala del jugador acotada a $R_{\text{utilizado}} = \max(\{c.rango \text{ activos}\})$.
    - Cada cazador en sala $u$ consulta localmente sus salidas abiertas:
      $$d(u) = \min_{v \in vecinos(u)} (costo(u, v) + dist[v.indice])$$
    - Si $d(u) \le rango$, se mueve a la primera sala vecina $v$ que logra el costo mínimo.
    - Desempate: ante empates en el costo total $d(u)$, se elige la sala vecina con menor `v.id` entero.
-3. **Arreglos con Marca de Búsqueda ($O(1)$ reinicio)**:
+4. **Arreglos con Marca de Búsqueda ($O(1)$ reinicio)**:
    - Mantener arreglos contiguos `dist` y `marca` de tamaño $N$.
    - Incrementar `token_busqueda += 1` en cada ejecución; solo los nodos con `marca[i] == token_busqueda` se consideran alcanzados.
 
 ### Bloque 4: Invalidación Reactiva y Mediciones (SC-001..SC-006)
 1. **Criterios de Invalidación del Campo Compartido**:
-   - El campo compartido es válido mientras el jugador no cambie de sala, $R_{\max}$ no aumente y ninguna puerta con al menos un extremo a distancia $\le R_{\max}$ cambie de estado.
-   - Si una puerta lejana cambia (ambos extremos $> R_{\max}$), no se invalida la caché.
-   - Si el jugador se mueve o una puerta relevante cambia, se invalida el campo y el siguiente cazador dispara el nuevo Dijkstra desde el jugador.
-2. **Suite de Benchmarking (`bench/bench_cazador.py`)**:
-   - **SC-004**: Medir tiempo de cada ciclo individual entre decisiones del jugador con 30 cazadores en cripta sintética grande; registrar tiempo máximo y conteo de ciclos $> 20\text{ ms}$.
-   - **SC-005**: Comparar tiempo total por ciclo entre búsqueda individual y compartida para 1, 10, 30 y 100 cazadores con rangos pequeño y grande.
-   - **SC-006**: Comparar reutilización vs. recálculo continuo en escenarios con puertas estables y con puertas inestables (autocierres continuos), verificando en cada paso equivalencia observable estricta.
-   - **Revisión §5.6**: Repetir `bench_motor` con cazadores y costos variables, verificando que el heap de la agenda mantenga su rendimiento $O(\log E)$.
+   - Se diferencian **$R_{\text{activo}}$** (el rango del cazador que necesita actuar) y **$R_{\text{utilizado}}$** (la cota máxima usada en el cálculo previo).
+   - El campo compartido sigue siendo válido si:
+     1. El jugador permanece en la misma sala.
+     2. No se requiere alcanzar un $R_{\text{activo}} > R_{\text{utilizado}}$ (si se activa un cazador con mayor rango, se invalida y recalcula).
+     3. Ninguna puerta con al menos un extremo a distancia $\le R_{\text{utilizado}}$ cambió de estado.
+   - Si una puerta lejana cambia (ambos extremos $> R_{\text{utilizado}}$), no se invalida la caché.
+   - Reversión por pergamino invalida incondicionalmente el campo de distancias.
+2. **Suite de Benchmarking (`bench/bench_cazador.py`) y `main.py`**:
+   - Integrar `--bench cazador` en `main.py` dentro de `SUBSISTEMAS_BENCH`.
+   - **Mediciones sintéticas**: Evaluación sobre criptas generadas con semillas aleatorias para comparar algoritmos.
+   - **Validación sobre cripta de referencia**: Medición oficial sobre la cripta que publique la cátedra, registrando el tiempo máximo de ciclo y el conteo de ciclos $> 20\text{ ms}$ (`SC-004`).
+   - **SC-005**: Comparar individual vs. compartido para 1, 10, 30 y 100 cazadores con rangos pequeño y grande.
+   - **SC-006**: Comparar reutilización vs. recálculo continuo en escenarios con puertas estables e inestables.
+   - **Revisión §5.6**: Repetir `bench_motor` con cazadores y documentar el análisis en `DECISIONES.md`.

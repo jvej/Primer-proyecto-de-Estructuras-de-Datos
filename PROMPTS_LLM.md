@@ -687,6 +687,84 @@ Utilicé Claude como herramienta de apoyo para comprender los requisitos, obtene
 > - Los acuerdos pendientes con Kim, Jeferson y Axel.
 > - Las inconsistencias encontradas por el análisis.
 
+
+
+#### 24. Ajustes a plan y tareas, análisis spec-kit e implementación de costos (T001-T010) — 07/11/2026
+
+- **Integrante**: Mariano
+- **Fecha**: 07/11/2026
+- **Herramienta**: Google Antigravity (IDE v2.0)
+- **Modelo**: Gemini 3.8 Flash / Claude Opus 4.6
+- **Uso de la respuesta**: Ajustar plan.md y tasks.md con 10 precisiones técnicas (validación estricta de costo, normalización con tildes, rango en enemigo, retroceso con deshacer_ultimo, rango activo vs utilizado, integración en main.py y pruebas test-first antes de implementación), ejecutar análisis de consistencia, y tras verificar el historial de Git, proceder a la implementación test-first de las tareas T001 a T010 del Bloque 1 de costos de movimiento.
+
+> Revisá plan.md y tasks.md de 001-terreno-cazador y aplicá
+> estos ajustes conservando los identificadores existentes:
+> 
+> 1. Quitá [P] de T001–T005 porque modifican el mismo archivo.
+> 2. Definí costo como entero positivo, rechazando booleanos,
+>    decimales, cadenas, cero y negativos. La omisión vale 100.
+> 3. Corregí la normalización de comportamiento para contemplar
+>    mayúsculas, espacios y tildes.
+> 4. Agregá una tarea para incorporar rango en Enemigo y cargarlo
+>    desde la ficha, coordinada con C5 y compatible con los
+>    enemigos anteriores. Identificá los caminos de guardado
+>    y carga que deban revisarse con Kim.
+> 5. Adaptá el diseño de retroceso a deshacer_ultimo() y a los
+>    inversos reales del proyecto. Documentá la coordinación
+>    con conocimiento e historia y la invalidación de rutas.
+> 6. Incluí el aumento del rango requerido entre las condiciones
+>    de invalidación. Diferenciá rango activo y rango utilizado
+>    al calcular las distancias guardadas.
+> 7. Agregá la integración de --bench cazador en main.py y la
+>    documentación de mi revisión de §5.6.
+> 8. Colocá las pruebas de puertas e invalidación antes de sus
+>    implementaciones. Agregá FR-008 a T022.
+> 9. Contrastá las afirmaciones de acuerdos y commits con
+>    evidencia disponible. Marcá lo pendiente como pendiente.
+> 10. Distinguí mediciones sintéticas y validación posterior
+>     sobre la cripta de referencia.
+> 
+> Ejecutá el análisis de consistencia de spec-kit.
+> 
+> Verificá el historial de Git antes de implementar.
+> Si falta confirmar la especificación o el plan y las tareas,
+> mostrame los comandos con rutas explícitas para que yo haga
+> esos commits en orden y detenete en ese punto.
+> 
+> Si ambos hitos ya están confirmados, implementá únicamente
+> T001–T010, correspondientes al bloque de costos.
+> 
+> Primero escribí las pruebas, ejecutalas y comprobá que los
+> fallos corresponden al comportamiento pendiente. Después
+> implementá los cambios mínimos necesarios.
+> 
+> Condiciones del bloque:
+> 
+> - Agregá costo al final de las firmas existentes de Salida
+>   y Sala.conectar para conservar los argumentos posicionales.
+> - Verificá la carga de costos mediante Mapa, además de la
+>   construcción directa de salidas.
+> - Asigná índices contiguos y estables desde el esqueleto.
+> - El jugador usa salida.costo.
+> - resolver_turno devuelve el costo de la acción ejecutada
+>   en todas sus rutas de ejecución.
+> - El siguiente turno enemigo usa ese costo y su velocidad.
+> - Errantes y rastreadores conservan su elección de movimiento.
+> - Reutilizá la reprogramación de velocidad existente.
+> - Probá el costo mediante movimientos reales y la agenda.
+>   Incluí al jugador y a los enemigos, además de la fórmula.
+> - Verificá que las acciones restantes conservan sus costos.
+> 
+> Ejecutá:
+> python -m tests.test_terreno_cazador
+> python -m tests.test_motor_base
+> python -m tests.test_partida
+> 
+> Al terminar, mostrámelos resultados reales, las tareas
+> completadas, los archivos modificados y cualquier pendiente.
+> Entregame el contenido completo de los archivos modificados
+> para copiar y pegar.
+
 ---
 
 ## 4. Inventario, retroceso, replay, controlador y vista — Axel
