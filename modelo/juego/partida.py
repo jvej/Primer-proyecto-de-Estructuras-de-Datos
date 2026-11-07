@@ -1,4 +1,4 @@
-from modelo.juego import efectos
+﻿from modelo.juego import efectos
 from modelo.juego.actor import Enemigo, Jugador
 from modelo.juego.agenda_eventos import AgendaEventos
 from modelo.juego.azar import AzarReversible
@@ -172,7 +172,7 @@ class Partida:
             self._incorporar(destino)
         except ErrorCripta as error:
             return self._rechazar(f"No se pudo cargar la sala {destino.id}: {error}")
-        self._accion(COSTO_MOVER, lambda: self._entrar(destino))
+        self._accion(salida.costo, lambda: self._entrar(destino))
         return True
 
     def _entrar(self, destino) -> None:
