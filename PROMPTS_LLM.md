@@ -1,4 +1,4 @@
-﻿# Bitácora de uso de LLM 
+# Bitácora de uso de LLM 
 
 | | |
 |---|---|
@@ -764,6 +764,83 @@ Utilicé Claude como herramienta de apoyo para comprender los requisitos, obtene
 > completadas, los archivos modificados y cualquier pendiente.
 > Entregame el contenido completo de los archivos modificados
 > para copiar y pegar.
+
+
+#### 25. Inspección e implementación de puertas, avisos y retroceso (Bloque 2, T011-T014) — 07/11/2026
+
+- **Integrante**: Mariano
+- **Fecha**: 07/11/2026
+- **Herramienta**: Google Antigravity (IDE v2.0)
+- **Modelo**: Gemini 3.8 Flash / Claude Opus 4.6
+- **Uso de la respuesta**: Inspeccionar los mecanismos existentes de mutación de puertas (`abrir`, `programar_cierre`), reversión con `Registro.deshacer_ultimo` y uso de pergaminos; redactar pruebas test-first para FR-008 e implementar el punto único de cambio de estado de puertas (`cambiar_estado_puerta`) con despachador desacoplado de eventos (Contrato C2 con C1 de Axel) y tratamiento reactivo de invalidación de rutas al concluir el retroceso temporal.
+
+> Continuemos con el Bloque 2 de la capacidad 001.
+> 
+> Primero verificá el cierre del Bloque 1:
+> 
+> - Contrastá T001–T010 con el tasks.md actual y corregí cualquier
+>   diferencia entre sus identificadores y el resumen de trabajo.
+> - Comprobá que PROMPTS_LLM.md conserve los prompts completos,
+>   incluyendo las instrucciones de commit cuando fueron enviadas.
+> - Corregí la referencia a C4: corresponde a comentarios del log.
+>   Para puertas y retroceso, coordinamos C2 con C1 de Axel.
+> - Verificá en Git los commits de especificación, planificación
+>   y Bloque 1. Si alguno sigue pendiente, mostrame los comandos
+>   correspondientes y esperá a que yo los ejecute.
+> 
+> Con los hitos anteriores confirmados, implementá el Bloque 2
+> siguiendo las tareas actuales y manteniendo sus identificadores.
+> 
+> Antes de programar, inspeccioná:
+> - Partida.cambiar y Partida.abrir.
+> - El cierre automático en efectos.py.
+> - Registro.cambiar y deshacer_ultimo.
+> - El uso del pergamino.
+> - Los puntos de integración ya existentes de Kim y Axel.
+> 
+> Escribí primero pruebas vinculadas a FR-008 que comprueben:
+> 
+> 1. Apertura y cierre automático pasan por el mismo método.
+> 2. Cada cambio efectivo emite un único aviso.
+> 3. Solicitar el estado que ya tiene la puerta no genera
+>    un cambio ni un aviso adicional.
+> 4. El pergamino restaura la puerta y los eventos de cierre
+>    conforme al comportamiento existente.
+> 5. Tras el retroceso se comunica la necesidad de descartar
+>    los cálculos de rutas anteriores.
+> 6. La restauración no genera nuevos registros de acciones
+>    ni duplica los cambios del historial.
+> 
+> Implementá cambiar_estado_puerta(salida, nuevo_estado)
+> reutilizando el registro de cambios existente.
+> 
+> Definí un contrato sencillo para los avisos, compatible con
+> los componentes que ya existan. Las pruebas pueden utilizar
+> receptores de prueba para observarlos.
+> 
+> Diferenciá explícitamente:
+> - Restauración del estado del juego y conocimiento.
+> - Recorte o restauración de la línea de tiempo.
+> - Invalidación de datos derivados de búsqueda de rutas.
+> 
+> Invalidar rutas al terminar el retroceso no sustituye la
+> restauración del conocimiento ni el tratamiento de la historia.
+> Evitá invocar atributos de una caché que todavía no exista.
+> 
+> Conservá las reglas de llaves, costo de apertura, cierres
+> automáticos y consumo de pergaminos.
+> 
+> Ejecutá:
+> python -m tests.test_terreno_cazador
+> python -m tests.test_motor_base
+> python -m tests.test_partida
+> 
+> Revisá además las pruebas existentes de replay y persistencia
+> que ejerciten los caminos modificados.
+> 
+> Al finalizar, entregame los archivos completos modificados,
+> los resultados reales de las pruebas, las tareas completadas
+> y los acuerdos pendientes con Kim y Axel.
 
 ---
 

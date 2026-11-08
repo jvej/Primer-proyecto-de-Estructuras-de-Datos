@@ -1,4 +1,4 @@
-﻿"""
+"""
 Pruebas de aceptación y unitarias para la Capacidad 001:
 Terreno, cazador e invalidación de rutas.
 
@@ -22,7 +22,7 @@ from modelo.juego.evento import Evento
 from modelo.juego.mapa import Mapa
 from modelo.juego.motor_enemigos import agendar_turno
 from modelo.juego.sala import DIRECCIONES, Sala, Salida
-from tests.cripta_de_prueba import armar, esqueleto_linea
+from tests.cripta_de_prueba import armar, entrada, esqueleto_linea
 
 
 class EsqueletoFalso:
@@ -194,6 +194,177 @@ def test_FR002_movimiento_enemigos_consume_costo_salida():
     esc.cerrar()
 
 
+# ==============================================================================
+# BLOQUE 2: PUERTAS, CONTRATO C2 Y RETROCESO (FR-008)
+# ==============================================================================
+
+
+def test_FR008_apertura_y_cierre_pasan_por_cambiar_estado_puerta():
+    """FR-008: Tanto la apertura del jugador como el cierre automático canalizan
+    sus mutaciones por el método único cambiar_estado_puerta."""
+    puertas = [(1, 2, {"cerrada": True, "llave": "itm_llave_bronce", "cierre_automatico": 200})]
+    salas = esqueleto_linea(3, puertas)
+    esc = armar(salas, [entrada(1, objetos=["itm_llave_bronce"])])
+    p = esc.partida
+
+    assert hasattr(p, "cambiar_estado_puerta"), "Partida debe definir cambiar_estado_puerta"
+
+    llamadas = []
+    original_cambiar = p.cambiar_estado_puerta
+
+    def spy_cambiar(salida, nuevo_estado):
+        llamadas.append((salida, nuevo_estado))
+        return original_cambiar(salida, nuevo_estado)
+
+    p.cambiar_estado_puerta = spy_cambiar
+
+    assert p.recoger(0)
+    assert p.abrir("N")
+    puerta = p.sala_actual().salidas[0]
+
+    assert len(llamadas) == 1, f"Se esperaba 1 llamada en abrir, hubo {len(llamadas)}"
+    assert llamadas[0] == (puerta, "abierta")
+    assert puerta.esta_abierta()
+
+    while p.reloj.tiempo_actual < 225:
+        p.esperar()
+
+    assert not puerta.esta_abierta()
+    assert len(llamadas) == 2, f"Se esperaba 2da llamada en cierre automático, hubo {len(llamadas)}"
+    assert llamadas[1] == (puerta, "cerrada")
+    esc.cerrar()
+
+
+def test_FR008_cada_cambio_efectivo_emite_unico_aviso():
+    """FR-008: Cada cambio de estado real emite exactamente un aviso a observadores registrados."""
+    puertas = [(1, 2, {"cerrada": True, "llave": "itm_llave_bronce", "cierre_automatico": 200})]
+    salas = esqueleto_linea(3, puertas)
+    esc = armar(salas, [entrada(1, objetos=["itm_llave_bronce"])])
+    p = esc.partida
+
+    avisos = []
+
+    def observador_puerta(salida, anterior, nuevo):
+        avisos.append((salida, anterior, nuevo))
+
+    p.suscribir_cambio_puerta(observador_puerta)
+
+    p.recoger(0)
+    p.abrir("N")
+    puerta = p.sala_actual().salidas[0]
+
+    assert len(avisos) == 1, f"Esperado 1 aviso tras abrir, obtenido {len(avisos)}"
+    assert avisos[0] == (puerta, "cerrada", "abierta")
+
+    while p.reloj.tiempo_actual < 225:
+        p.esperar()
+
+    assert len(avisos) == 2, f"Esperado 2do aviso tras cierre automático, obtenido {len(avisos)}"
+    assert avisos[1] == (puerta, "abierta", "cerrada")
+
+    p.desuscribir_cambio_puerta(observador_puerta)
+    p.cambiar_estado_puerta(puerta, "abierta")
+    assert len(avisos) == 2, "Observador desuscrito no debe recibir avisos"
+    esc.cerrar()
+
+
+def test_FR008_solicitar_mismo_estado_no_genera_cambio_ni_aviso():
+    """FR-008: Solicitar el estado que la puerta ya tiene es un no-op que retorna False."""
+    puertas = [(1, 2, {"cerrada": False})]
+    salas = esqueleto_linea(2, puertas)
+    esc = armar(salas)
+    p = esc.partida
+
+    avisos = []
+    p.suscribir_cambio_puerta(lambda s, a, n: avisos.append((s, a, n)))
+
+    puerta = p.sala_actual().salidas[0]
+    assert puerta.esta_abierta()
+
+    resultado = p.cambiar_estado_puerta(puerta, "abierta")
+    assert resultado is False, "cambiar_estado_puerta debe retornar False si el estado es el mismo"
+    assert len(avisos) == 0, "No debe emitir avisos si no hubo cambio real"
+    assert puerta.esta_abierta()
+
+    assert p.cambiar_estado_puerta(None, "cerrada") is False
+    esc.cerrar()
+
+
+def test_FR008_pergamino_restaura_puerta_y_cierre_existente():
+    """FR-008: Usar pergamino revierte la puerta y restaura el estado previo del evento de cierre."""
+    puertas = [(1, 2, {"cerrada": True, "llave": "itm_llave_bronce", "cierre_automatico": 200})]
+    salas = esqueleto_linea(3, puertas)
+    esc = armar(salas, [entrada(1, objetos=["itm_llave_bronce", "itm_pergamino"])], capacidad=5)
+    p = esc.partida
+
+    assert p.recoger(0)  # Llave en t=0 -> t=25
+    assert p.recoger(0)  # Pergamino en t=25 -> t=50
+    assert p.abrir("N")   # Abre puerta en t=50 -> t=100 (cierre programado para t=250)
+
+    puerta = p.sala_actual().salidas[0]
+    assert puerta.esta_abierta()
+    assert puerta.evento_cierre is not None
+
+    # Retroceso de la apertura de puerta
+    assert p.usar_pergamino()
+    assert not puerta.esta_abierta(), "La puerta debió volver a quedar cerrada tras retroceder"
+    assert puerta.evento_cierre is None, "El evento de cierre debió quedar limpio/cancelado"
+    esc.cerrar()
+
+
+def test_FR008_retroceso_comunica_invalidacion_de_rutas():
+    """FR-008: Al concluir deshacer_ultimo() en usar_pergamino se emite aviso de invalidación de rutas."""
+    puertas = [(1, 2, {"cerrada": True, "llave": "itm_llave_bronce"})]
+    salas = esqueleto_linea(3, puertas)
+    esc = armar(salas, [entrada(1, objetos=["itm_llave_bronce", "itm_pergamino"])], capacidad=5)
+    p = esc.partida
+
+    avisos_rutas = []
+    p.suscribir_invalidacion_rutas(lambda: avisos_rutas.append(True))
+
+    p.recoger(0)
+    p.recoger(0)
+    p.abrir("N")
+    assert len(avisos_rutas) == 0, "Apertura no dispara invalidación por retroceso"
+
+    assert p.usar_pergamino()
+    assert len(avisos_rutas) == 1, "usar_pergamino debió notificar la invalidación de rutas"
+
+    p.desuscribir_invalidacion_rutas(lambda: None)
+    esc.cerrar()
+
+
+def test_FR008_restauracion_no_duplica_registros_ni_emite_avisos_durante_retroceso():
+    """FR-008: Durante el retroceso no se emiten avisos individuales a observadores de puertas
+    y el historial en registro decrece sin duplicar entradas ni crear nuevas acciones."""
+    puertas = [(1, 2, {"cerrada": True, "llave": "itm_llave_bronce"})]
+    salas = esqueleto_linea(3, puertas)
+    esc = armar(salas, [entrada(1, objetos=["itm_llave_bronce", "itm_pergamino"])], capacidad=5)
+    p = esc.partida
+
+    avisos_puertas = []
+    p.suscribir_cambio_puerta(lambda s, a, n: avisos_puertas.append((s, a, n)))
+
+    p.recoger(0)
+    p.recoger(0)
+    p.abrir("N")
+    assert len(avisos_puertas) == 1  # Apertura
+
+    acciones_antes = p.registro.acciones_deshacibles()
+    assert acciones_antes >= 2
+
+    assert p.usar_pergamino()
+    # Durante el retroceso, las mutaciones inversas están silenciadas (_en_retroceso=True)
+    # por lo que no se agregan avisos individuales redundantes
+    assert len(avisos_puertas) == 1, (
+        f"El retroceso no debe emitir avisos individuales de cambio de puerta; obtenidos {len(avisos_puertas)}"
+    )
+    assert p.registro.acciones_deshacibles() == acciones_antes - 1, (
+        "El retroceso debió desapilar una acción sin agregar nuevos grupos"
+    )
+    esc.cerrar()
+
+
 if __name__ == "__main__":
     pruebas = [
         test_FR001_costo_predeterminado_y_simetria,
@@ -204,6 +375,12 @@ if __name__ == "__main__":
         test_FR002_acciones_sin_movimiento_conservan_costos_vigentes,
         test_FR002_movimiento_jugador_consume_costo_salida,
         test_FR002_movimiento_enemigos_consume_costo_salida,
+        test_FR008_apertura_y_cierre_pasan_por_cambiar_estado_puerta,
+        test_FR008_cada_cambio_efectivo_emite_unico_aviso,
+        test_FR008_solicitar_mismo_estado_no_genera_cambio_ni_aviso,
+        test_FR008_pergamino_restaura_puerta_y_cierre_existente,
+        test_FR008_retroceso_comunica_invalidacion_de_rutas,
+        test_FR008_restauracion_no_duplica_registros_ni_emite_avisos_durante_retroceso,
     ]
     for p in pruebas:
         p()

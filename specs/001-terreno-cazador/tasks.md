@@ -1,4 +1,4 @@
-﻿# Tasks: Terreno, cazador e invalidación de rutas
+# Tasks: Terreno, cazador e invalidación de rutas
 
 **Feature**: `001-terreno-cazador`  
 **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)  
@@ -14,11 +14,11 @@
 
 **Propósito**: Escribir las pruebas automatizadas de aceptación que definen el comportamiento de costos antes de tocar el código de producción. *(Secuenciales sobre `tests/test_terreno_cazador.py`)*.
 
-- [ ] T001 [US1] Crear archivo de pruebas `tests/test_terreno_cazador.py` e implementar pruebas de costo por defecto (100), validación estricta de costo (rechazo de booleanos, decimales, cadenas, cero y negativos) y simetría de salida (FR-001). -> `python -m tests.test_terreno_cazador`
-- [ ] T002 [US1] Implementar pruebas en `tests/test_terreno_cazador.py` para la cota mínima de intervalo `max(1, costo*100//v)` con velocidad alta y costo 1 (FR-002). -> `python -m tests.test_terreno_cazador`
-- [ ] T003 [US1] Implementar prueba en `tests/test_terreno_cazador.py` para la reprogramación por cambio de velocidad en salida costosa ($t=0$, costo 300, $v=100 \to 50$ en $t=100$, nuevo $t=500$) (FR-002). -> `python -m tests.test_terreno_cazador`
-- [ ] T004 [US1] Implementar prueba en `tests/test_terreno_cazador.py` que compruebe que las acciones sin movimiento (atacar, esperar, usar, recoger, abrir) conservan sus costos base vigentes de P1 (FR-002). -> `python -m tests.test_terreno_cazador`
-- [ ] T005 [US1] Implementar prueba de compatibilidad de errantes y rastreadores con salidas de costos variables en `tests/test_terreno_cazador.py`, verificando movimientos reales en la agenda (FR-002). -> `python -m tests.test_terreno_cazador`
+- [x] T001 [US1] Crear archivo de pruebas `tests/test_terreno_cazador.py` e implementar pruebas de costo por defecto (100), validación estricta de costo (rechazo de booleanos, decimales, cadenas, cero y negativos) y simetría de salida (FR-001). -> `python -m tests.test_terreno_cazador`
+- [x] T002 [US1] Implementar pruebas en `tests/test_terreno_cazador.py` para la cota mínima de intervalo `max(1, costo*100//v)` con velocidad alta y costo 1 (FR-002). -> `python -m tests.test_terreno_cazador`
+- [x] T003 [US1] Implementar prueba en `tests/test_terreno_cazador.py` para la reprogramación por cambio de velocidad en salida costosa ($t=0$, costo 300, $v=100 \to 50$ en $t=100$, nuevo $t=500$) (FR-002). -> `python -m tests.test_terreno_cazador`
+- [x] T004 [US1] Implementar prueba en `tests/test_terreno_cazador.py` que compruebe que las acciones sin movimiento (atacar, esperar, usar, recoger, abrir) conservan sus costos base vigentes de P1 (FR-002). -> `python -m tests.test_terreno_cazador`
+- [x] T005 [US1] Implementar prueba de compatibilidad de errantes y rastreadores con salidas de costos variables en `tests/test_terreno_cazador.py`, verificando movimientos reales en la agenda (FR-002). -> `python -m tests.test_terreno_cazador`
 
 ---
 
@@ -26,11 +26,11 @@
 
 **Propósito**: Implementar el soporte de costos en el motor y conectar la agenda temporal. **(Autónomo: Mariano puede ejecutarlo de inmediato sin dependencias de otros integrantes)**.
 
-- [ ] T006 [US1] Extender `Salida.__init__` y `Sala.conectar` en `modelo/juego/sala.py` agregando `costo: int = 100` al final de la firma con validación estricta (`type(costo) is int and costo >= 1`), y agregar `Sala.indice` (FR-001). -> `python -m tests.test_terreno_cazador`
-- [ ] T007 [US1] Modificar `modelo/juego/mapa.py` para leer `datos.get("costo", 100)`, asignar `sala.indice = p` contiguo desde el esqueleto, y normalizar cadenas de comportamiento contemplando mayúsculas, espacios y tildes (FR-001). -> `python -m tests.test_motor_base`
-- [ ] T008 [US1] Modificar `partida.mover` en `modelo/juego/partida.py` para pasar `salida.costo` en lugar de la constante `COSTO_MOVER` a `self._accion` (FR-002). -> `python -m tests.test_terreno_cazador`
-- [ ] T009 [US1] Modificar `modelo/juego/comportamiento.py` para que `resolver_turno` retorne el costo de la acción ejecutada (`COSTO_ATACAR`, `COSTO_ESPERAR` o `salida.costo`) en todas sus rutas de ejecución (FR-002). -> `python -m tests.test_terreno_cazador`
-- [ ] T010 [US1] Actualizar `modelo/juego/motor_enemigos.py` para agendar el próximo turno del enemigo usando el costo retornado por `resolver_turno` y su velocidad (FR-002). -> `python -m tests.test_terreno_cazador`
+- [x] T006 [US1] Extender `Salida.__init__` y `Sala.conectar` en `modelo/juego/sala.py` agregando `costo: int = 100` al final de la firma con validación estricta (`type(costo) is int and costo >= 1`), y agregar `Sala.indice` (FR-001). -> `python -m tests.test_terreno_cazador`
+- [x] T007 [US1] Modificar `modelo/juego/mapa.py` para leer `datos.get("costo", 100)`, asignar `sala.indice = p` contiguo desde el esqueleto, y normalizar cadenas de comportamiento contemplando mayúsculas, espacios y tildes (FR-001). -> `python -m tests.test_motor_base`
+- [x] T008 [US1] Modificar `partida.mover` en `modelo/juego/partida.py` para pasar `salida.costo` en lugar de la constante `COSTO_MOVER` a `self._accion` (FR-002). -> `python -m tests.test_terreno_cazador`
+- [x] T009 [US1] Modificar `modelo/juego/comportamiento.py` para que `resolver_turno` retorne el costo de la acción ejecutada (`COSTO_ATACAR`, `COSTO_ESPERAR` o `salida.costo`) en todas sus rutas de ejecución (FR-002). -> `python -m tests.test_terreno_cazador`
+- [x] T010 [US1] Actualizar `modelo/juego/motor_enemigos.py` para agendar el próximo turno del enemigo usando el costo retornado por `resolver_turno` y su velocidad (FR-002). -> `python -m tests.test_terreno_cazador`
 
 **Checkpoint US1**: Ejecutar `python -m tests.test_terreno_cazador`, `python -m tests.test_motor_base` y `python -m tests.test_partida`. Todos deben pasar limpiamente.
 
@@ -40,10 +40,10 @@
 
 **Propósito**: Unificar el control de estado de puertas y preparar el sistema de notificación para rutas, mapa conocido e historia. **(Autónomo)**.
 
-- [ ] T011 [US3] Escribir pruebas de aceptación de centralización de puertas y restauración tras `deshacer_ultimo()` en `tests/test_terreno_cazador.py` (FR-008). -> `python -m tests.test_terreno_cazador`
-- [ ] T012 [US3] Crear método `partida.cambiar_estado_puerta(salida, nuevo_estado)` en `modelo/juego/partida.py` que centraliza la mutación y emite avisos a observadores registrados (FR-008). -> `python -m tests.test_terreno_cazador`
-- [ ] T013 [US3] Refactorizar `partida.abrir` en `modelo/juego/partida.py` y `efectos.programar_cierre` en `modelo/juego/efectos.py` para canalizar las mutaciones exclusivamente a través de `cambiar_estado_puerta` (FR-008). -> `python -m tests.test_partida`
-- [ ] T014 [US3] Implementar en `partida.py` la gestión de retroceso: silenciar notificaciones individuales durante `deshacer_ultimo()` y emitir invalidación global de rutas al concluir el retroceso (FR-008). -> `python -m tests.test_terreno_cazador`
+- [x] T011 [US3] Escribir pruebas de aceptación de centralización de puertas y restauración tras `deshacer_ultimo()` en `tests/test_terreno_cazador.py` (FR-008). -> `python -m tests.test_terreno_cazador`
+- [x] T012 [US3] Crear método `partida.cambiar_estado_puerta(salida, nuevo_estado)` en `modelo/juego/partida.py` que centraliza la mutación y emite avisos a observadores registrados (FR-008). -> `python -m tests.test_terreno_cazador`
+- [x] T013 [US3] Refactorizar `partida.abrir` en `modelo/juego/partida.py` y `efectos.programar_cierre` en `modelo/juego/efectos.py` para canalizar las mutaciones exclusivamente a través de `cambiar_estado_puerta` (FR-008). -> `python -m tests.test_partida`
+- [x] T014 [US3] Implementar en `partida.py` la gestión de retroceso: silenciar notificaciones individuales durante `deshacer_ultimo()` y emitir invalidación global de rutas al concluir el retroceso (FR-008). -> `python -m tests.test_terreno_cazador`
 
 ---
 

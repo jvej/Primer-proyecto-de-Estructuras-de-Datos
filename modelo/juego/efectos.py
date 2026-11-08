@@ -97,7 +97,7 @@ def disparar_trampa(partida, trampa):
 def programar_cierre(partida, salida):
 
     def cerrar(ahora):
-        partida.cambiar(salida, "estado", "cerrada")
+        partida.cambiar_estado_puerta(salida, "cerrada")
         partida.cambiar(salida, "evento_cierre", None)
         if partida.jugador.sala is salida.sala_a or partida.jugador.sala is salida.sala_b:
             partida.bitacora.agregar("Una puerta se cierra.")
