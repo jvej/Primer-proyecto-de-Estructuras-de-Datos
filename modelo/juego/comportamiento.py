@@ -1,14 +1,17 @@
-from modelo.juego.combate import calcular_dano
+﻿from modelo.juego.combate import calcular_dano
+from modelo.juego.costos import COSTO_ATACAR, COSTO_ESPERAR
 from modelo.juego.sala import DIRECCIONES, Sala
 
 
-def resolver_turno(partida, enemigo, ahora) -> None:
+def resolver_turno(partida, enemigo, ahora) -> int:
     if partida.jugador.sala is enemigo.sala:
         _atacar(partida, enemigo)
+        return COSTO_ATACAR
     elif enemigo.comportamiento == "errante":
-        _errante(partida, enemigo)
+        return _errante(partida, enemigo)
     elif enemigo.comportamiento == "rastreador":
-        _rastreador(partida, enemigo, ahora)
+        return _rastreador(partida, enemigo, ahora)
+    return COSTO_ESPERAR
 
 
 def _atacar(partida, enemigo) -> None:
@@ -32,16 +35,19 @@ def _ir_a(partida, enemigo, destino) -> None:
         partida.bitacora.agregar(f"{enemigo.etiqueta()} entra a la sala.")
 
 
-def _errante(partida, enemigo) -> None:
+def _errante(partida, enemigo) -> int:
     opciones = _salidas_abiertas(enemigo.sala)
     if len(opciones) == 0:
-        return
+        return COSTO_ESPERAR
     i = opciones[partida.azar.randint(0, len(opciones) - 1)]
+    salida = enemigo.sala.salidas[i]
     _ir_a(partida, enemigo, enemigo.sala.vecino(i))
+    return salida.costo
 
 
-def _rastreador(partida, enemigo, ahora) -> None:
+def _rastreador(partida, enemigo, ahora) -> int:
     mejor = None
+    indice_mejor = None
     for i in _salidas_abiertas(enemigo.sala):
         vecino = enemigo.sala.vecino(i)
         if not vecino.rastro_fresco(ahora):
@@ -51,5 +57,9 @@ def _rastreador(partida, enemigo, ahora) -> None:
                 or (vecino.ultimo_instante_jugador == mejor.ultimo_instante_jugador
                     and vecino.id < mejor.id)):
             mejor = vecino
+            indice_mejor = i
     if mejor is not None:
+        salida = enemigo.sala.salidas[indice_mejor]
         _ir_a(partida, enemigo, mejor)
+        return salida.costo
+    return COSTO_ESPERAR

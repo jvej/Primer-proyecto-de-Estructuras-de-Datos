@@ -1,4 +1,4 @@
-from modelo.juego import efectos
+﻿from modelo.juego import efectos
 from modelo.juego.actor import Enemigo, Jugador
 from modelo.juego.agenda_eventos import AgendaEventos
 from modelo.juego.azar import AzarReversible
@@ -43,6 +43,48 @@ class Partida:
         self.esperando = False        
         self.acciones = 0            
         self.derrotados = 0          
+        self._observadores_puertas = []
+        self._observadores_invalidacion_rutas = []
+        self._en_retroceso = False
+
+    def suscribir_cambio_puerta(self, observador) -> None:
+        """Registra un observador de cambios de puerta (Contrato C2 con C1 de Axel)."""
+        if observador not in self._observadores_puertas:
+            self._observadores_puertas.append(observador)
+
+    def desuscribir_cambio_puerta(self, observador) -> None:
+        if observador in self._observadores_puertas:
+            self._observadores_puertas.remove(observador)
+
+    def suscribir_invalidacion_rutas(self, observador) -> None:
+        """Registra un observador que requiere invalidar rutas tras retroceso."""
+        if observador not in self._observadores_invalidacion_rutas:
+            self._observadores_invalidacion_rutas.append(observador)
+
+    def desuscribir_invalidacion_rutas(self, observador) -> None:
+        if observador in self._observadores_invalidacion_rutas:
+            self._observadores_invalidacion_rutas.remove(observador)
+
+    def _notificar_invalidacion_rutas(self) -> None:
+        for obs in self._observadores_invalidacion_rutas:
+            obs()
+        cache = getattr(self, "cache_rutas", None)
+        if cache is not None and hasattr(cache, "invalidar_todo"):
+            cache.invalidar_todo()
+
+    def cambiar_estado_puerta(self, salida, nuevo_estado: str) -> bool:
+        """Punto único centralizado de mutación de puertas (FR-008, Contrato C2).
+
+        Retorna True si hubo un cambio efectivo, False si ya tenía ese estado o si salida es None.
+        """
+        if salida is None or salida.estado == nuevo_estado:
+            return False
+        estado_anterior = salida.estado
+        self.cambiar(salida, "estado", nuevo_estado)
+        if not self._en_retroceso:
+            for obs in self._observadores_puertas:
+                obs(salida, estado_anterior, nuevo_estado)
+        return True
 
     def iniciar(self) -> None:
         """§2.4: el contenido de la sala inicial se carga antes de aceptar la primera acción."""
@@ -172,7 +214,7 @@ class Partida:
             self._incorporar(destino)
         except ErrorCripta as error:
             return self._rechazar(f"No se pudo cargar la sala {destino.id}: {error}")
-        self._accion(COSTO_MOVER, lambda: self._entrar(destino))
+        self._accion(salida.costo, lambda: self._entrar(destino))
         return True
 
     def _entrar(self, destino) -> None:
@@ -201,7 +243,7 @@ class Partida:
             return self._rechazar("No tienes la llave correcta.")
 
         def efecto():
-            self.cambiar(salida, "estado", "abierta")
+            self.cambiar_estado_puerta(salida, "abierta")
             if salida.llave == self.llave_salida:
                 self.cambiar(self.jugador, "abrio_salida", True)
             if salida.cierre_automatico:
@@ -348,7 +390,12 @@ class Partida:
         if not self.registro.puede_deshacer():
             return self._rechazar("No hay acciones que deshacer.")
         self._inv_quitar(pergamino)              # se consume sin registrar: no vuelve al deshacer
-        self.registro.deshacer_ultimo()
+        self._en_retroceso = True
+        try:
+            self.registro.deshacer_ultimo()
+        finally:
+            self._en_retroceso = False
+        self._notificar_invalidacion_rutas()
         self.esperando = True
         self.bitacora.agregar("Usas un pergamino de retroceso: el tiempo vuelve atrás.")
         return True
