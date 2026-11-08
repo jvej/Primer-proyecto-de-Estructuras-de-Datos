@@ -121,11 +121,12 @@ tests/
    - Para cada vecino, se consulta una sola vez `esqueleto.posicion(id_vecino)` (que usa `ListaOrdenada.buscar` en $O(\log S)$) y se almacena la posición entera continua $0 \le pos < S$.
    - Cada salida almacena su costo (entero $\ge 1$, por defecto 100).
    - Se almacena en un arreglo `vecinos_indexados[i]` una lista contigua de tuplas `(pos_vecino, direccion, abierta, llave_requerida)`.
-2. **Indexación de cerraduras y listas de espera**:
+2. **Indexación de cerraduras y listas de espera** (Principio I: sin `dict` ni `set` como índice):
    - Las listas de espera se indexan por el **identificador textual que pide la puerta** (`puerta["llave"]`), o por IDs de llaves.
    - Se recolectan los identificadores textuales únicos de cerraduras/llaves ($C \le L$).
-   - Se ordenan con `ordenar(lista_cerraduras_unicas)` en $O(C \log C)$.
-   - Se implementa una búsqueda binaria interna `_buscar_cerradura(id_texto) -> int` sobre la lista ordenada para obtener su índice $0 \le c < C$ en $O(\log C)$.
+   - Se ordenan con `ordenar(lista_cerraduras_unicas)` en $O(C \log C)$ usando la función propia `ordenar()` de `modelo/estructuras/ordenamiento.py`.
+   - El resultado es una **lista contigua ordenada** (`list` de Python) que constituye el índice `id_texto → posición_entera`. No se emplea `dict`, `set`, ni ninguna estructura de hash.
+   - Se implementa una **búsqueda binaria propia** `_buscar_cerradura(id_texto) -> int` sobre dicha lista ordenada para obtener su índice $0 \le c < C$ en $O(\log C)$, sin usar `bisect`.
    - Se crea el arreglo contiguo de listas de espera: `listas_espera = [[] for _ in range(C)]`.
 
 #### 1.3 Bucle Principal BFS por Etapas $O(S + E + L)$
