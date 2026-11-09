@@ -66,10 +66,10 @@
 
 ### Implementation for User Story 2
 
-- [ ] T018 [US2] Crear módulo modelo/juego/resolubilidad.py e implementar preprocesamiento de salas e indexación contigua de cerraduras y listas de espera (`listas_espera = [[] for _ in range(C)]`) usando `esqueleto.posicion()` y búsqueda binaria propia sobre cerraduras únicas ordenadas con `ordenar()` (FR-010, SC-002)
-- [ ] T019 [US2] Implementar en modelo/juego/resolubilidad.py el bucle principal de BFS por etapas con `ColaFIFO`, asegurando que durante la etapa $k$ solo se crucen puertas abiertas o abiertas en etapas anteriores, registrando llaves encontradas en `llaves_pendientes` y enviando puertas bloqueadas a sus listas de espera (FR-010, FR-012, SC-002)
-- [ ] T020 [US2] Implementar en modelo/juego/resolubilidad.py el cierre de etapa, la ordenación determinista de `llaves_pendientes` con `ordenar()` lexicográficamente, la liberación de listas de espera (por `id` directo y por `"abre"` del catálogo local si está disponible sin peticiones extra) y la siembra de la siguiente etapa (FR-012, FR-013, SC-002)
-- [ ] T021 [US2] Implementar en modelo/juego/resolubilidad.py la condición de victoria para calificar `RESOLUBLE` si y solo si se obtiene `llave_salida` y se alcanza `sala_salida` a través de una puerta que la pide (FR-011)
+- [X] T018 [US2] Crear módulo modelo/juego/resolubilidad.py e implementar preprocesamiento de salas e indexación contigua de cerraduras y listas de espera (`listas_espera = [[] for _ in range(C)]`) usando `esqueleto.posicion()` y búsqueda binaria propia sobre cerraduras únicas ordenadas con `ordenar()` (FR-010, SC-002)
+- [X] T019 [US2] Implementar en modelo/juego/resolubilidad.py el bucle principal de BFS por etapas con `ColaFIFO`, asegurando que durante la etapa $k$ solo se crucen puertas abiertas o abiertas en etapas anteriores, registrando llaves encontradas en `llaves_pendientes` y enviando puertas bloqueadas a sus listas de espera (FR-010, FR-012, SC-002)
+- [X] T020 [US2] Implementar en modelo/juego/resolubilidad.py el cierre de etapa, la ordenación determinista de `llaves_pendientes` con `ordenar()` lexicográficamente, la liberación de listas de espera (por `id` directo y por `"abre"` del catálogo local si está disponible sin peticiones extra) y la siembra de la siguiente etapa (FR-012, FR-013, SC-002)
+- [X] T021 [US2] Implementar en modelo/juego/resolubilidad.py la condición de victoria para calificar `RESOLUBLE` si y solo si se obtiene `llave_salida` y se alcanza `sala_salida` a través de una puerta que la pide (FR-011)
 
 **Checkpoint**: Prueba `test_FR013_...` debe pasar satisfactoriamente.
 
@@ -82,10 +82,10 @@
 
 ### Implementation for User Story 3
 
-- [ ] T022 [US3] Implementar en modelo/juego/resolubilidad.py el cálculo de la frontera bloqueada, excluyendo estrictamente las puertas cuyas dos salas (origen y destino) ya son alcanzables, ordenadas por `id_sala` ascendente y luego por dirección `N`, `S`, `E`, `O` (FR-014, SC-003)
-- [ ] T023 [US3] Implementar en modelo/juego/resolubilidad.py la propagación determinista de etiquetas desde la frontera bloqueada hacia salas no visitadas, aplicando la regla de la puerta más cercana (las salas toman como etiqueta la llave de la puerta cerrada más cercana que las bloquea) y construyendo el grafo de dependencias de llaves $X \to Y$ en tiempo lineal $O(S + E)$ (FR-014, SC-002, SC-003)
-- [ ] T024 [US3] Implementar en modelo/juego/resolubilidad.py la detección determinista de ciclos mediante DFS iterativa de 3 colores con pila propia (`pila = []`, sin recursión), ordenando previamente los nodos con `ordenar()` para garantizar que el ciclo comience y termine en la llave con menor ID de texto (FR-014, SC-004)
-- [ ] T025 [US3] Implementar en modelo/juego/resolubilidad.py la detección de anomalía de salida (si existe `llave_salida` pero ninguna puerta a `sala_salida` la requiere) y el formateador textual que emite la plantilla exacta canónica del reporte (`ESTADO:`, `ORDEN DE LLAVES:`, `LLAVES NO OBTENIBLES:`, `FRONTERA BLOQUEADA:`, `UBICACIÓN DE LLAVES:`, `CICLOS DETECTADOS:`, `MOTIVO:`) con siglas `N`, `S`, `E`, `O` (FR-011, FR-014, FR-018)
+- [X] T022 [US3] Implementar en modelo/juego/resolubilidad.py el cálculo de la frontera bloqueada, excluyendo estrictamente las puertas cuyas dos salas (origen y destino) ya son alcanzables, ordenadas por `id_sala` ascendente y luego por dirección `N`, `S`, `E`, `O` (FR-014, SC-003)
+- [X] T023 [US3] Implementar en modelo/juego/resolubilidad.py la propagación determinista de etiquetas desde la frontera bloqueada hacia salas no visitadas, aplicando la regla de la puerta más cercana (las salas toman como etiqueta la llave de la puerta cerrada más cercana que las bloquea) y construyendo el grafo de dependencias de llaves $X \to Y$ en tiempo lineal $O(S + E)$ (FR-014, SC-002, SC-003)
+- [X] T024 [US3] Implementar en modelo/juego/resolubilidad.py la detección determinista de ciclos mediante DFS iterativa de 3 colores con pila propia (`pila = []`, sin recursión), ordenando previamente los nodos con `ordenar()` para garantizar que el ciclo comience y termine en la llave con menor ID de texto (FR-014, SC-004)
+- [X] T025 [US3] Implementar en modelo/juego/resolubilidad.py la detección de anomalía de salida (si existe `llave_salida` pero ninguna puerta a `sala_salida` la requiere) y el formateador textual que emite la plantilla exacta canónica del reporte (`ESTADO:`, `ORDEN DE LLAVES:`, `LLAVES NO OBTENIBLES:`, `FRONTERA BLOQUEADA:`, `UBICACIÓN DE LLAVES:`, `CICLOS DETECTADOS:`, `MOTIVO:`) con siglas `N`, `S`, `E`, `O` (FR-011, FR-014, FR-018)
 
 **Checkpoint**: Pruebas `test_FR014_...` y `test_FR018_...` deben pasar satisfactoriamente.
 

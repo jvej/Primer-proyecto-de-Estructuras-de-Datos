@@ -1,7 +1,7 @@
 """Aceptación TDD de T003–T010; ejecutar con python -m tests.test_resolubilidad.
 
 Las respuestas sintéticas son registros de entrada, nunca índices ni cachés.
-No se simula el verificador: su importación debe fallar hasta implementar T018.
+No se simula el verificador: se ejecuta el módulo puro de T018–T025.
 Las interfaces nuevas de integración (forzar en crear_partida) quedan expresadas
 como expectativas de estas pruebas; no se agrega código de producción.
 """
@@ -331,6 +331,8 @@ def test_FR018_plantilla_exacta_reporte():
 
 
 if __name__ == "__main__":
+    import unittest
+
     pruebas = (
         test_FR014_llave_salida_detras_de_su_propia_puerta_con_ciclo,
         test_FR002_llave_en_suelta_de_errante_en_sala_inicial,
@@ -340,7 +342,6 @@ if __name__ == "__main__":
         test_FR017_codigos_salida_verificar,
         test_FR018_plantilla_exacta_reporte,
     )
-    for prueba in pruebas:
-        prueba()
-        print("OK ", prueba.__name__)
-    print("Todas las pruebas pasaron")
+    suite = unittest.TestSuite(unittest.FunctionTestCase(prueba) for prueba in pruebas)
+    resultado = unittest.TextTestRunner(verbosity=2).run(suite)
+    raise SystemExit(0 if resultado.wasSuccessful() else 1)
