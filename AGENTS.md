@@ -13,4 +13,4 @@
 - Solo modifica los archivos que pide la tarea actual. No toques specs/ salvo que se pida.
 - spec.md no contiene nombres de estructuras, clases ni módulos; eso va en plan.md.
 - Cada requisito tiene id estable (FR-###, SC-###). Cada prueba de aceptación cita su requisito en el nombre (por ejemplo, test_FR007_...).
-- Las pruebas se ejecutan con: python -m tests.<modulo>. El bench con: python main.py --bench <subsistema>.
+   - Ejecuta Python SIEMPRE con el del entorno virtual del proyecto: venv\Scripts\python.exe (Python 3.13). Pruebas: venv\Scripts\python.exe -m tests.<modulo>. Bench: venv\Scripts\python.exe main.py --bench <subsistema>. Nunca uses el python del sistema.
