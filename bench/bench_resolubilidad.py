@@ -21,7 +21,7 @@ from modelo.juego.resolubilidad import (
 SEMILLA = 7
 REPETICIONES = 7
 CASOS = (("linea", 11, 10), ("linea", 51, 50), ("linea", 101, 100),
-         ("linea", 201, 200), ("cuadricula", 1000, 50))
+         ("linea", 201, 200), ("linea", 401, 400), ("cuadricula", 1000, 50))
 
 
 def _recorrido_completo(indices, inicio, salida, disponibles, obtenidas):
@@ -140,6 +140,8 @@ def medir_resolubilidad():
     print("Salidas cuenta enlaces dirigidos (cada sentido de una puerta cuenta por separado).")
     print("topologia  | salas | salidas | llaves | etapas (ms) | repetido (ms) | aceleracion | estado igual | orden igual")
     mayor = None
+    anterior_linea = None
+    crecimientos = []
     for topologia, numero_salas, cantidad_llaves in CASOS:
         argumentos = _crear_caso(topologia, numero_salas, cantidad_llaves)
         esqueleto, ubicaciones = argumentos[:2]
@@ -148,8 +150,16 @@ def medir_resolubilidad():
         print("%-10s | %5d | %7d | %6d | %11.3f | %13.3f | %10.2fx | SI (%s) | SI" %
               (topologia, len(esqueleto.ids), salidas, len(ubicaciones), etapas,
                repetido, repetido / etapas, resultado.estado))
+        if topologia == "linea" and cantidad_llaves >= 50:
+            if anterior_linea is not None:
+                llaves_anteriores, tiempo_anterior = anterior_linea
+                crecimientos.append("%d -> %d: %.2fx" %
+                                    (llaves_anteriores, cantidad_llaves, etapas / tiempo_anterior))
+            anterior_linea = (cantidad_llaves, etapas)
         if mayor is None or len(esqueleto.ids) > mayor[1]:
             mayor = (topologia, len(esqueleto.ids), etapas)
+    print("Crecimiento por etapas al duplicar llaves (linea, preprocesamiento incluido): "
+          + "; ".join(crecimientos) + ".")
     topologia, salas, tiempo = mayor
     print("SC-001, caso sintético mayor (%s, %d salas): %.3f ms < 200 ms: %s." %
           (topologia, salas, tiempo, "SI" if tiempo < 200 else "NO"))

@@ -61,14 +61,15 @@
 
 ## Phase 4: User Story 2 - Reporte determinista de cripta resoluble con orden de llaves (Priority: P2)
 
-**Goal**: Implementar el algoritmo incremental de resolubilidad por etapas de alcanzabilidad topológica con orden determinista, respetando la Constitución (sin `dict`/`set` como índice, usando `ColaFIFO` y `ordenar()` propias).  
+**Goal**: Implementar el algoritmo incremental de resolubilidad por etapas de alcanzabilidad topológica con orden determinista, respetando la Constitución (sin `dict`/`set` como índice, usando `ColaFIFO` y `ordenar_merge()` propias).
+
 **Independent Test**: Verificar criptas resolubles con múltiples caminos y comprobar que ejecuciones independientes producen la misma secuencia ordenada de llaves por etapas.
 
 ### Implementation for User Story 2
 
-- [X] T018 [US2] Crear módulo modelo/juego/resolubilidad.py e implementar preprocesamiento de salas e indexación contigua de cerraduras y listas de espera (`listas_espera = [[] for _ in range(C)]`) usando `esqueleto.posicion()` y búsqueda binaria propia sobre cerraduras únicas ordenadas con `ordenar()` (FR-010, SC-002)
+- [X] T018 [US2] Crear módulo modelo/juego/resolubilidad.py e implementar preprocesamiento de salas e indexación contigua de cerraduras y listas de espera (`listas_espera = [[] for _ in range(C)]`) usando `esqueleto.posicion()` y búsqueda binaria propia sobre cerraduras únicas ordenadas con `ordenar_merge()` (corrección T036) (FR-010, SC-002)
 - [X] T019 [US2] Implementar en modelo/juego/resolubilidad.py el bucle principal de BFS por etapas con `ColaFIFO`, asegurando que durante la etapa $k$ solo se crucen puertas abiertas o abiertas en etapas anteriores, registrando llaves encontradas en `llaves_pendientes` y enviando puertas bloqueadas a sus listas de espera (FR-010, FR-012, SC-002)
-- [X] T020 [US2] Implementar en modelo/juego/resolubilidad.py el cierre de etapa, la ordenación determinista de `llaves_pendientes` con `ordenar()` lexicográficamente, la liberación de listas de espera (por `id` directo y por `"abre"` del catálogo local si está disponible sin peticiones extra) y la siembra de la siguiente etapa (FR-012, FR-013, SC-002)
+- [X] T020 [US2] Implementar en modelo/juego/resolubilidad.py el cierre de etapa, la ordenación determinista de `llaves_pendientes` con `ordenar_merge()` lexicográficamente (corrección T036), la liberación de listas de espera (por `id` directo y por `"abre"` del catálogo local si está disponible sin peticiones extra) y la siembra de la siguiente etapa (FR-012, FR-013, SC-002)
 - [X] T021 [US2] Implementar en modelo/juego/resolubilidad.py la condición de victoria para calificar `RESOLUBLE` si y solo si se obtiene `llave_salida` y se alcanza `sala_salida` a través de una puerta que la pide (FR-011)
 
 **Checkpoint**: Prueba `test_FR013_...` debe pasar satisfactoriamente.
@@ -84,7 +85,7 @@
 
 - [X] T022 [US3] Implementar en modelo/juego/resolubilidad.py el cálculo de la frontera bloqueada, excluyendo estrictamente las puertas cuyas dos salas (origen y destino) ya son alcanzables, ordenadas por `id_sala` ascendente y luego por dirección `N`, `S`, `E`, `O` (FR-014, SC-003)
 - [X] T023 [US3] Implementar en modelo/juego/resolubilidad.py la propagación determinista de etiquetas desde la frontera bloqueada hacia salas no visitadas, aplicando la regla de la puerta más cercana (las salas toman como etiqueta la llave de la puerta cerrada más cercana que las bloquea) y construyendo el grafo de dependencias de llaves $X \to Y$ en tiempo lineal $O(S + E)$ (FR-014, SC-002, SC-003)
-- [X] T024 [US3] Implementar en modelo/juego/resolubilidad.py la detección determinista de ciclos mediante DFS iterativa de 3 colores con pila propia (`pila = []`, sin recursión), ordenando previamente los nodos con `ordenar()` para garantizar que el ciclo comience y termine en la llave con menor ID de texto (FR-014, SC-004)
+- [X] T024 [US3] Implementar en modelo/juego/resolubilidad.py la detección determinista de ciclos mediante DFS iterativa de 3 colores con pila propia (`pila = []`, sin recursión), usando el índice previo ordenado con `ordenar_merge()` (corrección T036) para garantizar que el ciclo comience y termine en la llave con menor ID de texto (FR-014, SC-004)
 - [X] T025 [US3] Implementar en modelo/juego/resolubilidad.py la detección de anomalía de salida (si existe `llave_salida` pero ninguna puerta a `sala_salida` la requiere) y el formateador textual que emite la plantilla exacta canónica del reporte (`ESTADO:`, `ORDEN DE LLAVES:`, `LLAVES NO OBTENIBLES:`, `FRONTERA BLOQUEADA:`, `UBICACIÓN DE LLAVES:`, `CICLOS DETECTADOS:`, `MOTIVO:`) con siglas `N`, `S`, `E`, `O` (FR-011, FR-014, FR-018)
 
 **Checkpoint**: Pruebas `test_FR014_...` y `test_FR018_...` deben pasar satisfactoriamente.
@@ -115,12 +116,13 @@
 
 - [X] T030 [P] Registrar el subsistema `"resolubilidad"` en el diccionario `BENCHES` de main.py (SC-005, Principio VI)
 - [X] T031 [P] Crear el script bench/bench_resolubilidad.py para comparar el recorrido incremental por etapas $O(S + E + L)$ contra el recorrido repetido por llave $O(L \cdot (S + E))$ sobre criptas con cadenas de llaves $N \in \{10, 50, 100, 200\}$ generadas con bench/generador_criptas.py (SC-001, SC-002, SC-005)
-- [ ] T032 Actualizar bench/bench_red.py para incluir la medición del impacto de la consulta `/llaves` en presupuesto de solicitudes y latencia (SC-005, Principio V, Principio VI)
+- [X] T032 Actualizar bench/bench_red.py para incluir la medición del impacto de la consulta `/llaves` en presupuesto de solicitudes y latencia: sin copia local (1 solicitud), copia de la misma versión ya comprobada (0), y 429 seguido de 200 (2), mediante ClienteHTTP con sesión simulada y selección de copia de la aplicación, sin red real (FR-003, FR-004, SC-005, Principio V, Principio VI)
 - [X] T033 Buscar en todos los archivos nuevos y modificados del feature las palabras prohibidas `dict(`, `set(`, `{}` usado como índice, `heapq`, `bisect`, `collections`, `sorted(` y `.sort(` e informar si aparecen, conforme al Principio I de la Constitución (Estructuras propias). No es un test automatizado: es una inspección manual o con grep que debe pasar sin hallazgos antes de ejecutar las pruebas finales (Principio I)
 - [X] T034 Ejecutar todas las pruebas unitarias y de integración del proyecto mediante `python -m tests.<modulo>` asegurando cobertura completa y paso limpio (SC-001)
 - [X] T035 Ejecutar los benchmarks de rendimiento del sistema mediante `python main.py --bench resolubilidad red` y documentar los resultados observados (SC-001, SC-005)
+- [X] T036 Corregir la selección cuadrática medida en el commit 809f398: documentar primero la causa en specs/003-resolubilidad/plan.md y specs/003-resolubilidad/research.md; sustituir todos los usos de `ordenar()` por `ordenar_merge()` en modelo/juego/resolubilidad.py sin cambiar el algoritmo; ampliar bench/bench_resolubilidad.py a 400 llaves en línea e informar cocientes 50 → 100 → 200 → 400; agregar en tests/ una regresión de resultado y orden exactos sobre las criptas existentes y ejecutar los dos bench y los cinco módulos de pruebas solicitados (FR-013, FR-014, FR-018, SC-002, SC-005)
 
-**Alcance de esta ejecución (T030–T035)**: T032 sigue pendiente porque la instrucción actual autoriza cambios únicamente en `bench/bench_resolubilidad.py`, el registro de ese bench en `main.py`, `tests/` y este archivo; no permite modificar `bench/bench_red.py`. Se ejecuta el bench de red existente, sin atribuirle mediciones de `/llaves` que aún no incorpora. T031 incluye además una cuadrícula sintética de 1000 salas y 50 llaves; ambas versiones incluyen el preprocesamiento en el tiempo medido. El umbral de SC-001 se informa como referencia sintética, sin dar por validada la cripta oficial.
+**Alcance de la ejecución previa (T030–T035, commit 809f398)**: T032 quedó pendiente porque aquella instrucción no permitía modificar `bench/bench_red.py`. Se ejecutó el bench de red existente, sin atribuirle mediciones de `/llaves`. T031 incluye además una cuadrícula sintética de 1000 salas y 50 llaves; ambas versiones incluyen el preprocesamiento en el tiempo medido. El umbral de SC-001 se informa como referencia sintética, sin dar por validada la cripta oficial. La corrección actual completa T032 y T036; sus resultados se registran después de las mediciones históricas.
 
 **Inspección T033**: Revisados los archivos de `git diff --name-only Coso...HEAD` y los cambios locales autorizados, incluidos los dos archivos nuevos. Sin violaciones: las coincidencias en documentación describen las prohibiciones; `salidas = {}` y los literales `"salidas": {}` construyen registros de respuesta sintéticos; `dict(DATOS)` copia un registro de fixture; el `{}` de costos inválidos es un dato negativo de prueba. No se usan como índices ni cachés. La inspección precede a las pruebas finales.
 
@@ -138,7 +140,34 @@
 
 El caso con más salas queda por debajo de 200 ms. Estos datos sintéticos no validan SC-001 para la cripta oficial ni demuestran por sí solos el crecimiento aproximadamente lineal de SC-002.
 
-El bench de red existente midió bitácora circular frente a lista con `pop(0)` (microsegundos por mensaje): capacidades 20, 1000, 20000 y 200000, con resultados 0.142/0.091, 0.119/0.169, 0.128/39.210 y 0.128/106.935. Para 20, 60 y 200 salas, los lotes de diez consumieron 5, 9 y 23 solicitudes (2, 6 y 20 esperas), frente a 33, 73 y 213 solicitudes individuales (20, 60 y 200 esperas). No mide todavía el impacto de `/llaves` (T032 pendiente).
+El bench de red existente midió bitácora circular frente a lista con `pop(0)` (microsegundos por mensaje): capacidades 20, 1000, 20000 y 200000, con resultados 0.142/0.091, 0.119/0.169, 0.128/39.210 y 0.128/106.935. Para 20, 60 y 200 salas, los lotes de diez consumieron 5, 9 y 23 solicitudes (2, 6 y 20 esperas), frente a 33, 73 y 213 solicitudes individuales (20, 60 y 200 esperas). En esa ejecución aún no se medía `/llaves` (T032 estaba pendiente).
+
+**Corrección T032/T036 (2026-11-08, posterior a 809f398, sin commit)**: Se actualizaron primero `plan.md` y `research.md`, documentando la causa medida: el selector de `ordenar()` toma los tramos concatenados como casi ordenados (desorden lejano ≤ 2 %) y elige inserción cuadrática. El único cambio del algoritmo en `modelo/juego/resolubilidad.py` es sustituir el import y las cuatro llamadas por `ordenar_merge()`. Preparar índices y ordenar cada etapa tienen ahora ordenamientos $O(n \log n)$ garantizados, conservando los mismos comparadores.
+
+Validación con Python 3.13.18 y `venv\Scripts\python.exe -X utf8 -m tests.<modulo>`: `tests.test_resolubilidad` (7), `tests.test_resolubilidad_unitaria` (11), `tests.test_resolubilidad_integracion` (12), `tests.test_bench_resolubilidad` (7) y `tests.test_red` (13): **50 pruebas, todas OK**. Integración tuvo tres errores de acceso a temporales de Windows dentro del aislamiento; pasó al repetir el mismo comando fuera del aislamiento, sin cambios de código para esos permisos. La regresión FR-013 reutiliza las criptas de aceptación (ciclo, llaves portadas/inaccesibles y empates por etapa) y todos los casos del bench; compara cada campo del resultado, el orden de llaves y el reporte completo con el selector anterior. La prueba FR-003 comprueba los conteos 1/0/2 con la red real prohibida. Inspección de los cambios: sin nuevos índices/cachés ni ordenamientos prohibidos.
+
+Ambos comandos `venv\Scripts\python.exe -X utf8 main.py --bench resolubilidad` y `venv\Scripts\python.exe -X utf8 main.py --bench red` terminaron con código 0. Resolubilidad conserva semilla 7, calentamiento, mediana de siete repeticiones y preprocesamiento incluido en ambas versiones. Todas las comparaciones de estado y orden de llaves coincidieron:
+
+| Topología | Salas | Salidas dirigidas | Llaves | Etapas (ms) | Repetido (ms) | Aceleración |
+|-----------|-------|-------------------|--------|-------------|---------------|-------------|
+| linea | 11 | 20 | 10 | 0.153 | 0.179 | 1.17x |
+| linea | 51 | 100 | 50 | 0.899 | 1.509 | 1.68x |
+| linea | 101 | 200 | 100 | 2.663 | 5.776 | 2.17x |
+| linea | 201 | 400 | 200 | 4.732 | 15.950 | 3.37x |
+| linea | 401 | 800 | 400 | 10.586 | 63.248 | 5.97x |
+| cuadricula | 1000 | 3872 | 50 | 13.319 | 27.342 | 2.05x |
+
+Crecimiento por etapas al duplicar llaves en línea: **50 → 100: 2.96x; 100 → 200: 1.78x; 200 → 400: 2.24x**. El salto histórico 100 → 200 de aproximadamente 12.37x ya no aparece en esta medición. La cuadrícula de 1000 salas quedó en 13.319 ms (< 200 ms); sigue siendo una referencia sintética, sin validar SC-001 en la cripta oficial ni probar una cota asintótica solo con tiempos.
+
+T032 usa el cliente HTTP de producción con `SesionFalsa`/`RespuestaFalsa` del bench y la selección de copia real de `Aplicacion._verificar_cripta`, con almacén en memoria de la misma versión ya comprobada. No hace red real ni espera de reintento; excluye la preparación y otras rutas. El tiempo incluye selección de copia, lectura/consulta y verificación:
+
+| Caso `/llaves` | Solicitudes gastadas | Tiempo (ms) |
+|---------------|----------------------|-------------|
+| Sin copia local (200) | 1 | 0.075 |
+| Copia local de la misma versión | 0 | 0.065 |
+| Sin copia local (429 → 200) | 2 | 0.136 |
+
+Las secciones existentes de red también terminaron: bitácora circular/`pop(0)` en capacidades 20, 1000, 20000 y 200000: 0.146/0.113, 0.156/0.216, 0.162/46.305 y 0.147/136.538 μs por mensaje. Los conteos de solicitudes/esperas al recorrer 20, 60 y 200 salas fueron los mismos que en la medición previa.
 
 ---
 

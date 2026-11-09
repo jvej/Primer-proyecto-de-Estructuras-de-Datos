@@ -1,6 +1,6 @@
 """Alcanzabilidad por etapas y diagnóstico, exclusivamente con datos en memoria.
 
-Los índices se preparan una vez con ordenar() y búsquedas binarias propias.
+Los índices se preparan una vez con ordenar_merge() y búsquedas binarias propias.
 Después, cada sala y salida se procesa un número constante de veces entre
 recorrido y diagnóstico: O(S + E + L), más ordenar las llaves de cada etapa.
 El preprocesamiento incluye ordenar identificadores y salas y traducir sus
@@ -10,7 +10,7 @@ una llave únicamente abre la cerradura que coincide con su id.
 """
 
 from modelo.estructuras.cola_fifo import ColaFIFO
-from modelo.estructuras.ordenamiento import ordenar
+from modelo.estructuras.ordenamiento import ordenar_merge
 
 
 DIRECCIONES = ("N", "S", "E", "O")
@@ -81,7 +81,7 @@ class _Indices:
     def __init__(self, esqueleto, ubicaciones, llave_salida, catalogo):
         self.salas = esqueleto.ids
         cantidad_salas = len(self.salas)
-        self.orden_salas = ordenar(range(cantidad_salas), clave=lambda p: self.salas[p])
+        self.orden_salas = ordenar_merge(range(cantidad_salas), clave=lambda p: self.salas[p])
         textos = [llave_salida] if llave_salida is not None else []
         for salidas in esqueleto.salidas:
             for direccion in DIRECCIONES:
@@ -93,7 +93,7 @@ class _Indices:
                 if registro.get("abre") is not None:
                     textos.append(registro["abre"])
         self.textos = []
-        for texto in ordenar(textos):
+        for texto in ordenar_merge(textos):
             if not self.textos or self.textos[-1] != texto:
                 self.textos.append(texto)
         cantidad = len(self.textos)
@@ -110,7 +110,7 @@ class _Indices:
             if ubicacion.get("abre") is not None:
                 self.abre[indice] = _buscar_cerradura(self.textos, ubicacion["abre"])
         # Orden previo para que varias ubicaciones de una llave también sean deterministas.
-        ubicaciones = ordenar(ubicaciones, clave=lambda u: (u["id"], u["sala"], u.get("enemigo") or ""))
+        ubicaciones = ordenar_merge(ubicaciones, clave=lambda u: (u["id"], u["sala"], u.get("enemigo") or ""))
         for ubicacion in ubicaciones:
             indice = _buscar_cerradura(self.textos, ubicacion["id"])
             posicion = esqueleto.posicion(ubicacion["sala"])
@@ -170,7 +170,7 @@ def _recorrer(indices, inicio, salida):
                 elif cerradura >= 0:
                     listas_espera[cerradura].append((origen, direccion, destino))
         if pendientes:
-            pendientes = ordenar(pendientes, clave=lambda p: indices.textos[p])
+            pendientes = ordenar_merge(pendientes, clave=lambda p: indices.textos[p])
             orden_llaves.append((etapa, [indices.textos[p] for p in pendientes]))
             for llave in pendientes:
                 for cerradura in (llave, indices.abre[llave]):

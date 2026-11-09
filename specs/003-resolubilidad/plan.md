@@ -9,7 +9,7 @@
 
 Implementar la verificación estática de resolubilidad de criptas antes de iniciar la partida y proporcionar la herramienta de inspección en frío `--verificar <cripta>`, junto con la extensión de la capa de datos para consumir y almacenar llaves (`GET /criptas/<id>/llaves`), procesar costos de salidas (100 por defecto, entero $\ge 1$) y soportar fichas enemigas con comportamiento `"cazador"` y `"rango"` (en unidades de costo).
 
-El núcleo algorítmico residirá en un nuevo módulo puro `modelo/juego/resolubilidad.py` que no realiza operaciones de red ni disco, respetando escrupulosamente los principios de la Constitución: no utiliza `dict` ni `set` como índices, no utiliza bibliotecas prohibidas (`heapq`, `bisect`, `collections`, `networkx`), y emplea la estructura propia `ColaFIFO` y la función `ordenar()` propia. La verificación se basa en un recorrido incremental por etapas de complejidad lineal $O(S + E + L)$ que construye el reporte de resolubilidad, frontera bloqueada y detección determinista de ciclos (DFS iterativa de 3 colores) a partir de la misma pasada de exploración.
+El núcleo algorítmico residirá en un nuevo módulo puro `modelo/juego/resolubilidad.py` que no realiza operaciones de red ni disco, respetando escrupulosamente los principios de la Constitución: no utiliza `dict` ni `set` como índices, no utiliza bibliotecas prohibidas (`heapq`, `bisect`, `collections`, `networkx`), y emplea la estructura propia `ColaFIFO` y la función `ordenar_merge()` propia de `modelo/estructuras/ordenamiento.py`. La preparación de índices y el orden dentro de cada etapa usan mergesort estable con costo garantizado $O(n \log n)$. El recorrido incremental, separado del preprocesamiento y los ordenamientos, tiene complejidad lineal $O(S + E + L)$ y construye el reporte de resolubilidad, frontera bloqueada y detección determinista de ciclos (DFS iterativa de 3 colores) a partir de la misma pasada de exploración.
 
 ---
 
@@ -23,7 +23,7 @@ El núcleo algorítmico residirá en un nuevo módulo puro `modelo/juego/resolub
 **Project Type**: Juego de calabozo por turnos con arquitectura MVC y cliente HTTP  
 **Performance Goals**:
 - Verificación de resolubilidad < 200 ms en la cripta más grande publicada (`SC-001`).
-- Crecimiento temporal estrictamente lineal $O(S + E + L)$ (`SC-002`).
+- Crecimiento aproximadamente lineal (`SC-002`): recorrido $O(S + E + L)$, más preprocesamiento y ordenamientos garantizados $O(n \log n)$.
 - Reporte y ciclos generados a partir de la misma pasada de exploración (`SC-003`).
 - Determinismo reproducible en empates y ciclos (`SC-004`).
 **Constraints**:
@@ -34,7 +34,7 @@ El núcleo algorítmico residirá en un nuevo módulo puro `modelo/juego/resolub
 - Desempates: siempre por el menor identificador de texto lexicográfico. El azar proviene exclusivamente de `partida.azar`.
 - Toda solicitud HTTP cuenta en `presupuesto_solicitudes`, incluidos reintentos y `/llaves`.
 - Modos `--replay`, `--bench` y `--verificar` nunca inicializan ni crean la vista (consola interactiva ni Pygame).
-**Scale/Scope**: Criptas de cientos de salas ($S \le 1000$), salidas ($E \le 4000$) y decenas a cientos de llaves ($L \le 200$).
+**Scale/Scope**: Criptas de cientos de salas ($S \le 1000$), salidas ($E \le 4000$) y decenas a cientos de llaves ($L \le 400$ en el bench sintético).
 
 ---
 
@@ -44,7 +44,7 @@ El núcleo algorítmico residirá en un nuevo módulo puro `modelo/juego/resolub
 
 | Principio | Estado | Justificación en el Plan |
 |---|---|---|
-| **I. Estructuras propias** | **PASS** | El algoritmo utiliza `ColaFIFO` propia y `ordenar()` propio sobre listas contiguas de Python. La indexación de salas y cerraduras usa arreglos contiguos nativos indexados por enteros sin emplear `dict` ni `set` como índices. |
+| **I. Estructuras propias** | **PASS** | El algoritmo utiliza `ColaFIFO` propia y `ordenar_merge()` propio sobre listas contiguas de Python. La indexación de salas y cerraduras usa arreglos contiguos nativos indexados por enteros sin emplear `dict` ni `set` como índices. |
 | **II. Determinismo** | **PASS** | Las salidas se exploran en orden canónico fijo `N`, `S`, `E`, `O`. Los empates entre llaves de la misma etapa se resuelven por orden lexicográfico estricto. La frontera se recorre por id de sala y dirección `N`, `S`, `E`, `O`. La detección de ciclos DFS inicia en el menor ID textual y sigue vecinos ordenados. |
 | **III. Separación MVC** | **PASS** | `modelo/juego/resolubilidad.py` solo opera con estructuras de datos en memoria y no sabe de HTTP, archivos ni gráficos. `--verificar` imprime en stdout y sale con código 0, 1 o 2; no importa ni crea la vista. |
 | **IV. Ningún dato de cripta en código** | **PASS** | Todo el modelo y los algoritmos son independientes de IDs de salas, llaves o nombres concretos; se validan con criptas procedurales sintéticas. |
@@ -110,12 +110,12 @@ tests/
 3. **Listas de espera**: Toda puerta cerrada cuya llave no esté disponible previamente se coloca en la lista de espera asociada al identificador que pide la puerta, **incluso si su llave aparece más tarde en la misma etapa**.
 4. **Cierre de etapa**: Al agotarse la cola de la etapa actual:
    - Las llaves pendientes pasan a estar disponibles (`llaves_disponibles`).
-   - Se ordenan por ID de texto mediante `ordenar(llaves_etapa)`.
+   - Se ordenan por ID de texto mediante `ordenar_merge(llaves_etapa)`.
    - Se registran en el reporte: `etapa k: itm_...`.
    - Se activan y liberan las puertas de sus respectivas listas de espera, las cuales siembran la cola para la etapa $k+1$.
    - **Resultado**: La etapa 0 es exactamente la región alcanzable desde el inicio sin usar llaves, coincidiendo con la especificación, y el resultado es totalmente independiente del orden de exploración interno dentro de una etapa.
 
-#### 1.2 Preprocesamiento e Indexación $O(S \log S + C \log C)$
+#### 1.2 Preprocesamiento e Indexación con ordenamientos $O(n \log n)$
 1. **Indexación de salas**: Se recorre `esqueleto.ids` (longitud $S$). Para cada sala $i \in [0, S-1]$:
    - Se obtiene su lista de salidas hacia salas vecinas.
    - Para cada vecino, se consulta una sola vez `esqueleto.posicion(id_vecino)` (que usa `ListaOrdenada.buscar` en $O(\log S)$) y se almacena la posición entera continua $0 \le pos < S$.
@@ -123,11 +123,13 @@ tests/
    - Se almacena en un arreglo `vecinos_indexados[i]` una lista contigua de tuplas `(pos_vecino, direccion, abierta, llave_requerida)`.
 2. **Indexación de cerraduras y listas de espera** (Principio I: sin `dict` ni `set` como índice):
    - Las listas de espera se indexan por el **identificador textual que pide la puerta** (`puerta["llave"]`), o por IDs de llaves.
-   - Se recolectan los identificadores textuales únicos de cerraduras/llaves ($C \le L$).
-   - Se ordenan con `ordenar(lista_cerraduras_unicas)` en $O(C \log C)$ usando la función propia `ordenar()` de `modelo/estructuras/ordenamiento.py`.
+   - El índice final contiene $C$ identificadores textuales distintos de cerraduras, llaves y alias.
+   - Se reúnen `llave_salida`, las cerraduras de las puertas y los IDs/alias de ubicaciones y catálogo, conservando inicialmente los duplicados. Si hay $M$ entradas, se ordenan con `ordenar_merge(textos)` en $O(M \log M)$ garantizado y se eliminan duplicados en una pasada $O(M)$; quedan $C$ identificadores distintos. También se usa `ordenar_merge()` para ordenar salas y ubicaciones.
    - El resultado es una **lista contigua ordenada** (`list` de Python) que constituye el índice `id_texto → posición_entera`. No se emplea `dict`, `set`, ni ninguna estructura de hash.
    - Se implementa una **búsqueda binaria propia** `_buscar_cerradura(id_texto) -> int` sobre dicha lista ordenada para obtener su índice $0 \le c < C$ en $O(\log C)$, sin usar `bisect`.
    - Se crea el arreglo contiguo de listas de espera: `listas_espera = [[] for _ in range(C)]`.
+
+**Corrección respaldada por medición**: El commit `809f398` ([tabla T035](./tasks.md)) registra 1,577 ms con 100 llaves y 19,503 ms con 200 en la línea sintética. `ordenar()` selecciona inserción cuando el desorden lejano es $\le 2\%$. La concatenación de `llave_salida`, cerraduras de puertas y ubicaciones produce tramos ordenados cuyo muestreo parece casi ordenado, aunque mezclar esos tramos por inserción cuesta $O(n^2)$. Se sustituye el selector por `ordenar_merge()` en todos los ordenamientos del verificador, incluidos los de cada etapa, sin cambiar recorridos, comparadores ni desempates. El costo de preparar índices incluye además las búsquedas binarias para traducir salas y cerraduras; la garantía $O(n \log n)$ corresponde a cada ordenamiento.
 
 #### 1.3 Bucle Principal BFS por Etapas $O(S + E + L)$
 1. **Inicialización**:
@@ -156,7 +158,7 @@ tests/
            - Registrar puerta en `puertas_cerradas_sin_llave`.
 3. **Cierre de Etapa y Siembra de la Siguiente**:
    - Si `llaves_pendientes` no está vacía:
-     - Ordenar `llaves_pendientes` lexicográficamente con `ordenar()`.
+     - Ordenar `llaves_pendientes` lexicográficamente con `ordenar_merge()` ($O(k \log k)$ para $k$ llaves de esa etapa; suma acotada por $O(L \log L)$).
      - Agregar a `reporte_orden_llaves.append((etapa, llaves_pendientes))`.
      - Para cada llave $K$ de `llaves_pendientes`:
        - Marcar disponible: `llaves_disponibles[idx(K.id)] = True`.
@@ -199,7 +201,7 @@ Si la cripta no es resoluble, el reporte completo se deriva del mismo recorrido:
      - La construcción del grafo de dependencias es estrictamente lineal en $O(S + E)$.
 3. **Detección Determinista de Ciclos (DFS Iterativa con Pila Propia)**:
    - La búsqueda en profundidad de 3 colores (Blanco: no visitado, Gris: en pila, Negro: procesado) se implementa de forma **estrictamente iterativa** utilizando una lista contigua propia como pila (`pila = []`), sin llamadas recursivas para evitar `RecursionError`.
-   - Se ordenan los nodos del grafo de dependencias lexicográficamente con `ordenar()` para garantizar determinismo absoluto.
+   - Los nodos usan el índice lexicográfico preparado con `ordenar_merge()` para garantizar determinismo absoluto.
    - Se itera sobre los nodos en orden lexicográfico.
    - En la pila iterativa se gestiona el estado de cada nodo y el índice de la arista saliente que se está explorando.
    - Al encontrar una arista hacia un nodo en estado Gris, se extrae el ciclo desde la pila, se normaliza para que comience y termine en la llave del ciclo con menor ID de texto (ej. `itm_a -> itm_c -> itm_b -> itm_a`), indicando junto a cada flecha la puerta que bloquea (`[sala X (DIR)]`).
@@ -265,10 +267,11 @@ Si la cripta no es resoluble, el reporte completo se deriva del mismo recorrido:
 
 1. **`bench/bench_resolubilidad.py`**:
    - Criptas sintéticas encadenadas: $N$ salas en línea donde la sala $i$ contiene la llave para la puerta $i \to i+1$.
-   - Mediciones con $N \in \{10, 50, 100, 200\}$.
+   - Mediciones con $N \in \{10, 50, 100, 200, 400\}$ llaves y $N+1$ salas en línea, más la cuadrícula de 1000 salas y 50 llaves.
    - Comparación del algoritmo incremental por etapas frente al repetido por llave.
+   - Informar los cocientes de tiempo por etapas al duplicar llaves: $50 \to 100 \to 200 \to 400$. Ambas versiones incluyen el mismo preprocesamiento; conservar equivalencia exacta de estado y orden de llaves.
 2. **Repetición de `bench_red.py` (§5.6)**:
-   - Medir el impacto de la consulta adicional `/llaves` en el presupuesto y tiempos de red.
+   - Medir solicitudes gastadas y tiempo con cliente HTTP y sesión simulada, sin red real: sin copia local (1), con copia de la misma versión ya comprobada (0), y 429 seguido de 200 (2). Aislar `/llaves` de las demás rutas y usar la selección de copia de la aplicación.
 
 ---
 

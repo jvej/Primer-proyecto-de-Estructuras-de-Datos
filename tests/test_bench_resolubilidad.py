@@ -16,6 +16,35 @@ def _esqueleto(salas):
 
 
 class PruebasBenchResolubilidad(unittest.TestCase):
+    def test_FR013_merge_conserva_resultado_y_orden_de_criptas_existentes(self):
+        from modelo.estructuras.ordenamiento import ordenar
+        from modelo.juego import resolubilidad
+        from tests import test_resolubilidad as aceptacion
+
+        def comparar(*argumentos, **opciones):
+            actual = verificar_resolubilidad(*argumentos, **opciones)
+            # El verificador anterior solo difiere en la función de ordenación.
+            with patch.object(resolubilidad, "ordenar_merge", ordenar):
+                anterior = verificar_resolubilidad(*argumentos, **opciones)
+            for atributo in ("estado", "orden_llaves", "llaves_no_obtenibles",
+                             "frontera_bloqueada", "ubicacion_llaves", "ciclos", "motivo"):
+                self.assertEqual(getattr(actual, atributo), getattr(anterior, atributo), atributo)
+            self.assertEqual(actual.formatear_reporte(), anterior.formatear_reporte())
+            return actual
+
+        # Reutilizar las criptas y permutaciones de aceptación, sin duplicar fixtures:
+        # ciclo, llave portada e inalcanzable, y empates lexicográficos por etapa.
+        with patch.object(aceptacion, "verificar_resolubilidad", side_effect=comparar):
+            for prueba in (
+                    aceptacion.test_FR014_llave_salida_detras_de_su_propia_puerta_con_ciclo,
+                    aceptacion.test_FR002_llave_en_suelta_de_errante_en_sala_inicial,
+                    aceptacion.test_FR013_varios_ordenes_validos_mismo_orden_determinista):
+                with self.subTest(cripta=prueba.__name__):
+                    prueba()
+        for topologia, salas, llaves in bench.CASOS:
+            with self.subTest(topologia=topologia, salas=salas, llaves=llaves):
+                comparar(*bench._crear_caso(topologia, salas, llaves))
+
     def test_SC005_casos_del_bench_coinciden_con_el_orden_generado(self):
         for topologia, salas, llaves in bench.CASOS:
             with self.subTest(topologia=topologia, salas=salas, llaves=llaves):
