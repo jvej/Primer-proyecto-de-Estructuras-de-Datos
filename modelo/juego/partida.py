@@ -3,6 +3,10 @@ from modelo.juego.actor import Enemigo, Jugador
 from modelo.juego.agenda_eventos import AgendaEventos
 from modelo.juego.azar import AzarReversible
 from modelo.juego.combate import calcular_dano
+from modelo.juego.conocimiento import (
+    ConocimientoMapa, ESTADO_DESCONOCIDA, ESTADO_AVISTADA, ESTADO_EXPLORADA,
+    PUERTA_ABIERTA, PUERTA_CERRADA,
+)
 from modelo.juego.costos import (COSTO_ABRIR_PUERTA, COSTO_ACTIVACION, COSTO_ATACAR, COSTO_ESPERAR,
                     COSTO_MOVER, COSTO_RECOGER_SOLTAR, COSTO_USAR_EQUIPAR, costo_accion)
 from modelo.juego.errores import ErrorCripta
@@ -28,6 +32,7 @@ class Partida:
         self.azar = AzarReversible(semilla, self.registro)
         self.semilla = semilla
         self.mapa = Mapa(esqueleto)
+        self.conocimiento = ConocimientoMapa(len(self.mapa.salas), self.mapa.salas, self.mapa)
         self.precarga = precarga
         self.resolutor = resolutor
         self.inventario = inventario
@@ -46,6 +51,7 @@ class Partida:
         self._observadores_puertas = []
         self._observadores_invalidacion_rutas = []
         self._en_retroceso = False
+        self.suscribir_cambio_puerta(self._observar_cambio_puerta)
 
     def suscribir_cambio_puerta(self, observador) -> None:
         """Registra un observador de cambios de puerta (Contrato C2 con C1 de Axel)."""
@@ -92,6 +98,8 @@ class Partida:
         sala = self.mapa.sala(self.sala_inicial_id)
         self._incorporar(sala)
         self.jugador.mover_a(sala)
+        self._explorar_sala(sala)
+        self._observar_puertas()
         sala.marcar_visita_jugador(0)
         evento = self.programar(0, self._turno_jugador, self.jugador, "turno del jugador")
         self.jugador.evento_pendiente = evento     
@@ -100,6 +108,42 @@ class Partida:
 
     def cambiar(self, objeto, campo, valor) -> None:
         self.registro.cambiar(objeto, campo, valor)
+
+    def _explorar_sala(self, sala) -> None:
+        """Revela topología, sin cargar ni activar contenido de salas vecinas."""
+        c = self.conocimiento
+        anterior = c.estado_sala(sala)
+        if anterior != ESTADO_EXPLORADA:
+            if anterior == ESTADO_AVISTADA:
+                self.cambiar(c, "num_avistadas", c.num_avistadas - 1)
+            self.cambiar(c.estado_salas, sala.indice, ESTADO_EXPLORADA)
+            self.cambiar(c, "num_exploradas", c.num_exploradas + 1)
+        for salida in sala.salidas:
+            if salida is not None:
+                vecina = salida.otro_lado(sala)
+                if c.estado_sala(vecina) == ESTADO_DESCONOCIDA:
+                    self.cambiar(c.estado_salas, vecina.indice, ESTADO_AVISTADA)
+                    self.cambiar(c, "num_avistadas", c.num_avistadas + 1)
+
+    def _recordar_puerta(self, salida) -> None:
+        """Los dos extremos representan la misma puerta físicamente observada."""
+        memoria = self.conocimiento.memoria_puertas
+        estado = PUERTA_ABIERTA if salida.esta_abierta() else PUERTA_CERRADA
+        for sala in (salida.sala_a, salida.sala_b):
+            for direccion in range(len(DIRECCIONES)):
+                if sala.salidas[direccion] is salida:
+                    pos = sala.indice * 4 + direccion
+                    if memoria[pos] != estado:
+                        self.cambiar(memoria, pos, estado)
+
+    def _observar_puertas(self) -> None:
+        for salida in self.jugador.sala.salidas:
+            if salida is not None:
+                self._recordar_puerta(salida)
+
+    def _observar_cambio_puerta(self, salida, estado_anterior, nuevo_estado) -> None:
+        if self.jugador.sala is salida.sala_a or self.jugador.sala is salida.sala_b:
+            self._recordar_puerta(salida)
 
     def programar(self, tiempo, accion, actor=None, descripcion="") -> Evento:
         evento = Evento(tiempo, self.agenda.nueva_secuencia(), actor, accion, descripcion)
@@ -162,6 +206,7 @@ class Partida:
     def _accion(self, costo, efecto) -> None:
         ahora = self.reloj.tiempo_actual
         self.registro.abrir_grupo()
+        self._observar_puertas()
         self.registro.inverso(lambda: setattr(self.reloj, "tiempo_actual", ahora))
         self.esperando = False
         self._marcar_rastro(self.jugador.sala)   
@@ -171,6 +216,7 @@ class Partida:
         self.cambiar(self.jugador, "evento_pendiente", siguiente)
         efecto()
         self._avanzar()
+        self._observar_puertas()
         self.registro.cerrar_grupo()
 
     def _marcar_rastro(self, sala) -> None:
@@ -219,6 +265,12 @@ class Partida:
 
     def _entrar(self, destino) -> None:
         self._mover_actor(self.jugador, destino)
+        self._explorar_sala(destino)
+        if self.jugador.antorcha_encendida:
+            for salida in destino.salidas:
+                if salida is not None:
+                    self._explorar_sala(salida.otro_lado(destino))
+        self._observar_puertas()
         self._marcar_rastro(destino)
         self.bitacora.agregar(f"Entras a {destino.nombre or destino.id}.")
         self._activar_sala(destino)
@@ -443,7 +495,11 @@ class Partida:
         for i in range(len(DIRECCIONES)):
             salida = sala.salidas[i]
             if salida is not None:
-                resultado.append((DIRECCIONES[i], salida.estado, salida.otro_lado(sala).id, salida.llave))
+                vecina = salida.otro_lado(sala)
+                id_visible = vecina.id if self.conocimiento.es_explorada(vecina) else None
+                estado = self.conocimiento.puerta_recordada(sala, i)
+                texto_estado = "abierta" if estado == PUERTA_ABIERTA else "cerrada" if estado == PUERTA_CERRADA else "desconocida"
+                resultado.append((DIRECCIONES[i], texto_estado, id_visible, salida.llave))
         return resultado
 
     def efectos_activos(self) -> list:
