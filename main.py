@@ -43,6 +43,7 @@ CARPETA_PROYECTO = os.path.dirname(os.path.abspath(__file__))
 BENCHES = (
     ("agenda", "bench_motor.py"),             
     ("red", "bench_red.py"),              
+    ("resolubilidad", "bench_resolubilidad.py"),
     ("cache", "bench_cache.py"),              
     ("fichas", "bench_almacen_fichas.py"),    
     ("cripta", "bench_almacen_cripta.py"),     

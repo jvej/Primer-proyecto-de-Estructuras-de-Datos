@@ -113,12 +113,32 @@
 
 **Purpose**: Mediciones comparativas de rendimiento, reejecución de benchmarks existentes y ejecución de la suite completa de pruebas.
 
-- [ ] T030 [P] Registrar el subsistema `"resolubilidad"` en el diccionario `BENCHES` de main.py (SC-005, Principio VI)
-- [ ] T031 [P] Crear el script bench/bench_resolubilidad.py para comparar el recorrido incremental por etapas $O(S + E + L)$ contra el recorrido repetido por llave $O(L \cdot (S + E))$ sobre criptas con cadenas de llaves $N \in \{10, 50, 100, 200\}$ generadas con bench/generador_criptas.py (SC-001, SC-002, SC-005)
+- [X] T030 [P] Registrar el subsistema `"resolubilidad"` en el diccionario `BENCHES` de main.py (SC-005, Principio VI)
+- [X] T031 [P] Crear el script bench/bench_resolubilidad.py para comparar el recorrido incremental por etapas $O(S + E + L)$ contra el recorrido repetido por llave $O(L \cdot (S + E))$ sobre criptas con cadenas de llaves $N \in \{10, 50, 100, 200\}$ generadas con bench/generador_criptas.py (SC-001, SC-002, SC-005)
 - [ ] T032 Actualizar bench/bench_red.py para incluir la medición del impacto de la consulta `/llaves` en presupuesto de solicitudes y latencia (SC-005, Principio V, Principio VI)
-- [ ] T033 Buscar en todos los archivos nuevos y modificados del feature las palabras prohibidas `dict(`, `set(`, `{}` usado como índice, `heapq`, `bisect`, `collections`, `sorted(` y `.sort(` e informar si aparecen, conforme al Principio I de la Constitución (Estructuras propias). No es un test automatizado: es una inspección manual o con grep que debe pasar sin hallazgos antes de ejecutar las pruebas finales (Principio I)
-- [ ] T034 Ejecutar todas las pruebas unitarias y de integración del proyecto mediante `python -m tests.<modulo>` asegurando cobertura completa y paso limpio (SC-001)
-- [ ] T035 Ejecutar los benchmarks de rendimiento del sistema mediante `python main.py --bench resolubilidad red` y documentar los resultados observados (SC-001, SC-005)
+- [X] T033 Buscar en todos los archivos nuevos y modificados del feature las palabras prohibidas `dict(`, `set(`, `{}` usado como índice, `heapq`, `bisect`, `collections`, `sorted(` y `.sort(` e informar si aparecen, conforme al Principio I de la Constitución (Estructuras propias). No es un test automatizado: es una inspección manual o con grep que debe pasar sin hallazgos antes de ejecutar las pruebas finales (Principio I)
+- [X] T034 Ejecutar todas las pruebas unitarias y de integración del proyecto mediante `python -m tests.<modulo>` asegurando cobertura completa y paso limpio (SC-001)
+- [X] T035 Ejecutar los benchmarks de rendimiento del sistema mediante `python main.py --bench resolubilidad red` y documentar los resultados observados (SC-001, SC-005)
+
+**Alcance de esta ejecución (T030–T035)**: T032 sigue pendiente porque la instrucción actual autoriza cambios únicamente en `bench/bench_resolubilidad.py`, el registro de ese bench en `main.py`, `tests/` y este archivo; no permite modificar `bench/bench_red.py`. Se ejecuta el bench de red existente, sin atribuirle mediciones de `/llaves` que aún no incorpora. T031 incluye además una cuadrícula sintética de 1000 salas y 50 llaves; ambas versiones incluyen el preprocesamiento en el tiempo medido. El umbral de SC-001 se informa como referencia sintética, sin dar por validada la cripta oficial.
+
+**Inspección T033**: Revisados los archivos de `git diff --name-only Coso...HEAD` y los cambios locales autorizados, incluidos los dos archivos nuevos. Sin violaciones: las coincidencias en documentación describen las prohibiciones; `salidas = {}` y los literales `"salidas": {}` construyen registros de respuesta sintéticos; `dict(DATOS)` copia un registro de fixture; el `{}` de costos inválidos es un dato negativo de prueba. No se usan como índices ni cachés. La inspección precede a las pruebas finales.
+
+**Validación T034 (2026-11-08)**: Python 3.13.18 de `venv\Scripts\python.exe`, ejecutando cada módulo mediante `-m tests.<modulo>`. Los 23 módulos `tests/test_*.py` terminaron sin fallos, incluidos los diez solicitados y las seis pruebas nuevas de `tests.test_bench_resolubilidad`. La primera ejecución aislada tuvo errores de permisos en temporales de Windows en integración y replay; la suite completa pasó al repetir fuera del aislamiento. No se cambió código para resolver esos permisos.
+
+**Mediciones T035 (2026-11-08)**: Ambos comandos `venv\Scripts\python.exe main.py --bench resolubilidad` y `venv\Scripts\python.exe main.py --bench red` terminaron con código 0. Se usó `-X utf8` para conservar tildes en la salida. Resolubilidad usa semilla 7, un calentamiento y mediana de siete repeticiones por versión, con preprocesamiento incluido; ambas versiones dieron `RESOLUBLE` y el mismo orden de llaves en todas las ejecuciones.
+
+| Topología | Salas | Salidas dirigidas | Llaves | Etapas (ms) | Repetido (ms) | Aceleración |
+|-----------|-------|-------------------|--------|-------------|---------------|-------------|
+| linea | 11 | 20 | 10 | 0.139 | 0.160 | 1.15x |
+| linea | 51 | 100 | 50 | 0.759 | 1.280 | 1.69x |
+| linea | 101 | 200 | 100 | 1.577 | 3.687 | 2.34x |
+| linea | 201 | 400 | 200 | 19.503 | 29.284 | 1.50x |
+| cuadricula | 1000 | 3872 | 50 | 10.783 | 24.100 | 2.24x |
+
+El caso con más salas queda por debajo de 200 ms. Estos datos sintéticos no validan SC-001 para la cripta oficial ni demuestran por sí solos el crecimiento aproximadamente lineal de SC-002.
+
+El bench de red existente midió bitácora circular frente a lista con `pop(0)` (microsegundos por mensaje): capacidades 20, 1000, 20000 y 200000, con resultados 0.142/0.091, 0.119/0.169, 0.128/39.210 y 0.128/106.935. Para 20, 60 y 200 salas, los lotes de diez consumieron 5, 9 y 23 solicitudes (2, 6 y 20 esperas), frente a 33, 73 y 213 solicitudes individuales (20, 60 y 200 esperas). No mide todavía el impacto de `/llaves` (T032 pendiente).
 
 ---
 
