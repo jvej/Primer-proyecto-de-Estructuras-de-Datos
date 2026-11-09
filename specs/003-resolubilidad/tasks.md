@@ -18,7 +18,7 @@
 **Purpose**: Verificación de entorno y herramientas auxiliares sintéticas.
 
 - [X] T001 Verificar entorno de desarrollo Python 3.13 y dependencias exclusivas en requirements.txt (SC-002)
-- [ ] T002 [P] Implementar generador procedural determinista de criptas sintéticas (con soporte de tamaño, costos, cadenas de llaves, puertas inestables y cazadores con rango en unidades de costo) en bench/generador_criptas.py (SC-002, SC-005)
+- [X] T002 [P] Implementar generador procedural determinista de criptas sintéticas (con soporte de tamaño, costos, cadenas de llaves, puertas inestables y cazadores con rango en unidades de costo) en bench/generador_criptas.py (SC-002, SC-005)
 
 ---
 
@@ -47,13 +47,13 @@
 
 ### Implementation for User Story 4
 
-- [ ] T011 [P] [US4] Declarar método abstracto `llaves(self, id_cripta)` en modelo/datos/fuente_datos.py (FR-001)
-- [ ] T012 [P] [US4] Implementar método `llaves(self, id_cripta)` en modelo/datos/cliente_http.py consumiendo `presupuesto_solicitudes` ante solicitudes y reintentos 429 (FR-001, FR-003)
-- [ ] T013 [P] [US4] Implementar método `llaves(self, id_cripta)` en modelo/datos/cliente_offline.py leyendo `criptas/<id>/llaves.json` (FR-001, FR-006)
-- [ ] T014 [P] [US4] Implementar métodos `tiene_llaves()`, `guardar_llaves(datos)` y `leer_llaves()` con invalidación por versión de cripta en modelo/datos/almacen_cripta.py (FR-004, FR-005)
-- [ ] T015 [US4] Implementar método `llaves(self, id_cripta)` en modelo/datos/fuente_almacen.py delegando en `almacen_cripta.leer_llaves()` (FR-004)
-- [ ] T016 [P] [US4] Actualizar interpretación de salidas en modelo/datos/esqueleto.py asignando `costo` como entero $\ge 1$ con valor 100 por defecto (`costo = max(1, int(salida.get("costo", 100)))`) (FR-007)
-- [ ] T017 [P] [US4] Actualizar datos offline y fixtures en tests/crear_paquete_prueba.py y tests/cripta_de_prueba.py incorporando costos en salidas, cazadores con atributo `"rango"` (en unidades de costo), `llaves.json` con campo `"enemigo"` como ID de texto de la instancia (ej. `"e-1203"`), cripta con ciclo y cripta de referencia con decenas de cazadores, incrementando versiones de catálogo y cripta (FR-005, FR-008)
+- [X] T011 [P] [US4] Declarar método abstracto `llaves(self, id_cripta)` en modelo/datos/fuente_datos.py (FR-001)
+- [X] T012 [P] [US4] Implementar método `llaves(self, id_cripta)` en modelo/datos/cliente_http.py consumiendo `presupuesto_solicitudes` ante solicitudes y reintentos 429 (FR-001, FR-003)
+- [X] T013 [P] [US4] Implementar método `llaves(self, id_cripta)` en modelo/datos/cliente_offline.py leyendo `criptas/<id>/llaves.json` (FR-001, FR-006)
+- [X] T014 [P] [US4] Implementar métodos `tiene_llaves()`, `guardar_llaves(datos)` y `leer_llaves()` con invalidación por versión de cripta en modelo/datos/almacen_cripta.py (FR-004, FR-005)
+- [X] T015 [US4] Implementar método `llaves(self, id_cripta)` en modelo/datos/fuente_almacen.py delegando en `almacen_cripta.leer_llaves()` (FR-004)
+- [X] T016 [P] [US4] Actualizar interpretación de salidas en modelo/datos/esqueleto.py asignando `costo` como entero $\ge 1$ con valor 100 por defecto (`costo = max(1, int(salida.get("costo", 100)))`) (FR-007)
+- [X] T017 [P] [US4] Actualizar datos offline y fixtures en tests/crear_paquete_prueba.py y tests/cripta_de_prueba.py incorporando costos en salidas, cazadores con atributo `"rango"` (en unidades de costo), `llaves.json` con campo `"enemigo"` como ID de texto de la instancia (ej. `"e-1203"`), cripta con ciclo y cripta de referencia con decenas de cazadores, incrementando versiones de catálogo y cripta (FR-005, FR-008)
 
 **Checkpoint**: Pruebas `test_FR002_...` y `test_FR003_...` deben pasar satisfactoriamente.
 

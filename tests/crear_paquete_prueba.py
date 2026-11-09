@@ -2,11 +2,14 @@ import json
 import os
 import sys
 
-from tests.cripta_de_prueba import CATALOGO, entrada, esqueleto_linea
+from bench.generador_criptas import generar_cripta
+from tests.cripta_de_prueba import CATALOGO, entrada, esqueleto_linea, ubicar_llaves
 
 ID = "cripta-prueba"
-VERSION = "p1"
-VERSION_CATALOGO = "cat-prueba-2"
+VERSION = "p2"
+VERSION_CATALOGO = "cat-prueba-3"
+ID_CICLO = "cripta-ciclo"
+ID_CAZADORES = "cripta-cazadores"
 
 
 def salas_y_contenido():
@@ -32,6 +35,23 @@ def escribir(ruta, datos):
         json.dump(datos, f, ensure_ascii=False, indent=1)
 
 
+def _escribir_cripta(carpeta, general, paginas, contenido, llaves):
+    base = os.path.join(carpeta, "criptas", general["id"])
+    escribir(os.path.join(base, "general.json"), general)
+    escribir(os.path.join(base, "version.json"),
+             {"id": general["id"], "version": general["version"]})
+    escribir(os.path.join(base, "llaves.json"), llaves)
+    for pagina in paginas:
+        escribir(os.path.join(base, "salas_%d.json" % pagina["pagina"]), pagina)
+        for sala in pagina["salas"]:
+            datos = entrada(sala["id"])
+            for e in contenido:
+                if e["sala"] == sala["id"]:
+                    datos = e
+                    break
+            escribir(os.path.join(base, "contenido_%s.json" % sala["id"]), datos)
+
+
 def crear(carpeta):
     salas, contenido = salas_y_contenido()
     general = {"id": ID, "version": VERSION, "salas_total": len(salas), "paginas": 1,
@@ -39,21 +59,32 @@ def crear(carpeta):
                "llave_salida": "itm_llave_negra", "presupuesto_solicitudes": 12,
                "inventario_max": 6,
                "jugador": {"vida_max": 30, "ataque": 6, "defensa": 2, "velocidad": 100}}
-    escribir(os.path.join(carpeta, "criptas.json"),
-             {"criptas": [{"id": ID, "nombre": "Cripta de prueba", "salas": len(salas),
-                           "dificultad": 1}]})
-    base = os.path.join(carpeta, "criptas", ID)
-    escribir(os.path.join(base, "general.json"), general)
-    escribir(os.path.join(base, "version.json"), {"id": ID, "version": VERSION})
-    escribir(os.path.join(base, "salas_1.json"), {"pagina": 1, "total_paginas": 1, "salas": salas})
-    for sala in salas:
-        datos = entrada(sala["id"])
-        for e in contenido:
-            if e["sala"] == sala["id"]:
-                datos = e
-        escribir(os.path.join(base, "contenido_%s.json" % sala["id"]), datos)
+    _escribir_cripta(carpeta, general,
+                     [{"pagina": 1, "total_paginas": 1, "salas": salas}],
+                     contenido, ubicar_llaves(contenido))
+    listado = [{"id": ID, "nombre": "Cripta de prueba", "salas": len(salas), "dificultad": 1}]
     for ficha in CATALOGO:
         escribir(os.path.join(carpeta, "catalogo", ficha["id"] + ".json"), ficha)
+
+    ciclo = generar_cripta(numero_salas=2, semilla=1)
+    ciclo["general"]["id"] = ID_CICLO
+    # La llave queda al otro lado de la única puerta que la pide.
+    ciclo["contenido"]["contenido"][0]["objetos"] = []
+    ciclo["contenido"]["contenido"][1]["objetos"] = [ciclo["general"]["llave_salida"]]
+    ciclo["llaves"]["llaves"][0]["sala"] = 2
+    referencia = generar_cripta(numero_salas=48, semilla=7, rango_costos=(40, 200),
+                               cantidad_cazadores=32, rango_cazadores=600,
+                               cadena_llaves=12, cierre_automatico=300, salas_por_pagina=20)
+    referencia["general"]["id"] = ID_CAZADORES
+    for datos in (ciclo, referencia):
+        datos["general"]["version"] = VERSION
+        _escribir_cripta(carpeta, datos["general"], datos["paginas"],
+                         datos["contenido"]["contenido"], datos["llaves"])
+        listado.append({"id": datos["general"]["id"], "nombre": datos["general"]["id"],
+                        "salas": datos["general"]["salas_total"], "dificultad": 1})
+        for ficha in datos["catalogo"]["entidades"]:
+            escribir(os.path.join(carpeta, "catalogo", ficha["id"] + ".json"), ficha)
+    escribir(os.path.join(carpeta, "criptas.json"), {"criptas": listado})
     escribir(os.path.join(carpeta, "catalogo", "version.json"), {"version": VERSION_CATALOGO})
     return carpeta
 

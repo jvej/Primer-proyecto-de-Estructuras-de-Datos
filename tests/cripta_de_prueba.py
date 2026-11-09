@@ -20,6 +20,8 @@ CATALOGO = [
      "defensa": 0, "velocidad": 100, "comportamiento": "errante", "suelta": []},
     {"id": "ent_troll", "clase": "enemigo", "nombre": "Troll", "vida_max": 20, "ataque": 6,
      "defensa": 1, "velocidad": 100, "comportamiento": "guardian", "regeneracion": 2, "suelta": []},
+    {"id": "ent_cazador", "clase": "enemigo", "nombre": "Cazador", "vida_max": 10, "ataque": 4,
+     "defensa": 1, "velocidad": 100, "comportamiento": "cazador", "rango": 500, "suelta": []},
     {"id": "itm_daga", "clase": "arma", "nombre": "Daga", "peso": 2, "valor": 15, "ataque_bonus": 3},
     {"id": "itm_cota", "clase": "armadura", "nombre": "Cota", "peso": 8, "valor": 40, "defensa_bonus": 2},
     {"id": "itm_pocion", "clase": "pocion", "nombre": "Poción menor", "peso": 1, "valor": 5, "cura": 10},
@@ -35,7 +37,7 @@ CATALOGO = [
     {"id": "trp_aguja", "clase": "trampa", "nombre": "Aguja envenenada", "daño": 0, "veneno": 2, "rearme": 300},
 ]
 
-DATOS = {"id": "cripta-test", "version": "t1", "sala_inicial": 1, "sala_salida": 4,
+DATOS = {"id": "cripta-test", "version": "t2", "sala_inicial": 1, "sala_salida": 4,
          "llave_salida": "itm_llave_negra", "presupuesto_solicitudes": 200, "inventario_max": 3,
          "jugador": {"vida_max": 30, "ataque": 6, "defensa": 2, "velocidad": 100}}
 
@@ -47,7 +49,7 @@ def esqueleto_linea(n, puertas=()):
         for destino, direccion in ((i - 1, "S"), (i + 1, "N")):
             if destino < 1 or destino > n:
                 continue
-            datos = {"sala": destino}
+            datos = {"sala": destino, "costo": 100}
             for a, b, extra in puertas:
                 if (a == i and b == destino) or (b == i and a == destino):
                     datos.update(extra)
@@ -63,16 +65,47 @@ def entrada(sala, enemigos=(), objetos=(), trampas=()):
             "trampas": [{"instancia": i, "tipo": t} for i, t in trampas]}
 
 
+def ubicar_llaves(contenido, catalogo=CATALOGO):
+    """Arma la respuesta /llaves desde suelo y botín de enemigos iniciales."""
+    ubicaciones = []
+
+    def agregar(id_objeto, sala, enemigo=None):
+        for ficha in catalogo:
+            if ficha["id"] == id_objeto and ficha["clase"] == "llave":
+                ubicacion = {"id": id_objeto, "sala": sala}
+                if enemigo is not None:
+                    ubicacion["enemigo"] = enemigo
+                ubicaciones.append(ubicacion)
+                return
+
+    for sala in contenido:
+        for objeto in sala.get("objetos", []):
+            id_objeto = objeto if isinstance(objeto, str) else objeto.get("tipo", objeto.get("id"))
+            agregar(id_objeto, sala["sala"])
+        for enemigo in sala.get("enemigos", []):
+            for ficha in catalogo:
+                if ficha["id"] == enemigo["tipo"]:
+                    for id_objeto in ficha.get("suelta", []):
+                        agregar(id_objeto, sala["sala"], enemigo["instancia"])
+    return {"llaves": ubicaciones}
+
+
 class FuenteSimulada(FuenteDatos):
-    def __init__(self, datos, salas, contenido, presupuesto):
+    def __init__(self, datos, salas, contenido, presupuesto, llaves=None):
         self.presupuesto = presupuesto
         self._datos = datos
         self._salas = salas
         self._contenido = contenido
+        self._llaves = ubicar_llaves(contenido) if llaves is None else llaves
         self.solicitudes = 0
 
     def datos_cripta(self, id_cripta):
         return self._datos
+
+    def llaves(self, id_cripta):
+        self.presupuesto.registrar("llaves")
+        self.solicitudes += 1
+        return self._llaves
 
     def pagina_esqueleto(self, id_cripta, pagina):
         return {"pagina": 1, "total_paginas": 1, "salas": self._salas}
