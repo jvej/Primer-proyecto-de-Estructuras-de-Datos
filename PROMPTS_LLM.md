@@ -405,6 +405,443 @@ Utilicé Claude como herramienta de apoyo para comprender los requisitos, obtene
 
 > Explícame qué exige §10.3 sobre la bitácora de prompts, incluyendo fecha aproximada, herramienta, texto del prompt y propósito de uso. Oriéntame para crear una plantilla en Markdown que pueda completar con mis prompts reales. Revisa después mi borrador y señala qué campos faltan, sin inventar registros.
 
+
+#### 21. Especificación de terreno, cazador e invalidación de rutas (Capacidad 001) — 07/11/2026
+
+- **Integrante**: Mariano
+- **Fecha**: 07/11/2026
+- **Herramienta**: Google Antigravity (IDE v2.0)
+- **Modelo**: Gemini 3.8 Flash / Claude Opus 4.6
+- **Uso de la respuesta**: Generar la especificación formal specs/001-terreno-cazador/spec.md para la capacidad 001 de CRIPTA Parte II según el flujo de spec-kit, la constitución y las reglas del proyecto, y preparar la fase de aclaración previa a la planificación.
+
+> Soy Mariano, responsable de la capacidad 001 de CRIPTA Parte II:
+> terreno, cazador e invalidación de rutas.
+> 
+> Leé el enunciado oficial de la segunda parte, las reglas del proyecto
+> y .specify/memory/constitution.md. Revisá las especificaciones
+> existentes para usar el número 001 si continúa disponible.
+> 
+> Guiame mediante spec-kit para crear la especificación de esta capacidad.
+> La redacción debe ser clara, propia de estudiantes de segundo año y
+> centrada en comportamientos observables. Las decisiones sobre
+> estructuras, clases y archivos se definirán durante la planificación.
+> 
+> Mi objetivo interno es terminar el 11 de noviembre de 2026.
+> El 15 de noviembre es el límite de respaldo.
+> 
+> Incluí estos requisitos funcionales con identificadores FR estables:
+> 
+> 1. Cada salida admite un costo entero mayor o igual que 1. Cuando
+>    se omite, el costo es 100 y es igual en ambos sentidos.
+> 
+> 2. El movimiento de cualquier actor tarda:
+>    max(1, costo_salida * 100 // velocidad).
+>    Los costos de las demás acciones conservan las reglas vigentes.
+>    Errantes y rastreadores conservan su comportamiento de elección
+>    de movimiento.
+> 
+> 3. En su turno, el cazador ataca si comparte sala con el jugador.
+>    En caso contrario, determina el costo mínimo hasta la sala actual
+>    del jugador utilizando únicamente salidas abiertas.
+> 
+> 4. Si falta una ruta o su costo mínimo supera el rango del cazador,
+>    espera con costo base 100. Si el costo iguala el rango, puede avanzar.
+> 
+> 5. Si existe una ruta dentro del rango, avanza un paso por una ruta
+>    de costo mínimo. La acción usa el costo de la salida atravesada.
+> 
+> 6. Cuando varias primeras vecinas permiten alcanzar el mismo costo
+>    mínimo, elige la vecina de menor ID.
+> 
+> 7. El cazador conoce el esqueleto completo y las puertas reales.
+>    La niebla del jugador y la descarga del contenido de las salas
+>    no condicionan su decisión. El cazador no abre puertas.
+> 
+> 8. Cada decisión debe coincidir con un cálculo desde cero en ese
+>    instante. Contemplar apertura y cierre de puertas, movimiento
+>    del jugador, cambios de velocidad, otros actores y retroceso.
+> 
+> Incluí los siete escenarios obligatorios con dado, cuando y entonces:
+> 
+> - Cazador sin ruta abierta.
+> - Ruta mínima más cara que el rango, incluyendo la prueba del límite.
+> - Ruta con más pasos y menor costo frente a otra con menos pasos y
+>   mayor costo.
+> - Empate entre dos primeras vecinas, resuelto por menor ID.
+> - Puerta de la ruta cerrada entre dos turnos.
+> - Actor con velocidad alta atravesando una salida de costo 1.
+> - Cambio de velocidad durante una salida costosa, aplicando la regla
+>   vigente de reprogramación del tiempo restante.
+> 
+> Agregá escenarios para ataque al compartir sala, costo predeterminado,
+> simetría del costo, una puerta que abre una ruta antes imposible y
+> restauración de puertas mediante retroceso.
+> 
+> Definí criterios SC medibles para:
+> 
+> - Ciclo entre decisiones del jugador inferior a 20 ms en la cripta
+>   de referencia con decenas de cazadores activos.
+> - Búsqueda acotada al alcance del cazador.
+> - Comparación de cálculo individual y compartido.
+> - Comparación de reutilización y recálculo con puertas estables
+>   e inestables.
+> - Reproducción determinista con la misma cripta, semilla y acciones.
+> 
+> Separá los resultados esperados de las mediciones pendientes.
+> 
+> Después de generar la especificación, guiame por la fase de aclaración.
+> Preguntá únicamente por ambigüedades que los documentos no resuelvan.
+> 
+> Mi primera implementación posterior será el costo de movimiento
+> para todos los actores, con pruebas vinculadas a los FR.
+> 
+> Registrá esta solicitud de manera textual en PROMPTS_LLM.md junto
+> con mi nombre, la fecha real, la herramienta, el modelo si se conoce
+> y el uso de la respuesta.
+
+
+
+#### 22. Revisión y corrección de la especificación de terreno, cazador e invalidación de rutas (Capacidad 001) — 07/11/2026
+
+- **Integrante**: Mariano
+- **Fecha**: 07/11/2026
+- **Herramienta**: Google Antigravity (IDE v2.0)
+- **Modelo**: Gemini 3.8 Flash / Claude Opus 4.6
+- **Uso de la respuesta**: Corregir y afinar la especificación formal specs/001-terreno-cazador/spec.md según los 10 puntos de ajuste solicitados: costos exactos de acciones no de movimiento, límites y condiciones de SC-004 a SC-006, búsqueda acotada SC-002, desempate entero por ID, semántica temporal de agenda, escenario cuantitativo de reprogramación de velocidad, escenario de movimiento del jugador y clarificación de alcance por responsabilidades.
+
+> Revisá y corregí specs/001-terreno-cazador/spec.md usando el
+> enunciado oficial y la constitución. Conservá los identificadores
+> FR y SC existentes y aplicá los siguientes ajustes.
+> 
+> 1. Corregí FR-002. El movimiento utiliza:
+>    max(1, costo_salida * 100 // velocidad).
+> 
+>    Las demás acciones conservan sus costos vigentes de P1:
+>    atacar y esperar 100, usar/equipar 50, recoger/soltar 25
+>    y abrir puertas 50.
+> 
+>    Revisá esos valores contra el proyecto y el enunciado.
+>    Agregá un escenario que compruebe que introducir costos
+>    de terreno conserva los costos de las demás acciones.
+> 
+> 2. Corregí SC-004 para reflejar el límite de 20 ms por ciclo
+>    entre decisiones del jugador, medido en el equipo local,
+>    sin red ni renderizado y con decenas de cazadores activos
+>    en la cripta de referencia.
+> 
+>    La evaluación debe permitir detectar ciclos que excedan
+>    el límite. La media por sí sola es insuficiente.
+>    La metodología de medición se detallará en plan.md.
+> 
+> 3. Reformulá SC-005 para exigir la comparación entre cálculo
+>    individual y compartido con distintos números de cazadores
+>    y rangos. La elección final y las condiciones donde conviene
+>    cada alternativa deben justificarse mediante resultados reales.
+> 
+> 4. Reformulá SC-006 para exigir la comparación de reutilización
+>    frente a recálculo en escenarios de puertas estables e
+>    inestables, comprobando siempre equivalencia observable.
+>    La mejora de rendimiento queda sujeta a medición.
+> 
+> 5. Reformulá SC-002 como propiedad observable de rendimiento.
+>    Para un cazador de rango pequeño, el trabajo de búsqueda
+>    debe depender de la región pertinente dentro de su alcance.
+>    El plan definirá cómo cumplirlo y medirlo, incluyendo el
+>    caso de cálculos compartidos con rangos diferentes.
+> 
+> 6. Eliminá la ambigüedad de “ID alfanumérico/numérico”.
+>    Usá el orden de los identificadores definido por el contrato
+>    de datos del proyecto. Si el contrato deja una duda real,
+>    señalala para aclaración.
+> 
+> 7. Revisá las frases sobre “llegar al destino” o “completar el
+>    movimiento”. Conservá la semántica temporal de la primera
+>    parte y especificá cómo el costo determina el intervalo
+>    hasta la siguiente actuación del actor.
+> 
+> 8. Concretá el escenario de cambio de velocidad.
+>    Una acción de costo 300 iniciada en t=0 con velocidad 100
+>    tiene su siguiente evento en t=300. Si en t=100 cambia a
+>    velocidad 50, el tiempo restante pasa de 200 a 400 y el
+>    evento queda programado para t=500.
+>    Contrastá el ejemplo con la regla vigente de P1.
+> 
+> 9. Agregá un escenario explícito de movimiento del jugador
+>    entre turnos del cazador, vinculado a FR-008.
+>    La nueva decisión debe dirigirse a su posición actual y
+>    coincidir con recalcular desde cero.
+> 
+> 10. Ajustá la aclaración de alcance.
+>     Mariano es responsable de las reglas del motor para 001,
+>     sus pruebas, benchmarks, integración de mediciones y
+>     documentación. La presentación visual corresponde al
+>     reparto acordado con Axel y Kim.
+>     Expresá esto en términos de responsabilidades y dejá
+>     las rutas de archivos y decisiones técnicas para el plan.
+> 
+> Mostrame los cambios y cualquier ambigüedad pendiente.
+> Registrá este prompt textual en PROMPTS_LLM.md.
+
+
+
+#### 23. Planificación, investigación, modelo de datos y tareas de 001-terreno-cazador — 07/11/2026
+
+- **Integrante**: Mariano
+- **Fecha**: 07/11/2026
+- **Herramienta**: Google Antigravity (IDE v2.0)
+- **Modelo**: Gemini 3.8 Flash / Claude Opus 4.6
+- **Uso de la respuesta**: Generar los artefactos de la fase de planificación de spec-kit (plan.md, esearch.md, data-model.md, 	asks.md) y el reporte de análisis de consistencia para la capacidad 001 (terreno, cazador e invalidación de rutas), estructurados en cuatro bloques técnicos (costos de movimiento, contrato C2 de puertas, contrato C3 del cazador e invalidación/benchmarking) bajo las restricciones de la constitución.
+
+> Continuemos con la planificación de mi capacidad
+> 001-terreno-cazador.
+> 
+> Leé la constitución, la especificación actual, el enunciado
+> oficial y el código existente del motor.
+> 
+> Primero aplicá tres ajustes puntuales al spec.md:
+> 
+> 1. En el caso borde del jugador moviéndose hacia el cazador,
+>    indicá que si ambos comparten sala al comenzar el turno
+>    del cazador, este ataca, independientemente del orden
+>    de los movimientos anteriores.
+> 
+> 2. En SC-004, exigí registrar el máximo observado y la cantidad
+>    de ciclos que exceden 20 ms. Los percentiles serán
+>    información complementaria.
+> 
+> 3. Presentá las mediciones como criterios que requieren
+>    validación empírica. El límite de rendimiento es un
+>    requisito y la ventaja de las optimizaciones debe medirse.
+> 
+> Después, ejecutá las fases de planificación, tareas y análisis
+> de spec-kit disponibles en esta instalación.
+> 
+> Prepará plan.md, research.md, data-model.md y tasks.md.
+> La implementación quedará para la siguiente etapa, después
+> de confirmar la especificación y el plan en Git.
+> 
+> Usá estas condiciones para el plan:
+> 
+> - Trabajaremos sobre el proyecto actual, conservando MVC
+>   y las convenciones de sus pruebas.
+> - Usaremos Python 3.13, arreglos y estructuras propias.
+>   No usaremos tablas hash ni dependencias nuevas.
+> - Inspeccioná los llamadores antes de cambiar firmas.
+>   Los datos anteriores sin costo deben seguir usando 100.
+> - Cada tarea debe citar sus FR y especificar cómo se verifica.
+> 
+> Organizá el trabajo en estos bloques:
+> 
+> BLOQUE 1. COSTOS DE MOVIMIENTO
+> 
+> Revisá sala.py, mapa.py, costos.py, partida.py,
+> comportamiento.py, motor_enemigos.py y agenda_eventos.py.
+> 
+> Planificá:
+> - Incorporar y validar costo en las salidas compartidas.
+> - Mantener compatibilidad con los argumentos existentes.
+> - Usar el costo de la salida para el jugador.
+> - Hacer que la resolución del turno enemigo comunique el
+>   costo base de la acción realmente ejecutada.
+> - Programar el siguiente turno con ese costo.
+> - Conservar las elecciones de errantes y rastreadores.
+> - Reutilizar la fórmula de cambio de velocidad vigente.
+> 
+> Primero deben escribirse pruebas de FR-001 y FR-002,
+> incluyendo costos predeterminados, simetría, intervalo
+> mínimo, acciones sin movimiento y reprogramación a t=500.
+> 
+> BLOQUE 2. PUERTAS Y CONTRATO C2
+> 
+> Revisá apertura, cierre automático y retroceso.
+> Definí un punto común de modificación y los avisos que
+> requieren rutas, conocimiento e historia.
+> Explicá cómo evitar avisos o registros duplicados durante
+> el retroceso y qué acuerdos requieren Kim y Axel.
+> 
+> BLOQUE 3. CAZADOR Y CONTRATO C3
+> 
+> Revisá qué búsqueda de rutas está disponible.
+> Kim es responsable del montículo y la búsqueda compartida.
+> Documentá la interfaz necesaria y las dependencias pendientes.
+> 
+> Compará búsqueda individual acotada y cálculo compartido
+> desde el jugador. Explicá el desempate por la primera
+> vecina de menor ID y el uso de índices de sala para arreglos.
+> Considerá cómo evitar reiniciar arreglos del tamaño de
+> toda la cripta en cada búsqueda.
+> 
+> BLOQUE 4. INVALIDACIÓN Y MEDICIONES
+> 
+> Justificá qué cambios invalidan las distancias y cuáles
+> permiten reutilizarlas. Incluí apertura de rutas antes
+> inaccesibles y restauración mediante pergamino.
+> 
+> Planificá comparar decisiones con recálculo desde cero,
+> medir puertas estables e inestables, probar distintos
+> rangos y cantidades de cazadores y repetir bench_motor.
+> 
+> Al terminar, mostrame:
+> - Los archivos que cambiará cada bloque.
+> - Las tareas que puedo empezar sin depender de compañeros.
+> - Los acuerdos pendientes con Kim, Jeferson y Axel.
+> - Las inconsistencias encontradas por el análisis.
+
+
+
+#### 24. Ajustes a plan y tareas, análisis spec-kit e implementación de costos (T001-T010) — 07/11/2026
+
+- **Integrante**: Mariano
+- **Fecha**: 07/11/2026
+- **Herramienta**: Google Antigravity (IDE v2.0)
+- **Modelo**: Gemini 3.8 Flash / Claude Opus 4.6
+- **Uso de la respuesta**: Ajustar plan.md y tasks.md con 10 precisiones técnicas (validación estricta de costo, normalización con tildes, rango en enemigo, retroceso con deshacer_ultimo, rango activo vs utilizado, integración en main.py y pruebas test-first antes de implementación), ejecutar análisis de consistencia, y tras verificar el historial de Git, proceder a la implementación test-first de las tareas T001 a T010 del Bloque 1 de costos de movimiento.
+
+> Revisá plan.md y tasks.md de 001-terreno-cazador y aplicá
+> estos ajustes conservando los identificadores existentes:
+> 
+> 1. Quitá [P] de T001–T005 porque modifican el mismo archivo.
+> 2. Definí costo como entero positivo, rechazando booleanos,
+>    decimales, cadenas, cero y negativos. La omisión vale 100.
+> 3. Corregí la normalización de comportamiento para contemplar
+>    mayúsculas, espacios y tildes.
+> 4. Agregá una tarea para incorporar rango en Enemigo y cargarlo
+>    desde la ficha, coordinada con C5 y compatible con los
+>    enemigos anteriores. Identificá los caminos de guardado
+>    y carga que deban revisarse con Kim.
+> 5. Adaptá el diseño de retroceso a deshacer_ultimo() y a los
+>    inversos reales del proyecto. Documentá la coordinación
+>    con conocimiento e historia y la invalidación de rutas.
+> 6. Incluí el aumento del rango requerido entre las condiciones
+>    de invalidación. Diferenciá rango activo y rango utilizado
+>    al calcular las distancias guardadas.
+> 7. Agregá la integración de --bench cazador en main.py y la
+>    documentación de mi revisión de §5.6.
+> 8. Colocá las pruebas de puertas e invalidación antes de sus
+>    implementaciones. Agregá FR-008 a T022.
+> 9. Contrastá las afirmaciones de acuerdos y commits con
+>    evidencia disponible. Marcá lo pendiente como pendiente.
+> 10. Distinguí mediciones sintéticas y validación posterior
+>     sobre la cripta de referencia.
+> 
+> Ejecutá el análisis de consistencia de spec-kit.
+> 
+> Verificá el historial de Git antes de implementar.
+> Si falta confirmar la especificación o el plan y las tareas,
+> mostrame los comandos con rutas explícitas para que yo haga
+> esos commits en orden y detenete en ese punto.
+> 
+> Si ambos hitos ya están confirmados, implementá únicamente
+> T001–T010, correspondientes al bloque de costos.
+> 
+> Primero escribí las pruebas, ejecutalas y comprobá que los
+> fallos corresponden al comportamiento pendiente. Después
+> implementá los cambios mínimos necesarios.
+> 
+> Condiciones del bloque:
+> 
+> - Agregá costo al final de las firmas existentes de Salida
+>   y Sala.conectar para conservar los argumentos posicionales.
+> - Verificá la carga de costos mediante Mapa, además de la
+>   construcción directa de salidas.
+> - Asigná índices contiguos y estables desde el esqueleto.
+> - El jugador usa salida.costo.
+> - resolver_turno devuelve el costo de la acción ejecutada
+>   en todas sus rutas de ejecución.
+> - El siguiente turno enemigo usa ese costo y su velocidad.
+> - Errantes y rastreadores conservan su elección de movimiento.
+> - Reutilizá la reprogramación de velocidad existente.
+> - Probá el costo mediante movimientos reales y la agenda.
+>   Incluí al jugador y a los enemigos, además de la fórmula.
+> - Verificá que las acciones restantes conservan sus costos.
+> 
+> Ejecutá:
+> python -m tests.test_terreno_cazador
+> python -m tests.test_motor_base
+> python -m tests.test_partida
+> 
+> Al terminar, mostrámelos resultados reales, las tareas
+> completadas, los archivos modificados y cualquier pendiente.
+> Entregame el contenido completo de los archivos modificados
+> para copiar y pegar.
+
+
+#### 25. Inspección e implementación de puertas, avisos y retroceso (Bloque 2, T011-T014) — 07/11/2026
+
+- **Integrante**: Mariano
+- **Fecha**: 07/11/2026
+- **Herramienta**: Google Antigravity (IDE v2.0)
+- **Modelo**: Gemini 3.8 Flash / Claude Opus 4.6
+- **Uso de la respuesta**: Inspeccionar los mecanismos existentes de mutación de puertas (`abrir`, `programar_cierre`), reversión con `Registro.deshacer_ultimo` y uso de pergaminos; redactar pruebas test-first para FR-008 e implementar el punto único de cambio de estado de puertas (`cambiar_estado_puerta`) con despachador desacoplado de eventos (Contrato C2 con C1 de Axel) y tratamiento reactivo de invalidación de rutas al concluir el retroceso temporal.
+
+> Continuemos con el Bloque 2 de la capacidad 001.
+> 
+> Primero verificá el cierre del Bloque 1:
+> 
+> - Contrastá T001–T010 con el tasks.md actual y corregí cualquier
+>   diferencia entre sus identificadores y el resumen de trabajo.
+> - Comprobá que PROMPTS_LLM.md conserve los prompts completos,
+>   incluyendo las instrucciones de commit cuando fueron enviadas.
+> - Corregí la referencia a C4: corresponde a comentarios del log.
+>   Para puertas y retroceso, coordinamos C2 con C1 de Axel.
+> - Verificá en Git los commits de especificación, planificación
+>   y Bloque 1. Si alguno sigue pendiente, mostrame los comandos
+>   correspondientes y esperá a que yo los ejecute.
+> 
+> Con los hitos anteriores confirmados, implementá el Bloque 2
+> siguiendo las tareas actuales y manteniendo sus identificadores.
+> 
+> Antes de programar, inspeccioná:
+> - Partida.cambiar y Partida.abrir.
+> - El cierre automático en efectos.py.
+> - Registro.cambiar y deshacer_ultimo.
+> - El uso del pergamino.
+> - Los puntos de integración ya existentes de Kim y Axel.
+> 
+> Escribí primero pruebas vinculadas a FR-008 que comprueben:
+> 
+> 1. Apertura y cierre automático pasan por el mismo método.
+> 2. Cada cambio efectivo emite un único aviso.
+> 3. Solicitar el estado que ya tiene la puerta no genera
+>    un cambio ni un aviso adicional.
+> 4. El pergamino restaura la puerta y los eventos de cierre
+>    conforme al comportamiento existente.
+> 5. Tras el retroceso se comunica la necesidad de descartar
+>    los cálculos de rutas anteriores.
+> 6. La restauración no genera nuevos registros de acciones
+>    ni duplica los cambios del historial.
+> 
+> Implementá cambiar_estado_puerta(salida, nuevo_estado)
+> reutilizando el registro de cambios existente.
+> 
+> Definí un contrato sencillo para los avisos, compatible con
+> los componentes que ya existan. Las pruebas pueden utilizar
+> receptores de prueba para observarlos.
+> 
+> Diferenciá explícitamente:
+> - Restauración del estado del juego y conocimiento.
+> - Recorte o restauración de la línea de tiempo.
+> - Invalidación de datos derivados de búsqueda de rutas.
+> 
+> Invalidar rutas al terminar el retroceso no sustituye la
+> restauración del conocimiento ni el tratamiento de la historia.
+> Evitá invocar atributos de una caché que todavía no exista.
+> 
+> Conservá las reglas de llaves, costo de apertura, cierres
+> automáticos y consumo de pergaminos.
+> 
+> Ejecutá:
+> python -m tests.test_terreno_cazador
+> python -m tests.test_motor_base
+> python -m tests.test_partida
+> 
+> Revisá además las pruebas existentes de replay y persistencia
+> que ejerciten los caminos modificados.
+> 
+> Al finalizar, entregame los archivos completos modificados,
+> los resultados reales de las pruebas, las tareas completadas
+> y los acuerdos pendientes con Kim y Axel.
+
 ---
 
 ## 4. Inventario, retroceso, replay, controlador y vista — Axel

@@ -1,4 +1,4 @@
-from typing import List, Optional
+﻿from typing import List, Optional
 
 DIRECCIONES = ("N", "S", "E", "O")
 OPUESTAS = (1, 0, 3, 2)  
@@ -7,13 +7,18 @@ LIMITE_RASTRO = 400
 
 class Salida:
     def __init__(self, sala_a: "Sala", sala_b: "Sala", estado: str = "abierta",
-                 llave: Optional[str] = None, cierre_automatico: Optional[int] = None) -> None:
+                 llave: Optional[str] = None, cierre_automatico: Optional[int] = None,
+                 costo: int = 100) -> None:
+        if type(costo) is not int or costo < 1:
+            raise ValueError(f"El costo de una salida debe ser un entero positivo >= 1, obtenido {costo!r}")
         self.sala_a = sala_a
         self.sala_b = sala_b
         self.estado = estado                       
         self.llave = llave                          
         self.cierre_automatico = cierre_automatico  
-        self.evento_cierre = None                  
+        self.evento_cierre = None
+        self.costo = costo
+
     def esta_abierta(self) -> bool:
         return self.estado == "abierta"
 
@@ -25,6 +30,7 @@ class Sala:
     def __init__(self, id: int, nombre: str = "") -> None:
         self.id = id
         self.nombre = nombre
+        self.indice: Optional[int] = None
         self.salidas: List[Optional[Salida]] = [None, None, None, None]
         self.actores: list = []     
         self.objetos: list = []   
@@ -33,9 +39,10 @@ class Sala:
         self.incorporada = False     
 
     def conectar(self, direccion: str, otra: "Sala", estado: str = "abierta",
-                 llave: Optional[str] = None, cierre_automatico: Optional[int] = None) -> Salida:
+                 llave: Optional[str] = None, cierre_automatico: Optional[int] = None,
+                 costo: int = 100) -> Salida:
         i = DIRECCIONES.index(direccion)
-        salida = Salida(self, otra, estado, llave, cierre_automatico)
+        salida = Salida(self, otra, estado, llave, cierre_automatico, costo)
         self.salidas[i] = salida
         otra.salidas[OPUESTAS[i]] = salida
         return salida
