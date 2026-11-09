@@ -5,6 +5,7 @@ Uso:
     python main.py --offline paquete/           jugar leyendo el paquete de respuestas
     python main.py --gui                        jugar en ventana (Pygame); también con --offline
     python main.py --replay datos_cripta/partidas/x.log    reproducir sin interacción
+    python main.py --verificar CRIPTA           inspeccionar sin crear una vista
     python main.py --bench                      todas las mediciones
     python main.py --bench historial inventario solo esos subsistemas
 
@@ -14,11 +15,12 @@ Opciones:
     --nombre TEXTO    nombre del jugador (si no se da, se pregunta)
     --datos CARPETA   dónde se guardan caché, logs, guardados y puntajes (datos_cripta)
     --detalle         con --replay: muestra cada orden reproducida
+    --forzar          permite iniciar una cripta no resoluble o no verificada
 
 Arquitectura (§6): aquí solo se ARMAN las piezas. El Modelo (partida.py) no sabe de
 red, disco ni interfaz; el Controlador recibe funciones y objetos ya armados; la Vista
-de consola o la de Pygame (--gui) solo se crean en el modo interactivo: --replay y
---bench no abren ventana ni importan Pygame.
+de consola o la de Pygame (--gui) solo se crean en el modo interactivo: --replay,
+--bench y --verificar no abren ventana ni importan Pygame.
 """
 
 import argparse
@@ -30,6 +32,7 @@ import time
 from controlador.aplicacion import CACHE_DEFECTO, CARPETA_DEFECTO, Aplicacion
 from controlador.controlador import Controlador
 from modelo.juego.errores import ErrorCripta
+from modelo.juego.resolubilidad import ResultadoResolubilidad
 from modelo.datos.fabrica_fuentes import crear_fuente_datos
 from modelo.datos.persistencia_partida import PersistenciaPartida
 from controlador.repeticiones import ServicioRepeticiones
@@ -56,6 +59,10 @@ def leer_argumentos(argv):
     parser.add_argument("--offline", metavar="CARPETA",
                         help="lee las respuestas del paquete en CARPETA en vez de la red")
     parser.add_argument("--replay", metavar="LOG", help="reproduce una partida sin interacción")
+    parser.add_argument("--verificar", metavar="CRIPTA",
+                        help="imprime la resolubilidad de la cripta sin crear una vista")
+    parser.add_argument("--forzar", action="store_true",
+                        help="permite iniciar una cripta no resoluble o no verificada")
     parser.add_argument("--bench", nargs="*", metavar="SUBSISTEMA",
                         help="ejecuta mediciones (todas, o solo las indicadas)")
     parser.add_argument("--cache-size", type=int, default=CACHE_DEFECTO,
@@ -109,6 +116,25 @@ def correr_replay(argumentos):
     return 0 if resultado.reproducido else 1
 
 
+def correr_verificacion(argumentos):
+    aplicacion = None
+    try:
+        fuente, presupuesto = crear_fuente_datos(argumentos.offline is not None, argumentos.offline)
+        aplicacion = Aplicacion(
+            fuente, presupuesto, argumentos.datos, argumentos.cache_size,
+            registrar_log=False, registrar_puntajes=False, forzar=argumentos.forzar)
+        reporte = aplicacion.verificar(argumentos.verificar)
+    except (ErrorCripta, ValueError) as error:
+        reporte = ResultadoResolubilidad("NO VERIFICADA", motivo=str(error))
+    finally:
+        if aplicacion is not None:
+            aplicacion.cerrar()
+    print(reporte.formatear_reporte())
+    if reporte.estado == "RESOLUBLE":
+        return 0
+    return 1 if reporte.estado == "NO RESOLUBLE" else 2
+
+
 def crear_vista(argumentos):
     """Solo el modo interactivo crea una vista. Pygame se importa únicamente con --gui."""
     if argumentos.gui:
@@ -142,7 +168,7 @@ def correr_interactivo(argumentos):
     nombre = argumentos.nombre if argumentos.nombre else vista.pedir_nombre()
 
     aplicacion = Aplicacion(fuente, presupuesto, argumentos.datos, argumentos.cache_size,
-                            argumentos.semilla, nombre)
+                            argumentos.semilla, nombre, forzar=argumentos.forzar)
     repeticiones = ServicioRepeticiones(
         aplicacion, lambda: crear_fuente_datos(argumentos.offline is not None, argumentos.offline),
         argumentos.datos, argumentos.cache_size)
@@ -176,6 +202,8 @@ def main(argv=None):
         return correr_benches(argumentos.bench)
     if argumentos.replay:
         return correr_replay(argumentos)
+    if argumentos.verificar is not None:
+        return correr_verificacion(argumentos)
     return correr_interactivo(argumentos)
 
 
