@@ -98,10 +98,12 @@
 
 ### Implementation for User Story 1
 
-- [ ] T026 [US1] Modificar controlador/aplicacion.py para orquestar la verificación de resolubilidad antes de inicializar la partida, impidiendo el inicio si no es resoluble salvo que se haya especificado `--forzar`, y mostrando el reporte en la interfaz activa (consola o pantalla Pygame) (FR-009, FR-015, FR-016)
-- [ ] T027 [US1] Implementar en controlador/aplicacion.py el manejo de contingencia cuando `GET /criptas/<id>/llaves` falla por red o presupuesto sin copia local válida, emitiendo `ESTADO: NO VERIFICADA` con el motivo específico (red o presupuesto) e impidiendo el inicio salvo con `--forzar` (FR-004, FR-009, FR-015)
-- [ ] T028 [US1] Modificar main.py para procesar la opción `--verificar <cripta>`, invocando la verificación, imprimiendo el reporte textual en `stdout` y finalizando inmediatamente con códigos de salida 0 (resoluble), 1 (no resoluble) o 2 (no verificada o inexistente) sin crear ninguna vista (ni consola interactiva ni Pygame) (FR-017)
-- [ ] T029 [US1] Incorporar argumento `--forzar` en el parser de argumentos de main.py y propagarlo al controlador de la aplicación (FR-016)
+- [X] T026 [US1] Modificar controlador/aplicacion.py para orquestar la verificación de resolubilidad antes de inicializar la partida, impidiendo el inicio si no es resoluble salvo que se haya especificado `--forzar`, y mostrando el reporte en la interfaz activa (consola o pantalla Pygame) (FR-009, FR-015, FR-016)
+- [X] T027 [US1] Implementar en controlador/aplicacion.py el manejo de contingencia cuando `GET /criptas/<id>/llaves` falla por red o presupuesto sin copia local válida, emitiendo `ESTADO: NO VERIFICADA` con el motivo específico (red o presupuesto) e impidiendo el inicio salvo con `--forzar` (FR-004, FR-009, FR-015)
+- [X] T028 [US1] Modificar main.py para procesar la opción `--verificar <cripta>`, invocando la verificación, imprimiendo el reporte textual en `stdout` y finalizando inmediatamente con códigos de salida 0 (resoluble), 1 (no resoluble) o 2 (no verificada o inexistente) sin crear ninguna vista (ni consola interactiva ni Pygame) (FR-017)
+- [X] T029 [US1] Incorporar argumento `--forzar` en el parser de argumentos de main.py y propagarlo al controlador de la aplicación (FR-016)
+
+**Alcance acordado de T026**: Se conserva el resultado en `Aplicacion.reporte_resolubilidad` y se entrega el diagnóstico completo mediante `ErrorNoResoluble`. El manejo existente de `ErrorCripta` en `Controlador.correr_sesion` muestra ese texto y vuelve a la selección. No se modifican `controlador/controlador.py` ni las vistas; la presentación del reporte al iniciar partidas aceptadas o forzadas queda para la integración de Axel.
 
 **Checkpoint**: Pruebas `test_FR015_...` y `test_FR017_...` deben pasar satisfactoriamente.
 

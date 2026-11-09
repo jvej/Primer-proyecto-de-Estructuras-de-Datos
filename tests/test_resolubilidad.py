@@ -117,7 +117,8 @@ def _integracion_memoria(fuente, almacen):
         pila.enter_context(patch.object(aplicacion.os, "makedirs"))
         pila.enter_context(patch.object(aplicacion, "AlmacenCripta", return_value=almacen))
         pila.enter_context(patch.object(aplicacion, "AlmacenFichas"))
-        pila.enter_context(patch.object(aplicacion, "AlmacenLocalCache"))
+        local = pila.enter_context(patch.object(aplicacion, "AlmacenLocalCache"))
+        local.return_value.disponible.return_value = False
         pila.enter_context(patch.object(aplicacion, "EjecutorRed"))
         pila.enter_context(patch.object(aplicacion, "ResolutorCatalogo"))
         pila.enter_context(patch.object(aplicacion, "PrecargaContenido"))
