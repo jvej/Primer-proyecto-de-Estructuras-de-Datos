@@ -17,7 +17,7 @@
 
 **Purpose**: Verificación de entorno y herramientas auxiliares sintéticas.
 
-- [ ] T001 Verificar entorno de desarrollo Python 3.13 y dependencias exclusivas en requirements.txt (SC-002)
+- [X] T001 Verificar entorno de desarrollo Python 3.13 y dependencias exclusivas en requirements.txt (SC-002)
 - [ ] T002 [P] Implementar generador procedural determinista de criptas sintéticas (con soporte de tamaño, costos, cadenas de llaves, puertas inestables y cazadores con rango en unidades de costo) en bench/generador_criptas.py (SC-002, SC-005)
 
 ---
@@ -27,14 +27,14 @@
 **Purpose**: Batería de pruebas de aceptación previas en `tests/test_resolubilidad.py`.  
 ⚠️ **CRÍTICO: Estas pruebas se escriben PRIMERO y deben FALLAR antes de abordar la implementación.**
 
-- [ ] T003 Crear módulo base de pruebas de aceptación en tests/test_resolubilidad.py compatible con ejecución vía `python -m tests.test_resolubilidad`
-- [ ] T004 Implementar escenario de prueba de aceptación `test_FR014_llave_salida_detras_de_su_propia_puerta_con_ciclo` en tests/test_resolubilidad.py para calificar no resoluble y reportar ciclo determinista autorreferencial (FR-014, SC-003, SC-004)
-- [ ] T005 Implementar escenario de prueba de aceptación `test_FR002_llave_en_suelta_de_errante_en_sala_inicial` en tests/test_resolubilidad.py comprobando que la llave portada por un enemigo se ubica y obtiene en su sala inicial (FR-001, FR-002, FR-010)
-- [ ] T006 Implementar escenario de prueba de aceptación `test_FR013_varios_ordenes_validos_mismo_orden_determinista` en tests/test_resolubilidad.py comprobando que órdenes topológicos alternativos desempatan de forma idéntica por id de texto en cada etapa (FR-012, FR-013)
-- [ ] T007 Implementar escenario de prueba de aceptación `test_FR015_cripta_no_resoluble_sin_forzar_no_inicia` en tests/test_resolubilidad.py comprobando bloqueo de partida sin `--forzar` e inicio permitido con `--forzar` (FR-015, FR-016)
-- [ ] T008 Implementar escenario de prueba de aceptación `test_FR003_endpoint_llaves_cuenta_en_presupuesto_solicitudes` en tests/test_resolubilidad.py comprobando decremento de presupuesto ante consultas HTTP (incluyendo 429) y 0 consultas con versión local coincidente o `--offline` (FR-003, FR-004)
-- [ ] T009 Implementar escenario de prueba de aceptación `test_FR017_codigos_salida_verificar` en tests/test_resolubilidad.py comprobando códigos de salida 0 (resoluble), 1 (no resoluble) y 2 (falla de red/presupuesto/inexistente) bajo `--verificar` sin crear vistas (FR-017, SC-001)
-- [ ] T010 Implementar escenario de prueba de aceptación `test_FR018_plantilla_exacta_reporte` en tests/test_resolubilidad.py comprobando formato canónico exacto de secciones `ESTADO:`, `ORDEN DE LLAVES:`, `LLAVES NO OBTENIBLES:`, `FRONTERA BLOQUEADA:`, `UBICACIÓN DE LLAVES:`, `CICLOS DETECTADOS:` y `MOTIVO:` con siglas `N`, `S`, `E`, `O` (FR-018)
+- [X] T003 Crear módulo base de pruebas de aceptación en tests/test_resolubilidad.py compatible con ejecución vía `python -m tests.test_resolubilidad`
+- [X] T004 Implementar escenario de prueba de aceptación `test_FR014_llave_salida_detras_de_su_propia_puerta_con_ciclo` en tests/test_resolubilidad.py para calificar no resoluble y reportar ciclo determinista autorreferencial (FR-014, SC-003, SC-004)
+- [X] T005 Implementar escenario de prueba de aceptación `test_FR002_llave_en_suelta_de_errante_en_sala_inicial` en tests/test_resolubilidad.py comprobando que la llave portada por un enemigo se ubica y obtiene en su sala inicial (FR-001, FR-002, FR-010)
+- [X] T006 Implementar escenario de prueba de aceptación `test_FR013_varios_ordenes_validos_mismo_orden_determinista` en tests/test_resolubilidad.py comprobando que órdenes topológicos alternativos desempatan de forma idéntica por id de texto en cada etapa (FR-012, FR-013)
+- [X] T007 Implementar escenario de prueba de aceptación `test_FR015_cripta_no_resoluble_sin_forzar_no_inicia` en tests/test_resolubilidad.py comprobando bloqueo de partida sin `--forzar` e inicio permitido con `--forzar` (FR-015, FR-016)
+- [X] T008 Implementar escenario de prueba de aceptación `test_FR003_endpoint_llaves_cuenta_en_presupuesto_solicitudes` en tests/test_resolubilidad.py comprobando decremento de presupuesto ante consultas HTTP (incluyendo 429) y 0 consultas con versión local coincidente o `--offline` (FR-003, FR-004)
+- [X] T009 Implementar escenario de prueba de aceptación `test_FR017_codigos_salida_verificar` en tests/test_resolubilidad.py comprobando códigos de salida 0 (resoluble), 1 (no resoluble) y 2 (falla de red/presupuesto/inexistente) bajo `--verificar` sin crear vistas (FR-017, SC-001)
+- [X] T010 Implementar escenario de prueba de aceptación `test_FR018_plantilla_exacta_reporte` en tests/test_resolubilidad.py comprobando formato canónico exacto de secciones `ESTADO:`, `ORDEN DE LLAVES:`, `LLAVES NO OBTENIBLES:`, `FRONTERA BLOQUEADA:`, `UBICACIÓN DE LLAVES:`, `CICLOS DETECTADOS:` y `MOTIVO:` con siglas `N`, `S`, `E`, `O` (FR-018)
 
 **Checkpoint**: Ejecutar `python -m tests.test_resolubilidad` y confirmar que las pruebas fallan limpiamente.
 
