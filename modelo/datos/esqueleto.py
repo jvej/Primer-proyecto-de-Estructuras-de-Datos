@@ -16,14 +16,23 @@ class Esqueleto:
     def agregar_pagina(self, cuerpo):
         for sala in cuerpo["salas"]:
             vecinos = []
+            # Copias de registros del payload: no se modifica el JSON recibido.
+            salidas = sala["salidas"].copy()
             for direccion in DIRECCIONES:
-                if direccion in sala["salidas"]:
-                    vecinos.append(sala["salidas"][direccion]["sala"])
+                if direccion in salidas:
+                    salida = salidas[direccion].copy()
+                    costo = salida.get("costo", 100)
+                    if type(costo) is not int or costo < 1:
+                        raise ErrorRed("esqueleto, sala %s (%s)" % (sala["id"], direccion),
+                                       "costo inválido %r; se esperaba un entero >= 1" % (costo,))
+                    salida["costo"] = costo
+                    salidas[direccion] = salida
+                    vecinos.append(salida["sala"])
             self._indice.insertar(str(sala["id"]), len(self.ids))
             self.ids.append(sala["id"])
             self.vecinos.append(vecinos)
             self.nombres.append(sala.get("nombre", ""))
-            self.salidas.append(sala["salidas"])
+            self.salidas.append(salidas)
 
     def existe(self, id_sala):
         return self._indice.contiene(str(id_sala))

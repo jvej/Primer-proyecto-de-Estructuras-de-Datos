@@ -8,6 +8,10 @@ class FuenteDatos:
     def datos_cripta(self, id_cripta):
         raise NotImplementedError
 
+    def llaves(self, id_cripta):
+        """Ubicaciones iniciales de llaves, incluidas las portadas por enemigos."""
+        raise NotImplementedError
+
     def pagina_esqueleto(self, id_cripta, pagina):
         raise NotImplementedError
 
