@@ -249,6 +249,145 @@ class PruebasViaje(unittest.TestCase):
         self.assertFalse(c._viaje_activo)
         self.assertIs(p.cambiar.__func__, type(p).cambiar)
 
+    def test_C4_observador_cancela_antes_de_observar_recalcular_y_mover(self):
+        esc = self.escenario()
+        p = esc.partida
+        c = Controlador(p)
+        observaciones = []
+        p._observar_puertas = lambda: observaciones.append(True)
+        movimientos = []
+        comentarios = []
+        c.agregar_observador(movimientos.append)
+        c.agregar_observador_comentarios(comentarios.append)
+        estado_antes = (list(p.conocimiento.estado_salas), list(p.conocimiento.memoria_puertas), p.conocimiento.resumen())
+        def cancelar(actual):
+            self.assertIs(actual, p)
+            self.assertIsNone(p.registro.grupo_abierto())
+            self.assertIs(p.cambiar.__func__, type(p).cambiar)
+            return False
+        c.agregar_observador_viaje(cancelar)
+        self.assertTrue(c.ejecutar("ir a 4"))
+        self.assertEqual((p.acciones, p.reloj.tiempo_actual, p.jugador.sala.id), (0, 0, 1))
+        self.assertEqual((observaciones, movimientos), ([], []))
+        self.assertEqual(p.registro.acciones_deshacibles(), 0)
+        self.assertEqual(c._planificador._token_navegacion, 1)  # Solo validación preliminar C4.
+        self.assertEqual((p.conocimiento.estado_salas, p.conocimiento.memoria_puertas, p.conocimiento.resumen()), estado_antes)
+        self.assertEqual(comentarios, ["ir a 4"])
+        self.assertFalse(c._viaje_activo)
+
+    def test_C4_cancelacion_despues_de_varios_pasos_y_retroceso_individual(self):
+        esc = self.escenario()
+        p = esc.partida
+        esc.dar("itm_pergamino")
+        c = Controlador(p)
+        visitas = []
+        movimientos = []
+        c.agregar_observador(movimientos.append)
+        def continuar(actual):
+            visitas.append(actual.jugador.sala.id)
+            self.assertIsNone(actual.registro.grupo_abierto())
+            return actual.acciones < 2
+        c.agregar_observador_viaje(continuar)
+        self.assertTrue(c.ejecutar("ir a 4"))
+        self.assertEqual(visitas, [1, 2, 3])
+        self.assertEqual(movimientos, [Orden(MOVER, "N"), Orden(MOVER, "N")])
+        self.assertEqual((p.jugador.sala.id, p.acciones, p.reloj.tiempo_actual), (3, 2, 200))
+        self.assertEqual(p.registro.acciones_deshacibles(), 2)
+        self.assertTrue(c.ejecutar(Orden(PERGAMINO)))
+        self.assertEqual((p.jugador.sala.id, p.acciones, p.reloj.tiempo_actual), (2, 1, 100))
+        self.assertEqual(visitas, [1, 2, 3])  # El pergamino no reinicia el viaje.
+
+    def test_C4_cancelacion_conserva_log_de_movimientos_ejecutados(self):
+        esc = self.escenario()
+        p = esc.partida
+        c = Controlador(p)
+        with tempfile.TemporaryDirectory() as carpeta:
+            ruta = os.path.join(carpeta, "cancelado.log")
+            log = BitacoraPartida(ruta, EncabezadoLog("test", "1", "1", 1))
+            try:
+                c.agregar_observador(log.anotar)
+                c.agregar_observador_comentarios(log.anotar_comentario)
+                c.agregar_observador_viaje(lambda actual: actual.acciones < 2)
+                c.ejecutar("ir a 4")
+                self.assertEqual(log.lineas, 2)
+            finally:
+                log.cerrar()
+            _, ordenes = leer_log(ruta)
+            registradas = []
+            while not ordenes.vacia():
+                registradas.append(ordenes.sacar())
+            self.assertEqual(registradas, [Orden(MOVER, "N"), Orden(MOVER, "N")])
+
+    def test_C4_cambio_partida_en_callback_no_mueve_ninguna(self):
+        p = self.escenario().partida
+        otra = self.escenario().partida
+        c = Controlador(p)
+        posteriores = []
+        def sustituir(actual):
+            self.assertIs(actual, p)
+            c.partida = otra
+            return True
+        c.agregar_observador_viaje(sustituir)
+        c.agregar_observador_viaje(lambda actual: posteriores.append(True) or True)
+        self.assertTrue(c.ejecutar("ir a 4"))
+        for partida in (p, otra):
+            self.assertEqual((partida.acciones, partida.reloj.tiempo_actual, partida.jugador.sala.id), (0, 0, 1))
+        self.assertIs(c._planificador.mapa, otra.mapa)
+        self.assertEqual(posteriores, [])
+        self.assertFalse(c._viaje_activo)
+
+    def test_C4_token_se_verifica_despues_de_cada_callback(self):
+        p = self.escenario().partida
+        c = Controlador(p)
+        posteriores = []
+        def cancelar_token(actual):
+            c._token_viaje += 1
+            return True
+        c.agregar_observador_viaje(cancelar_token)
+        c.agregar_observador_viaje(lambda actual: posteriores.append(True) or True)
+        self.assertTrue(c.ejecutar("ir a 4"))
+        self.assertEqual((p.acciones, p.reloj.tiempo_actual, posteriores), (0, 0, []))
+
+    def test_C4_sin_observadores_conserva_viaje(self):
+        p = self.escenario().partida
+        c = Controlador(p)
+        self.assertTrue(c.ejecutar("ir a 4"))
+        self.assertEqual((p.jugador.sala.id, p.acciones, p.reloj.tiempo_actual), (4, 3, 300))
+
+    def test_C4_excepcion_callback_se_propaga_sin_movimientos_posteriores(self):
+        for pasos in (0, 2):
+            with self.subTest(pasos=pasos):
+                p = self.escenario().partida
+                c = Controlador(p)
+                registrados = []
+                c.agregar_observador(registrados.append)
+                def fallar(actual):
+                    if actual.acciones == pasos:
+                        raise RuntimeError("fallo de observador de viaje")
+                    return True
+                c.agregar_observador_viaje(fallar)
+                with self.assertRaisesRegex(RuntimeError, "fallo de observador de viaje"):
+                    c.ejecutar("ir a 4")
+                self.assertEqual((p.acciones, p.reloj.tiempo_actual, len(registrados)), (pasos, pasos * 100, pasos))
+                self.assertFalse(c._viaje_activo)
+                self.assertIsNone(p.registro.grupo_abierto())
+                self.assertIs(p.cambiar.__func__, type(p).cambiar)
+
+    def test_C4_bool_estricto_y_cancelacion_no_llama_otro_observador(self):
+        p = self.escenario().partida
+        c = Controlador(p)
+        c.agregar_observador_viaje(lambda actual: None)
+        with self.assertRaisesRegex(TypeError, "devolver bool"):
+            c.ejecutar("ir a 4")
+        self.assertEqual(p.acciones, 0)
+        self.assertFalse(c._viaje_activo)
+        c = Controlador(p)
+        posteriores = []
+        c.agregar_observador_viaje(lambda actual: False)
+        c.agregar_observador_viaje(lambda actual: posteriores.append(True) or True)
+        self.assertTrue(c.ejecutar("ir a 4"))
+        self.assertEqual(posteriores, [])
+
 
 if __name__ == "__main__":
     unittest.main()

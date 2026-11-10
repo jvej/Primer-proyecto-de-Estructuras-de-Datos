@@ -30,6 +30,7 @@ class Controlador:
         self.repeticiones = repeticiones
         self._observadores = []
         self._observadores_comentarios = []
+        self._observadores_viaje = []
         self._terminado = False
 
     @property
@@ -55,6 +56,16 @@ class Controlador:
     def agregar_observador_comentarios(self, funcion):
         """Conexión opcional pendiente en Aplicacion/main (C4)."""
         self._observadores_comentarios.append(funcion)
+
+    def agregar_observador_viaje(self, funcion):
+        """funcion(partida) -> bool, antes de cada paso de IR_A.
+
+        True continúa y False cancela sin acciones ni tiempo adicionales. Corre
+        tras la validación preliminar, fuera del grupo reversible y del adaptador
+        C1. El callback debe limitarse a eventos/presentación, sin ejecutar
+        acciones de juego. Sus excepciones se propagan; no se ocultan.
+        """
+        self._observadores_viaje.append(funcion)
 
     def ejecutar(self, orden):
         """Ejecuta una orden. Devuelve True si fue aceptada (las rechazadas no cambian
@@ -94,6 +105,17 @@ class Controlador:
             for observador in self._observadores_comentarios:
                 observador("ir a %s" % orden.argumento)
             while token == self._token_viaje and self.partida is p:
+                for observador in self._observadores_viaje:
+                    continuar = observador(p)
+                    if token != self._token_viaje or self.partida is not p:
+                        self._avisar("Viaje automático cancelado por otra orden o cambio de partida.")
+                        return True
+                    if type(continuar) is not bool:
+                        raise TypeError("el observador de viaje debe devolver bool")
+                    if not continuar:
+                        self._token_viaje += 1
+                        self._avisar("Viaje automático cancelado antes del siguiente paso.")
+                        return True
                 # Observar es local y no avanza el reloj; el planificador solo
                 # recibe la memoria, nunca el estado físico de las puertas.
                 p._observar_puertas()
