@@ -51,6 +51,19 @@ class Vista(ABC):
         """True si esta vista puede mostrar una repetición paso a paso."""
         return False
 
+    def mostrar_mapa(self, mapa):
+        """Presentación textual compatible; recibe datos ya filtrados por Partida."""
+        lineas = ["Mapa conocido:"]
+        for id_sala, nombre, salidas in mapa:
+            lineas.append("Sala %s: %s" % (id_sala, nombre or "sin nombre"))
+            for direccion, estado, id_vecino, llave, costo in salidas:
+                destino = "desconocida" if id_vecino is None else "sala %s" % id_vecino
+                detalle = estado + (", llave %s" % llave if llave is not None else "")
+                lineas.append("  %s -> %s (costo %s, %s)" % (direccion, destino, costo, detalle))
+        if not mapa:
+            lineas.append("  Ninguna sala explorada.")
+        self.mostrar_aviso("\n".join(lineas))
+
     def elegir_repeticion(self, entradas):
         """entradas: bitacora_partida.EntradaLog, de la más nueva a la más vieja.
         Devuelve la ruta elegida o None (volver)."""

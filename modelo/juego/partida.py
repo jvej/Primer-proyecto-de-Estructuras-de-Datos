@@ -490,7 +490,25 @@ class Partida:
         return self.jugador.sala.trampas
 
     def salidas_visibles(self) -> list:
-        sala = self.jugador.sala
+        """(dirección, puerta recordada, ID conocido, llave observada, costo)."""
+        return self._salidas_conocidas(self.jugador.sala)
+
+    def mapa_conocido(self) -> list:
+        """Foto filtrada (ID, nombre, salidas) de salas exploradas.
+
+        La topología estática se obtiene de las salas referidas por Conocimiento;
+        la visibilidad y las puertas se obtienen solo de su memoria. No observa,
+        carga contenido, devuelve actores ni avanza el reloj. O(N + E_conocidas).
+        """
+        resultado = []
+        for sala in self.conocimiento.salas_por_indice:
+            if self.conocimiento.es_explorada(sala):
+                resultado.append((sala.id, sala.nombre, self._salidas_conocidas(sala)))
+        return resultado
+
+    def _salidas_conocidas(self, sala) -> list:
+        if not self.conocimiento.es_explorada(sala):
+            return []
         resultado = []
         for i in range(len(DIRECCIONES)):
             salida = sala.salidas[i]
@@ -499,7 +517,8 @@ class Partida:
                 id_visible = vecina.id if self.conocimiento.es_explorada(vecina) else None
                 estado = self.conocimiento.puerta_recordada(sala, i)
                 texto_estado = "abierta" if estado == PUERTA_ABIERTA else "cerrada" if estado == PUERTA_CERRADA else "desconocida"
-                resultado.append((DIRECCIONES[i], texto_estado, id_visible, salida.llave))
+                llave = salida.llave if estado in (PUERTA_ABIERTA, PUERTA_CERRADA) else None
+                resultado.append((DIRECCIONES[i], texto_estado, id_visible, llave, salida.costo))
         return resultado
 
     def efectos_activos(self) -> list:

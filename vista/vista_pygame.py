@@ -553,7 +553,7 @@ class VistaPygame(Vista):
 
     def _salida(self, direccion, con_llave=False):
         """Estado de la salida en esa dirección ('abierta' / 'cerrada' / None si no hay)."""
-        for otra, estado, _vecino, llave in self.partida.salidas_visibles():
+        for otra, estado, _vecino, llave, _costo in self.partida.salidas_visibles():
             if otra == direccion:
                 return (estado, llave) if con_llave else estado
         return (None, None) if con_llave else None
@@ -960,8 +960,8 @@ class VistaPygame(Vista):
         efectos = partida.efectos_activos()
         if len(efectos) > 0:
             self._texto(self.fuente, "Efectos: " + ", ".join(efectos), DORADO, SALA.x, SALA.y - 22)
-        for direccion, estado, id_vecino, llave in partida.salidas_visibles():
-            self._dibujar_puerta(direccion, estado, id_vecino, llave)
+        for direccion, estado, id_vecino, llave, costo in partida.salidas_visibles():
+            self._dibujar_puerta(direccion, estado, id_vecino, llave, costo)
         y = SALA.y + GROSOR_MURO + 8
         for trampa in partida.trampas_en_sala():
             self._texto(self.fuente_chica, "Trampa: %s (%s)" % (
@@ -1019,7 +1019,7 @@ class VistaPygame(Vista):
             return "jugador_antorcha"
         return "jugador"
 
-    def _dibujar_puerta(self, direccion, estado, id_vecino, llave):
+    def _dibujar_puerta(self, direccion, estado, id_vecino, llave, costo):
         color = ABIERTA if estado != "cerrada" else CERRADA
         imagen = self._cuadro_de_puerta(direccion, estado)
         if imagen is not None:
@@ -1045,9 +1045,12 @@ class VistaPygame(Vista):
         else:
             pygame.draw.rect(self.pantalla, color, rect)
             pygame.draw.rect(self.pantalla, TEXTO, rect, 1)
-        texto = "%s: sala %s" % (direccion, id_vecino)
+        destino = "desconocida" if id_vecino is None else "sala %s" % id_vecino
+        texto = "%s: %s (costo %s)" % (direccion, destino, costo)
         if estado == "cerrada":
             texto += " (cerrada)"
+        elif estado == "desconocida":
+            texto += " (puerta desconocida)"
         self._texto(self.fuente_chica, texto, TEXTO, etiqueta[0], etiqueta[1], centro=True)
         if estado == "cerrada" and llave:
             self._texto(self.fuente_chica, "llave: %s" % llave, TEXTO_TENUE,

@@ -157,6 +157,34 @@ def test_cuadros_de_animacion():
     assert indice_de_cuadro(TRAMPA, 0, 4) == 0 and indice_de_cuadro(TRAMPA, 9999, 4) == 3
 
 
+def test_z_FR010_salidas_cinco_campos_y_etiqueta_privada():
+    # Después de las verificaciones de imports: no abre ventana ni carga assets.
+    import pygame
+    from vista.vista_pygame import VistaPygame
+    esc = armar(esqueleto_linea(3, [(1, 2, {"costo": 173})]))
+    try:
+        class VistaMinima:
+            partida = esc.partida
+        assert VistaPygame._salida(VistaMinima(), "N") == "abierta"
+        assert VistaPygame._salida(VistaMinima(), "N", con_llave=True) == ("abierta", None)
+        textos = []
+        class DibujoMinimo:
+            destello = None
+            fuente_chica = None
+            def __init__(self):
+                self.zonas = []
+                self.pantalla = pygame.Surface((1280, 720))
+            def _cuadro_de_puerta(self, direccion, estado):
+                return pygame.Surface((20, 20))
+            def _texto(self, fuente, texto, *args, **kwargs):
+                textos.append(texto)
+        VistaPygame._dibujar_puerta(DibujoMinimo(), "N", "abierta", None, None, 173)
+        assert "desconocida" in textos[0] and "costo 173" in textos[0]
+        assert "None" not in textos[0]
+    finally:
+        esc.cerrar()
+
+
 if __name__ == "__main__":
     pruebas = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     for nombre, funcion in pruebas:

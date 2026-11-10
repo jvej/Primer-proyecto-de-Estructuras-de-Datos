@@ -19,6 +19,7 @@ AYUDA = "ayuda"
 PUNTAJES = "puntajes"
 SALIR = "salir"
 IR_A = "ir_a"
+MAPA = "mapa"
 
 VER_REPETICIONES = "__repeticiones__"
 

@@ -1,14 +1,13 @@
 """Controlador de órdenes ordinarias y viaje compuesto IR_A.
 
-Integración pendiente: la consola debe delegar 'ir a <sala>' al parser de orden;
-Aplicacion/main deben conectar agregar_observador_comentarios al log activo.
-Hasta entonces el viaje es accesible mediante ejecutar(texto) u Orden(IR_A, id),
-y los comentarios se emiten únicamente a los observadores conectados.
+Integración pendiente: Aplicacion/main deben conectar los comentarios al log
+activo; Pygame todavía no ofrece entrada de IR_A. Los comentarios se emiten
+únicamente a los observadores conectados.
 """
 
 from modelo.juego.errores import ErrorCripta
 from controlador.planificador_rutas import PlanificadorRutas
-from controlador.orden import IR_A, interpretar_ir_a
+from controlador.orden import IR_A, MAPA, interpretar_ir_a
 from controlador.orden import (ABRIR, AYUDA, ATACAR, CARGAR, EQUIPAR, ESPERAR, GUARDAR, INV_ANTERIOR,
                                INV_INICIO, INV_ORDENAR, INV_SIGUIENTE, INVENTARIO, MOVER, Orden,
                                ORDENES_DE_PARTIDA, PERGAMINO, PUNTAJES, RECOGER, SALIR, SOLTAR, USAR,
@@ -220,6 +219,10 @@ class Controlador:
 
     def _ejecutar_de_interfaz(self, orden):
         tipo = orden.tipo
+        if tipo == MAPA:
+            if self.vista is not None:
+                self.vista.mostrar_mapa(self.partida.mapa_conocido())
+            return True
         inventario = self.partida.inventario if self.partida is not None else None
         if tipo == INVENTARIO:
             self._mostrar_inventario()
