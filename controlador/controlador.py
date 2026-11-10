@@ -1,4 +1,14 @@
+"""Controlador de órdenes ordinarias y viaje compuesto IR_A.
+
+Integración pendiente: la consola debe delegar 'ir a <sala>' al parser de orden;
+Aplicacion/main deben conectar agregar_observador_comentarios al log activo.
+Hasta entonces el viaje es accesible mediante ejecutar(texto) u Orden(IR_A, id),
+y los comentarios se emiten únicamente a los observadores conectados.
+"""
+
 from modelo.juego.errores import ErrorCripta
+from controlador.planificador_rutas import PlanificadorRutas
+from controlador.orden import IR_A, interpretar_ir_a
 from controlador.orden import (ABRIR, AYUDA, ATACAR, CARGAR, EQUIPAR, ESPERAR, GUARDAR, INV_ANTERIOR,
                                INV_INICIO, INV_ORDENAR, INV_SIGUIENTE, INVENTARIO, MOVER, Orden,
                                ORDENES_DE_PARTIDA, PERGAMINO, PUNTAJES, RECOGER, SALIR, SOLTAR, USAR,
@@ -9,6 +19,10 @@ from modelo.juego.sala import DIRECCIONES
 class Controlador:
     def __init__(self, partida=None, vista=None, persistencia=None, puntajes=None,
                  al_terminar=None, repeticiones=None):
+        self._partida = None
+        self._planificador = None
+        self._viaje_activo = False
+        self._token_viaje = 0
         self.partida = partida
         self.vista = vista
         self.persistencia = persistencia
@@ -16,7 +30,20 @@ class Controlador:
         self.al_terminar = al_terminar
         self.repeticiones = repeticiones
         self._observadores = []
+        self._observadores_comentarios = []
         self._terminado = False
+
+    @property
+    def partida(self):
+        return self._partida
+
+    @partida.setter
+    def partida(self, nueva):
+        self._partida = nueva
+        self._token_viaje += 1
+        self._planificador = None
+        if nueva is not None and hasattr(nueva, "conocimiento"):
+            self._planificador = PlanificadorRutas(nueva.mapa, nueva.conocimiento)
 
     @property
     def terminado(self):
@@ -26,12 +53,110 @@ class Controlador:
         """funcion(orden) se llama con cada orden de partida ACEPTADA, ya resuelta."""
         self._observadores.append(funcion)
 
+    def agregar_observador_comentarios(self, funcion):
+        """Conexión opcional pendiente en Aplicacion/main (C4)."""
+        self._observadores_comentarios.append(funcion)
+
     def ejecutar(self, orden):
         """Ejecuta una orden. Devuelve True si fue aceptada (las rechazadas no cambian
         nada ni consumen tiempo; el motivo queda en la bitácora de la partida)."""
+        if isinstance(orden, str):
+            try:
+                orden = interpretar_ir_a(orden)
+            except ValueError as error:
+                self._avisar(str(error))
+                return False
+        if self._viaje_activo:
+            self._token_viaje += 1
+            if orden.tipo == IR_A:
+                self._avisar("Viaje automático cancelado; repite la orden para iniciar otro.")
+                return False
+        if orden.tipo == IR_A:
+            return self._ejecutar_ir_a(orden)
         if orden.tipo in ORDENES_DE_PARTIDA:
             return self._ejecutar_de_partida(orden)
         return self._ejecutar_de_interfaz(orden)
+
+    def _ejecutar_ir_a(self, orden):
+        p = self.partida
+        if p is None or p.estado != "jugando" or not p.esperando:
+            self._avisar("No se puede iniciar el viaje: no es el turno de una partida activa.")
+            return False
+        planificador = self._planificador
+        paso = planificador.siguiente_paso(p.jugador.sala, orden.argumento)
+        if paso.estado != "paso":
+            self._avisar(paso.motivo)
+            return paso.estado == "destino"
+
+        self._token_viaje += 1
+        token = self._token_viaje
+        self._viaje_activo = True
+        try:
+            for observador in self._observadores_comentarios:
+                observador("ir a %s" % orden.argumento)
+            while token == self._token_viaje and self.partida is p:
+                # Observar es local y no avanza el reloj; el planificador solo
+                # recibe la memoria, nunca el estado físico de las puertas.
+                p._observar_puertas()
+                paso = planificador.siguiente_paso(p.jugador.sala, orden.argumento)
+                if paso.estado == "destino":
+                    self._avisar("Has llegado a tu destino.")
+                    return True
+                if paso.estado != "paso":
+                    self._avisar("Viaje automático interrumpido: ruta bloqueada por puerta cerrada o sin ruta conocida.")
+                    return True
+                aceptada, recibio_dano = self._mover_en_viaje(p, paso.direccion)
+                if token != self._token_viaje or self.partida is not p:
+                    self._avisar("Viaje automático cancelado por otra orden o cambio de partida.")
+                    return True
+                if recibio_dano:
+                    self._avisar("Viaje automático interrumpido: has recibido daño.")
+                    return True
+                if p.estado != "jugando":
+                    self._avisar("Viaje automático terminado: %s." % p.estado)
+                    return True
+                if p.enemigos_en_sala():
+                    self._avisar("Viaje automático interrumpido: presencia de enemigos vivos en la sala.")
+                    return True
+                if not aceptada:
+                    mensajes = p.bitacora.ultimos()
+                    motivo = mensajes[-1] if mensajes else "movimiento rechazado"
+                    self._avisar("Viaje automático interrumpido: " + motivo)
+                    return True
+                if p.jugador.sala.id == orden.argumento:
+                    self._avisar("Has llegado a tu destino.")
+                    return True
+            self._avisar("Viaje automático cancelado por otra orden o cambio de partida.")
+            return True
+        finally:
+            self._viaje_activo = False
+
+    def _mover_en_viaje(self, partida, direccion):
+        """Detecta daño aunque una curación posterior recupere la vida.
+
+        Adaptador temporal del punto C1: delega todos los cambios al método
+        original sin añadir grupos ni alterar inversos. Se retira incluso ante
+        excepciones. No añade observadores permanentes a Partida/historia.
+        """
+        cambiar_original = partida.cambiar
+        metodo_de_clase = getattr(cambiar_original, "__func__", None) is type(partida).cambiar
+        recibio_dano = False
+
+        def cambiar(objeto, campo, valor):
+            nonlocal recibio_dano
+            if objeto is partida.jugador and campo == "vida" and valor < objeto.vida:
+                recibio_dano = True
+            return cambiar_original(objeto, campo, valor)
+
+        partida.cambiar = cambiar
+        try:
+            aceptada = self._ejecutar_de_partida(Orden(MOVER, direccion))
+            return aceptada, recibio_dano
+        finally:
+            if metodo_de_clase:
+                del partida.cambiar
+            else:
+                partida.cambiar = cambiar_original
 
     def _ejecutar_de_partida(self, orden):
         resuelta = self._resolver(orden)
@@ -277,7 +402,7 @@ class Controlador:
         """Con vista, un aviso de la aplicación; sin vista (replay), a la bitácora."""
         if self.vista is not None:
             self.vista.mostrar_aviso(texto)
-        else:
+        elif self.partida is not None:
             self.partida.bitacora.agregar(texto)
 
     def _rechazar(self, motivo):
