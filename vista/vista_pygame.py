@@ -80,7 +80,9 @@ from vista.controles_gui import (AYUDA_LINEAS, BOTONES, SIG_ENEMIGO, SIG_SUELO, 
                                  orden_para_tecla, siguiente_posicion)
 from controlador.orden import (ABRIR, ATACAR, CARGAR, EQUIPAR, ESPERAR, MOVER, Orden, PERGAMINO,
                                RECOGER, SALIR, SOLTAR, USAR, VER_REPETICIONES, es_clave)
-from vista.vista_base import Vista
+from vista.vista_base import Vista, lineas_mapa_conocido
+from controlador.orden import interpretar_ir_a
+from modelo.juego.conocimiento import ESTADO_EXPLORADA
 
 ANCHO, ALTO = 1280, 720
 FPS = 30
@@ -682,6 +684,79 @@ class VistaPygame(Vista):
 
     def mostrar_ayuda(self):
         self._modal("Controles", list(AYUDA_LINEAS))
+
+    def mostrar_mapa(self, mapa):
+        """El controlador suministra exclusivamente Partida.mapa_conocido()."""
+        lineas = lineas_mapa_conocido(mapa)
+        inicio = 0
+        visibles = 20
+        while not self.cerrada:
+            for evento in self._eventos():
+                if evento.type == pygame.QUIT:
+                    return
+                if evento.type == pygame.KEYDOWN:
+                    if evento.key in (pygame.K_ESCAPE, pygame.K_RETURN):
+                        return
+                    if evento.key == pygame.K_DOWN:
+                        inicio += 1
+                    elif evento.key == pygame.K_UP:
+                        inicio -= 1
+                    elif evento.key == pygame.K_PAGEDOWN:
+                        inicio += visibles
+                    elif evento.key == pygame.K_PAGEUP:
+                        inicio -= visibles
+                    elif evento.key == pygame.K_HOME:
+                        inicio = 0
+                    elif evento.key == pygame.K_END:
+                        inicio = len(lineas) - visibles
+                elif evento.type == pygame.MOUSEWHEEL:
+                    inicio -= evento.y * 3
+            inicio = max(0, min(inicio, max(0, len(lineas) - visibles)))
+            self._dibujar_fondo_de_dialogo()
+            caja = self._caja_centrada(1000, 580, ALTO // 2)
+            self._texto(self.fuente_media, "Mapa conocido", DORADO, caja.centerx, caja.y + 18, centro=True)
+            for i, linea in enumerate(lineas[inicio:inicio + visibles]):
+                self._texto(self.fuente, linea, TEXTO, caja.x + 28, caja.y + 58 + i * 22, ancho_max=caja.w - 56)
+            self._texto(self.fuente_chica, "Flechas / rueda / RePag / AvPag: recorrer. Esc: volver.",
+                        TEXTO_TENUE, caja.centerx, caja.bottom - 26, centro=True)
+            self._mostrar_cuadro()
+
+    def _pedir_ir_a(self, partida):
+        """Entrada preparada; sin control asociado hasta coordinar eventos C4.
+
+        Solo devuelve Orden; no ejecuta el viaje ni enumera destinos precargados.
+        Esc/QUIT cancelan este diálogo sin emitir ninguna orden de partida.
+        """
+        texto = "ir a "
+        aviso = "Escribe ir a <sala explorada>. Enter: aceptar. Esc: cancelar."
+        while not self.cerrada:
+            for evento in self._eventos():
+                if evento.type == pygame.QUIT:
+                    return None
+                if evento.type != pygame.KEYDOWN:
+                    continue
+                if evento.key == pygame.K_ESCAPE:
+                    return None
+                if evento.key == pygame.K_RETURN:
+                    try:
+                        orden = interpretar_ir_a(texto)
+                        if partida.conocimiento.estado_por_id(orden.argumento) != ESTADO_EXPLORADA:
+                            aviso = "La sala destino no está explorada o no existe."
+                            continue
+                        return orden
+                    except ValueError as error:
+                        aviso = str(error)
+                elif evento.key == pygame.K_BACKSPACE:
+                    texto = texto[:-1]
+                elif evento.unicode and evento.unicode.isprintable() and len(texto) < 64:
+                    texto += evento.unicode
+            self._dibujar_fondo_de_dialogo()
+            caja = self._caja_centrada(1000, 180, ALTO // 2)
+            self._texto(self.fuente_media, "Viaje a una sala explorada", DORADO, caja.centerx, caja.y + 18, centro=True)
+            self._texto(self.fuente, texto + "_", TEXTO, caja.x + 28, caja.y + 65, ancho_max=caja.w - 56)
+            self._texto(self.fuente_chica, aviso, TEXTO_TENUE, caja.x + 28, caja.y + 115, ancho_max=caja.w - 56)
+            self._mostrar_cuadro()
+        return None
 
     def mostrar_fin(self, partida):
         self.partida = partida

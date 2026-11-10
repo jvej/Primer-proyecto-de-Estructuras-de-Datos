@@ -185,6 +185,108 @@ def test_z_FR010_salidas_cinco_campos_y_etiqueta_privada():
         esc.cerrar()
 
 
+def _vista_dialogo_prueba(lotes):
+    import pygame
+    from vista.vista_pygame import VistaPygame
+    vista = object.__new__(VistaPygame)
+    vista.cerrada = False
+    vista.fuente = vista.fuente_media = vista.fuente_chica = None
+    textos = []
+    cuadros = []
+    lotes = iter(lotes)
+    def eventos():
+        lote = next(lotes)
+        if any(e.type == pygame.QUIT for e in lote):
+            vista.cerrada = True
+        return lote
+    vista._eventos = eventos
+    vista._dibujar_fondo_de_dialogo = lambda: None
+    vista._caja_centrada = lambda ancho, alto, centro: pygame.Rect(0, 0, ancho, alto)
+    vista._texto = lambda fuente, texto, *args, **kwargs: textos.append(texto)
+    vista._mostrar_cuadro = lambda: cuadros.append(len(textos))
+    return vista, textos, cuadros
+
+
+def test_z_mapa_tecla_nueva_no_rompe_controles():
+    from controlador.orden import MAPA
+    from vista.controles_gui import AYUDA_LINEAS
+    assert orden_para_tecla("m", False, 0, 0) == Orden(MAPA)
+    assert orden_para_tecla("up", False, 0, 0) == Orden(MOVER, "N")
+    assert orden_para_tecla("r", False, 0, 0) == Orden(PERGAMINO)
+    assert any("M: mapa conocido" in linea for linea in AYUDA_LINEAS)
+
+
+def test_z_mapa_grafico_privacidad_y_cierre_sin_tiempo():
+    import pygame
+    esc = armar(esqueleto_linea(3))
+    try:
+        p = esc.partida
+        p.mapa.sala(2).nombre = "NOMBRE_VECINO_PRIVADO"
+        p.mapa.sala(3).nombre = "NOMBRE_REMOTO_PRIVADO"
+        antes = (p.acciones, p.reloj.tiempo_actual, list(p.conocimiento.estado_salas))
+        vista, textos, cuadros = _vista_dialogo_prueba([
+            [], [pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE)]])
+        c = Controlador(p, vista)
+        from controlador.orden import MAPA
+        assert c.ejecutar(Orden(MAPA))
+        texto = "\n".join(textos)
+        assert "desconocida" in texto and "costo 100" in texto and "abierta" in texto
+        assert "NOMBRE_VECINO_PRIVADO" not in texto and "NOMBRE_REMOTO_PRIVADO" not in texto
+        assert "sala None" not in texto and len(cuadros) == 1
+        assert (p.acciones, p.reloj.tiempo_actual, p.conocimiento.estado_salas) == antes
+    finally:
+        esc.cerrar()
+
+
+def test_z_mapa_desplazamiento_y_quit():
+    import pygame
+    mapa = [(i, "Visible %s" % i, []) for i in range(35)]
+    vista, textos, cuadros = _vista_dialogo_prueba([
+        [], [pygame.event.Event(pygame.KEYDOWN, key=pygame.K_END)],
+        [pygame.event.Event(pygame.QUIT)]])
+    vista.mostrar_mapa(mapa)
+    assert "Sala 34: Visible 34" in textos
+    assert len(cuadros) == 2 and vista.cerrada
+
+
+def test_z_entrada_ir_a_reutiliza_parser_sin_ejecutar_viaje():
+    import pygame
+    from controlador.orden import IR_A
+    esc = armar(esqueleto_linea(5))
+    try:
+        p = esc.partida
+        p._explorar_sala(p.mapa.sala(4))
+        vista, textos, cuadros = _vista_dialogo_prueba([
+            [pygame.event.Event(pygame.KEYDOWN, key=pygame.K_4, unicode="4")],
+            [pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)]])
+        assert vista._pedir_ir_a(p) == Orden(IR_A, 4)
+        assert (p.acciones, p.reloj.tiempo_actual, p.jugador.sala.id) == (0, 0, 1)
+        assert len(cuadros) == 1
+    finally:
+        esc.cerrar()
+
+
+def test_z_entrada_ir_a_no_enumera_desconocidas_y_escape_cancela():
+    import pygame
+    esc = armar(esqueleto_linea(3))
+    try:
+        p = esc.partida
+        p.mapa.sala(2).nombre = "SECRETO_NO_MOSTRAR"
+        antes = (p.acciones, p.reloj.tiempo_actual, list(p.conocimiento.estado_salas))
+        vista, textos, cuadros = _vista_dialogo_prueba([
+            [pygame.event.Event(pygame.KEYDOWN, key=pygame.K_2, unicode="2"),
+             pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)],
+            [pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE)]])
+        assert vista._pedir_ir_a(p) is None
+        assert any("no está explorada o no existe" in texto for texto in textos)
+        assert "SECRETO_NO_MOSTRAR" not in "\n".join(textos)
+        assert (p.acciones, p.reloj.tiempo_actual, p.conocimiento.estado_salas) == antes
+        vista, textos, cuadros = _vista_dialogo_prueba([[pygame.event.Event(pygame.QUIT)]])
+        assert vista._pedir_ir_a(p) is None and vista.cerrada
+    finally:
+        esc.cerrar()
+
+
 if __name__ == "__main__":
     pruebas = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     for nombre, funcion in pruebas:
