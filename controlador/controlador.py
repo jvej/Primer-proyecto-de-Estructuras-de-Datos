@@ -102,8 +102,6 @@ class Controlador:
         token = self._token_viaje
         self._viaje_activo = True
         try:
-            for observador in self._observadores_comentarios:
-                observador("ir a %s" % orden.argumento)
             while token == self._token_viaje and self.partida is p:
                 for observador in self._observadores_viaje:
                     continuar = observador(p)
@@ -118,6 +116,8 @@ class Controlador:
                         return True
                 # Observar es local y no avanza el reloj; el planificador solo
                 # recibe la memoria, nunca el estado físico de las puertas.
+                for observador in self._observadores_comentarios:
+                    observador("ir a %s" % orden.argumento)
                 p._observar_puertas()
                 paso = planificador.siguiente_paso(p.jugador.sala, orden.argumento)
                 if paso.estado == "destino":
