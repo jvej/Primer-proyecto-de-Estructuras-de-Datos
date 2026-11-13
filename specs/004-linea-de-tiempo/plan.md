@@ -2,7 +2,7 @@
 
 **Branch**: `004-linea-de-tiempo` | **Date**: 2026-11-13 | **Spec**: [spec.md](spec.md)
 
-**Responsable**: Axel. Revisión de alcance: instrumentar los puntos existentes, reutilizar comentarios de IR_A y separar los pedidos a otros integrantes. Esta revisión no modifica `spec.md`.
+**Responsable**: Axel. Revisión de alcance: instrumentar los puntos existentes, reutilizar comentarios de IR_A e incorporar la integración limitada en `controlador/aplicacion.py`, **autorizado por Jeferson**. Esta revisión solo modifica `plan.md` y `tasks.md`; no implementa código ni modifica `spec.md` o contratos. T001–T009 ya están hechas y confirmadas.
 
 ## Summary
 
@@ -34,13 +34,13 @@ Para FR-014 y replay se reutiliza `# ir a X`: su interpretación llama al mismo 
 | VII. Spec antes de código | Solo documentos; spec intacto en esta revisión; commits del integrante |
 | Puntos únicos | Captura donde ya hay mutaciones/inversos; escrituras iniciales anteriores al checkpoint 0 se absorben sin canalizarlas; reloj y pergamino conservan su implementación |
 
-No se declara que pedidos externos ya estén entregados. FR-014 depende del contrato mínimo de Kim; simultaneidad depende de que el motor entregue su frontera correctamente. Son condiciones de integración a probar, no autorizaciones para editar sus archivos. Sin excepciones a las estructuras prohibidas ni nuevas dependencias.
+Kim entregó las marcas IR_A en `69dbc30`, pendiente de verificar con T007/T008. FR-014 aún depende de su integración de carga v4; simultaneidad depende de la frontera del motor de Mariano. Son condiciones de integración a probar, no autorizaciones para editar sus archivos. Sin excepciones a las estructuras prohibidas ni nuevas dependencias.
 
 ## Project Structure
 
 ### Documentación
 
-`plan.md`, `research.md`, `data-model.md`, `quickstart.md` y `contracts/{c1-captura,comandos-interfaz,persistencia}.md`. No se generan tareas ni se modifica spec/checklist.
+`plan.md`, `research.md`, `data-model.md`, `quickstart.md` y `contracts/{c1-captura,comandos-interfaz,persistencia}.md`. Esta revisión actualiza plan y tareas; spec, checklist y contratos permanecen intactos.
 
 ### Lista final de archivos que tocará Axel al implementar
 
@@ -53,6 +53,7 @@ No se declara que pedidos externos ya estén entregados. FR-014 depende del cont
 | `controlador/orden.py` | HISTORIA fuera de `ORDENES_DE_PARTIDA`; parser de selector |
 | `controlador/controlador.py` | Solo HISTORIA: despacho sin cancelar IR_A, presentación y acceso desde el flujo final; no editar `_ejecutar_ir_a` por cuenta de Axel |
 | `controlador/reproductor.py` | Leer/intercalar comentarios existentes, observar sin viajar, replay completo antes de consultar t y propagar K; lector compartible con carga |
+| `controlador/aplicacion.py` | **autorizado por Jeferson**: en `_armar`, llamar `inicializar_historia` después de `partida.iniciar()` y antes del bucle de órdenes previas, propagar K; conservar en `self.ordenes` y `registrar_comentario` las líneas intercaladas (órdenes y `# ir a X`), ofrecer `lineas_para_reconstruir()` y conectar el aplicador; inyectar el parser de bitácora en sus llamadores propios y facilitar acceso de solo lectura al reporte existente. Solo estas adaptaciones, sujetas a las restricciones obligatorias de abajo |
 | `controlador/resumen_historia.py` (nuevo) | Formateador común sin importar vistas |
 | `modelo/datos/bitacora_partida.py` | Solo retirar dependencia de `controlador.orden`: parser/fábrica inyectado como adaptación mínima; conservar formato, encabezado, escritura y omisión de comentarios de su API ordinaria |
 | `vista/vista_consola.py` | Parser/ayuda, resumen histórico y final; reporte canónico, marca cazador y conservar costos |
@@ -66,14 +67,21 @@ No se declara que pedidos externos ya estén entregados. FR-014 depende del cont
 | `tests/test_historia_persistencia.py` (nuevo) | FR-007,008,014 y contrato de comentarios/carga |
 | `tests/test_bench_linea_tiempo.py` (nuevo) | Integridad de las mediciones SC-001,005 |
 
-No se crea `modelo/datos/registro_reconstruccion.py`. Los benches `historial` e `inventario` se repiten sin modificarlos. Los demás archivos de motor/datos/aplicación solo aparecen en pedidos a sus dueños.
+No se crea `modelo/datos/registro_reconstruccion.py`. Los benches `historial` e `inventario` se repiten sin modificarlos. Los demás archivos de motor/datos solo aparecen en pedidos a sus dueños.
+
+### Restricciones obligatorias de Jeferson
+
+1. En `_armar` se conserva exactamente la condición `partida_nueva and ordenes_previas is None and exigir_versiones is None` para verificar resolubilidad. Solo se verifica una partida nueva; se omite si se proporcionan `ordenes_previas` (incluso una secuencia vacía), si `partida_nueva=False` o si se exige versión. Tampoco cambia al cargar un guardado v4.
+2. Al reconstruir, los comentarios no se pasan a `Controlador.ejecutar`, no cuentan como órdenes ni como órdenes rechazadas. Se conservan intercalados para reescribirlos en el log; las marcas `# ir a X` se aplican por el adaptador de observación de T044, sin viajar ni consumir tiempo.
+3. No se tocan `verificar()`, `ErrorNoResoluble`, `reporte_resolubilidad` ni `--verificar`/`--forzar` de `main.py`. El alcance sobre el reporte solo permite leer/proporcionar el resultado ya calculado para presentarlo; no modificar su cálculo, almacenamiento ni contrato.
+4. Antes de publicar son obligatorias, además de las pruebas de la capacidad, las regresiones `venv\Scripts\python.exe -m tests.test_resolubilidad`, `venv\Scripts\python.exe -m tests.test_resolubilidad_integracion` y `venv\Scripts\python.exe -m tests.test_replay_puntajes` (T065).
 
 ### Líneas acordadas de main.py
 
 1. `BENCHES`: añadir `("linea_tiempo", "bench_linea_tiempo.py")`, conservando los demás.
 2. `leer_argumentos`: `--checkpoint-cada K` entero positivo y `--hasta T` entero no negativo válido con replay. Sin nuevos metadatos en log/guardado; K efectivo procede de CLI/configuración del proceso o default medido.
 3. `correr_replay`: pasar `hasta` y K por nombre a `reproducir`, conservando parámetros/códigos actuales.
-4. `correr_interactivo`: propagar K mediante el punto de configuración acordado con Jeferson y proporcionar acceso a `app.reporte_resolubilidad`. No añadir observador de registros externos ni nuevas escrituras al log.
+4. `correr_interactivo`: propagar K al ensamblado propio de aplicación (**autorizado por Jeferson**) y proporcionar acceso de solo lectura a `app.reporte_resolubilidad`. No añadir observador de registros externos ni nuevas escrituras al log.
 5. Mantener despacho de bench/replay/verificar antes de crear vista; sin imports globales de vistas/Pygame.
 
 ## Auditoría reducida de mutaciones
@@ -108,18 +116,20 @@ Son contratos mínimos propuestos, no trabajo que Axel incorpora a su lista de a
 
 | Dueño y archivo/función | Cambio mínimo o confirmación | Motivo y firma necesaria |
 |---|---|---|
-| **Kim**, tramo IR_A de `controlador/controlador.py:Controlador._ejecutar_ir_a` | Emitir el mismo comentario `ir a X` justo antes de cada `_observar_puertas()` exterior efectiva, incluidos intentos que terminan sin paso; después del callback que puede cancelar. Conservar orden relativo frente a movimientos/pergaminos | El comentario actual se escribe una sola vez al iniciar y puede quedar antes de una cancelación. Una sola marca inicial no identifica observaciones de bloqueo posteriores. Sin nueva sintaxis ni nuevas órdenes |
+| **Kim**, tramo IR_A de `controlador/controlador.py:Controlador._ejecutar_ir_a` | **Entregado en `69dbc30`, pendiente de verificar con T007/T008**: comentario `# ir a X` antes de cada observación exterior efectiva, después del callback de cancelación, incluidos intentos sin paso | T043 conserva pendiente la verificación de posición, frecuencia y ausencia de observación fantasma. Sin nueva sintaxis ni nuevas órdenes |
 | **Kim**, contrato IR_A/modelo existente | Confirmar que reproducir la marca llama una vez a `Partida._observar_puertas()` con grupo cerrado, sin planificar, viajar ni consumir tiempo | Adaptador en reproductor: `reproducir_observacion_ir_a(partida, destino: int) -> None`; usa método existente, no requiere editar Partida fuera de puntos únicos |
 | **Kim**, `persistencia_partida.py:foto_de`, `PersistenciaPartida.cargar` y guardado v4 | Conservar comentarios `# ir a X` intercalados con órdenes como cadenas en el campo de líneas ya existente; al cargar, usar el lector/aplicador de reproductor en vez de interpretar cada línea como Orden | `iterar_lineas_reconstruccion(lineas)`, `aplicar_linea_reconstruccion(controlador, linea) -> bool`. Ningún bloque/campo/versión binaria nuevo; no saltarse la validación antes de reemplazar la partida |
-| **Kim**, `persistencia_partida.py` (dependencia MVC existente) | Si toca el import de `controlador.orden`, recibir parser/aplicador como callback, no importar reproductor desde modelo | Retirar la dependencia corresponde a la dueña; Axel solo ofrece funciones en controlador. No se impone un refactor del guardado |
-| **Jeferson**, `aplicacion.py:Aplicacion._armar` | Después de `partida.iniciar()` y antes del bucle de órdenes previas, configurar la historia y tomar checkpoint 0. Propagar K de proceso/configuración | `inicializar_historia(partida, checkpoint_cada: int) -> None` en archivo propio de Axel; sin editar `__init__`/`iniciar` de Partida |
-| **Jeferson**, `aplicacion.py:registrar_comentario`, `_armar` y exposición de líneas | Conservar en memoria la intercalación de comentarios IR_A que hoy solo van al log; facilitar las mismas líneas a foto/carga y continuar la bitácora existente | `lineas_para_reconstruir() -> iterable[str]` y aplicador inyectado. Reutilizar líneas actuales, sin inventar un registro externo ni formato |
-| **Jeferson**, ensamblado/main y `app.reporte_resolubilidad` | Conectar K, los callbacks mínimos y un proveedor del reporte ya calculado; mantener ambos caminos de replay/carga sin vista | `obtener_reporte_resolubilidad() -> reporte`; no otra verificación desde las vistas |
+| **Kim**, `persistencia_partida.py` (dependencia MVC existente) | Retirar el import de `controlador.orden` y recibir parser/aplicador como callback, no importar reproductor desde modelo | Retirar la dependencia corresponde a la dueña; Axel solo ofrece funciones en controlador. Entrega obligatoria de T046, sin cambiar el formato del guardado |
 | **Mariano**, `agenda_eventos.py:AgendaEventos.siguiente` y frontera del motor | Confirmar mediante caso de eventos simultáneos que se entrega el estado exigido antes de cada decisión; si no, indicar el ajuste mínimo a cargo de Mariano | Axel no edita agenda ni `_avanzar`, ni drena eventos desde historia. FR-002 no se declara probado mientras falle este caso |
 | **Mariano/Kim**, solo si una prueba demuestra mutación observable posterior a inicio que elude C1 | Indicar punto único ya existente o adaptación mínima en el archivo del dueño | Primero resolver adopción en `resumen_historico.py`; no solicitar cambios preventivos en actor, sala, objetos, mapa, conocimiento, inventario o efectos |
 
 No se piden cambios en `actor.py`, `sala.py`, `objetos.py` por inicialización, ni en `efectos.py` por campos ya capturados. No se piden cambios de estructuras a `inventario.py`, `mapa.py` o `conocimiento.py` cuando su lectura/adopción desde archivos propios basta. La observación normal de puertas no se mueve al controlador de Axel.
 
+## Dependencias y paralelismo del alcance actualizado
+
+T011/T024/T045/T048 son implementación propia de Axel, **autorizado por Jeferson**, y dejan de ser pedidos externos. Orden por contratos y archivo compartido: T010 → T011; T011 + T023 → T024; T024 + T044 → T045; T045 → T048; T047 + T048 → T049. T047 requiere T024 para inicialización y K en ambas fuentes de replay. No solapar cambios en aplicación ni en main (T048 → T049 → T061).
+
+Las ramas de núcleo, vistas y bench avanzan cuando sus dependencias técnicas estén listas, sin esperar el cierre global T050. T031 usa el inicializador directamente y T051 usa el contrato de presentación; no requieren esperar el ensamblado. Las dependencias externas restantes son T025 (Mariano, simultáneos), T043 (Kim, entregado en 69dbc30 y pendiente de verificar con T007/T008) y T046 (Kim, carga v4 e import MVC, sin cambio de responsabilidad/alcance). T025 y T046 conservan sus tareas; T046 requiere T044/T045 para cerrar. Estas entregas condicionan sus casos reales de integración en T050/T065, no el inicio de código independiente.
 ## Complejidad y memoria
 
 A acciones vigentes; D datos de cambios; S proyección; B=1+floor(A/K); E_K deltas de hasta K acciones; U externos; L costo de secuencias/inventario; R salida.
@@ -146,10 +156,10 @@ Pruebas nuevas cubren todos los FR/SC, comentarios en inicio/bloqueo posterior/c
 
 ## Riesgos y cierre de integración
 
-- **Comentario inicial insuficiente:** pedido explícito a Kim de frecuencia/posición y conservación; no prometer FR-014 universal antes de entregarlo.
+- **Marcas IR_A:** entregadas por Kim en `69dbc30`, pendientes de verificar con T007/T008; no declarar FR-014 completo antes de comprobar también conservación/carga v4.
 - **Inverso y persistente sobre el mismo destino:** comprobar igualdad de proyección y juego; no reescribir el comportamiento del pergamino desde esta feature.
 - **Eventos simultáneos pendientes:** prueba de frontera y pedido a Mariano; no cambiar el reloj ni ejecutar agenda desde consultas.
-- **Carga pierde comentarios:** conservar secuencia de líneas a través de aplicación y v4 sin nuevo formato; depender de Kim/Jeferson.
+- **Carga pierde comentarios:** Axel conserva la secuencia en aplicación (T045, autorizado por Jeferson); la entrega externa de Kim sigue siendo v4 y el retiro del import MVC (T046).
 - **Token/alta o copia filtra estado actual:** normalizar al primer C1, copiar dinámicos por valor y filtrar conocimiento histórico.
 - **Latencia/memoria mayores de lo esperado:** medir tamaño real de salida, capacidad reservada y liberación de checkpoints; default pendiente de datos.
 
