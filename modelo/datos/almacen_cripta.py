@@ -17,6 +17,16 @@ class AlmacenCripta:
     def leer_generales(self):
         return self.almacen.leer("general")
 
+    def tiene_llaves(self):
+        return self.almacen.contiene("llaves")
+
+    def guardar_llaves(self, datos):
+        """Persiste el payload completo bajo la versión del encabezado de la cripta."""
+        self.almacen.guardar("llaves", datos)
+
+    def leer_llaves(self):
+        return self.almacen.leer("llaves")
+
     def tiene_pagina(self, numero):
         return self.almacen.contiene("pagina_" + str(numero))
 

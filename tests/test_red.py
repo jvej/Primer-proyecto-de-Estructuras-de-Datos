@@ -115,6 +115,17 @@ class TestBitacora(unittest.TestCase):
 
 
 class TestCliente(unittest.TestCase):
+    def test_FR003_bench_llaves_cuenta_consulta_copia_y_reintento_sin_red(self):
+        from unittest.mock import patch
+        from bench.bench_red import contar_solicitudes_llaves
+
+        with patch("requests.sessions.Session.request", side_effect=AssertionError("Red real")):
+            for copia, codigos, esperado in ((False, (200,), 1), (True, (), 0),
+                                             (False, (429, 200), 2)):
+                with self.subTest(copia_local=copia, respuestas=codigos):
+                    gastadas, _tiempo_ms = contar_solicitudes_llaves(copia, codigos)
+                    self.assertEqual(gastadas, esperado)
+
     def test_cabecera_429_y_conteo(self):
         sesion = SesionFalsa([RespuestaFalsa(429, {"error": "x", "reintentar_en": 3}),
                               RespuestaFalsa(200, {"ok": 1})])
