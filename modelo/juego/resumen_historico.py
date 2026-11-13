@@ -264,8 +264,10 @@ def aplicar_delta(proyeccion, delta):
         secuencia.insert(delta.posicion_nueva, delta.elemento)
     elif delta.operacion in ("QUITAR", "MOVER"):
         posicion = delta.posicion_anterior
-        if secuencia[posicion] != delta.elemento:
-            raise ValueError("El token no coincide con su posición histórica")
+        if (type(posicion) is not int or not 0 <= posicion < len(secuencia)
+                or secuencia[posicion] != delta.elemento):
+            raise ValueError("El token no coincide con su posición histórica: "
+                             f"{destino}, token={delta.elemento}, posición={posicion}")
         elemento = secuencia.pop(posicion)
         if delta.operacion == "MOVER":
             secuencia.insert(delta.posicion_nueva, elemento)
@@ -375,6 +377,9 @@ class NormalizadorHistorico:
 
     def _adoptar_actor(self, actor, grupo):
         if not self._adoptado(actor):
+            for objeto in (getattr(actor, "arma", None), getattr(actor, "armadura", None)):
+                if objeto is not None:
+                    self._adoptar_objeto(objeto, grupo)
             self._marcar(actor)
             self._emitir("ALTA", "actor", token=self._token(actor),
                          nuevo=self._datos_actor(actor), grupo=grupo)
@@ -391,6 +396,22 @@ class NormalizadorHistorico:
                 sala.ultimo_instante_jugador, sala.incorporada,
                 [self._token(a) for a in sala.actores])
             self._emitir("ALTA", "sala", token=sala.indice, nuevo=dato, grupo=grupo)
+
+    def _adoptar_habitantes(self, sala, grupo):
+        """Adopta altas locales anteriores a su primer cambio C1.
+
+        La incorporación puede agregar actores antes de que la historia los
+        vea. Solo se visita esta sala al encontrar una instancia nueva; un
+        cambio de orden entre instancias ya conocidas sigue siendo un error.
+        """
+        secuencia = self.linea.proyeccion.salas[sala.indice].actores
+        for posicion, actor in enumerate(sala.actores):
+            token = self._adoptar_actor(actor, grupo)
+            if token not in secuencia:
+                self._emitir("INSERTAR", "actores_sala", token=sala.indice,
+                             elemento=token, posicion_nueva=posicion, grupo=grupo)
+            elif secuencia[posicion] != token:
+                raise ValueError("El orden de actores conocidos difiere de la proyección")
 
     def _valor_actor(self, campo, valor, grupo):
         if campo == "sala":
@@ -422,6 +443,35 @@ class NormalizadorHistorico:
                         reversible, elemento=None, posicion_anterior=None,
                         posicion_nueva=None, token=None, usos=None,
                         instante=None, grupo=None):
+        """Frontera C1: diagnostica los fallos de captura sin propagarlos al juego."""
+        if not self.linea.disponible:
+            return
+        try:
+            self._capturar_cambio(
+                operacion, destino, campo, anterior, nuevo, reversible,
+                elemento, posicion_anterior, posicion_nueva, token, usos,
+                instante, grupo)
+        except Exception as error:
+            self._invalidar(error)
+
+    def _invalidar(self, error):
+        self.linea.marcar_no_disponible(error)
+        self._partida.registro.conectar_captura(None)
+
+    def deshacer_grupo(self, grupo=None, instante=None):
+        """Los inversos del motor no son cambios C1 ni deltas nuevos.
+
+        Hasta implementar el recorte/reubicación de T029–T031, la proyección
+        no representa el estado restaurado. Se invalida antes de aceptar otro
+        cambio; jamás se usa esa foto obsoleta para interrumpir la partida.
+        """
+        self._invalidar(f"Historia no disponible tras deshacer el grupo {grupo}: "
+                        "recorte y reubicación históricos pendientes (T029–T031)")
+
+    def _capturar_cambio(self, operacion, destino, campo, anterior, nuevo,
+                         reversible, elemento=None, posicion_anterior=None,
+                         posicion_nueva=None, token=None, usos=None,
+                         instante=None, grupo=None):
         from modelo.juego.actor import Actor
         from modelo.juego.objetos import Objeto
         from modelo.juego.sala import Sala
@@ -441,6 +491,11 @@ class NormalizadorHistorico:
             tipo = "memoria_puertas"
         elif isinstance(destino, Actor):
             if campo in self.CAMPOS_ACTOR:
+                conocido = self._adoptado(destino)
+                if destino.sala is not None:
+                    self._adoptar_sala(destino.sala, grupo)
+                    if not conocido:
+                        self._adoptar_habitantes(destino.sala, grupo)
                 identidad = self._adoptar_actor(destino, grupo)
                 tipo = "actor"
                 anterior = self._valor_actor(campo, anterior, grupo)
@@ -463,6 +518,8 @@ class NormalizadorHistorico:
             if sala is None:
                 raise ValueError("C1: no se pudo identificar la sala de la lista de actores")
             self._adoptar_sala(sala, grupo)
+            if operacion == "QUITAR" and not self._adoptado(elemento):
+                self._adoptar_habitantes(sala, grupo)
             tipo, identidad = "actores_sala", sala.indice
             token = self._adoptar_actor(elemento, grupo)
         # Agenda, trampas, suelo y puertas físicas no forman el resumen.
@@ -498,29 +555,51 @@ def inicializar_historia(partida, checkpoint_cada):
 
     K pertenece solo a esta sesión. El lector y el adaptador pueden conocer el
     motor; ninguna referencia suya se almacena dentro de una foto o un delta.
+    Repetirla antes de la primera acción reemplaza el checkpoint cero. Una
+    incompatibilidad del motor o un fallo de proyección quedan diagnosticados
+    en linea_tiempo.disponible/motivo_no_disponible y no salen hacia el juego.
     Las fronteras periódicas, consultas y retroceso se incorporan en T026–T031.
     """
-    from modelo.juego.linea_tiempo import LineaTiempo
-
-    if getattr(partida, "linea_tiempo", None) is not None:
-        raise ValueError("La partida ya tiene una historia inicializada")
-    if partida.registro.captura_activa():
-        raise ValueError("Ya existe un consumidor C1 conectado a la partida")
-    if (partida.jugador.sala is None or partida.jugador.evento_pendiente is None
-            or partida.registro.grupo_abierto() is not None
-            or partida.acciones != 0 or partida.reloj.tiempo_actual != 0):
-        raise ValueError("Inicializar historia después de iniciar() y antes de la primera acción")
+    from modelo.juego.linea_tiempo import K_DEFECTO, LineaTiempo
+    from modelo.juego.registro import Registro
 
     def leer_reloj():
-        return partida.reloj.tiempo_actual
+        try:
+            instante = partida.reloj.tiempo_actual
+            if type(instante) is not int or instante < 0:
+                raise ValueError("El reloj histórico requiere un entero no negativo")
+            return instante
+        except Exception as error:
+            linea.marcar_no_disponible(error)
+            return 0
 
-    linea = LineaTiempo(checkpoint_cada, leer_reloj)
-    normalizador = NormalizadorHistorico(partida, linea)
-    # token_de de C1 solo asigna identidades cuando hay consumidor conectado.
-    partida.registro.conectar_captura(normalizador, leer_reloj)
+    linea = LineaTiempo(K_DEFECTO, leer_reloj)
+    registro = getattr(partida, "registro", None)
+    conectado = False
     try:
+        linea = LineaTiempo(checkpoint_cada, leer_reloj)
+        if not isinstance(registro, Registro):
+            raise TypeError("Motor sin Registro compatible con la captura histórica")
+        anterior = getattr(partida, "linea_tiempo", None)
+        if (isinstance(anterior, LineaTiempo) and anterior.disponible
+                and anterior.checkpoint_cada == checkpoint_cada
+                and partida.acciones != 0):
+            return  # Una llamada repetida no descarta una historia en curso.
+        if (partida.jugador.sala is None or partida.jugador.evento_pendiente is None
+                or registro.grupo_abierto() is not None
+                or partida.acciones != 0 or partida.reloj.tiempo_actual != 0):
+            raise ValueError("El checkpoint cero requiere iniciar() y ninguna acción previa")
+        if (registro.captura_activa()
+                and not isinstance(registro._consumidor, NormalizadorHistorico)):
+            raise ValueError("Otro consumidor C1 ya está conectado al registro")
+        normalizador = NormalizadorHistorico(partida, linea)
+        # token_de de C1 solo asigna identidades con consumidor conectado.
+        registro.conectar_captura(normalizador, leer_reloj)
+        conectado = True
         linea.iniciar(normalizador.crear_proyeccion())
-    except Exception:
-        partida.registro.conectar_captura(None)
-        raise
+    except Exception as error:
+        linea.marcar_no_disponible(error)
+        if (conectado or (isinstance(registro, Registro)
+                          and isinstance(registro._consumidor, NormalizadorHistorico))):
+            registro.conectar_captura(None)
     partida.linea_tiempo = linea

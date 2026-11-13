@@ -10,6 +10,10 @@ K_DEFECTO = 50
 OPERACIONES = ("ASIGNAR", "INSERTAR", "QUITAR", "MOVER", "ALTA")
 
 
+class ErrorHistoriaNoDisponible(RuntimeError):
+    """Se informa solo al consultar; un fallo histórico no detiene el motor."""
+
+
 class ArregloContiguo:
     """Directorio cuya reducción lógica solo libera elementos del sufijo."""
 
@@ -123,6 +127,29 @@ class LineaTiempo:
         self.metricas = MetricasHistoria()
         self._secuencia = 0
         self.proyeccion = None
+        self.disponible = False
+        self.motivo_no_disponible = "La historia todavía no se ha inicializado"
+
+    def marcar_no_disponible(self, error):
+        """Conserva el diagnóstico por valor, sin retener excepciones ni el motor."""
+        if isinstance(error, Exception):
+            motivo = f"{type(error).__name__}: {error}"
+            traza = error.__traceback__
+            if traza is not None:
+                while traza.tb_next is not None:
+                    traza = traza.tb_next
+                codigo = traza.tb_frame.f_code
+                motivo += f" ({codigo.co_filename}:{traza.tb_lineno}, {codigo.co_name})"
+        else:
+            motivo = str(error)
+        self.disponible = False
+        self.motivo_no_disponible = motivo
+        # Una proyección parcial no puede confundirse con una foto consultable.
+        self.proyeccion = None
+
+    def exigir_disponible(self):
+        if not self.disponible:
+            raise ErrorHistoriaNoDisponible(self.motivo_no_disponible)
 
     @property
     def cursor(self):
@@ -130,8 +157,6 @@ class LineaTiempo:
 
     def iniciar(self, proyeccion):
         """Recibe la proyección propia del inicio y conserva una copia en b=0."""
-        if self.proyeccion is not None or len(self.checkpoints) or self.cursor:
-            raise ValueError("La historia ya fue iniciada o recibió cambios previos")
         if not isinstance(proyeccion, ProyeccionHistorica):
             raise TypeError("El inicio requiere una ProyeccionHistorica")
         if (proyeccion.reloj != 0 or proyeccion.acciones != 0
@@ -146,10 +171,19 @@ class LineaTiempo:
                 or sala_inicial.ultimo_instante_jugador is None):
             raise ValueError("La proyección debe tomarse después de Partida.iniciar()")
         checkpoint = PuntoControl(0, 0, 0, proyeccion.copiar())
+        # Repetir la inicialización en la frontera cero reemplaza su foto.
+        self.deltas = ArregloContiguo()
+        self.grupos = ArregloContiguo()
+        self.fronteras = ArregloContiguo()
+        self.checkpoints = ArregloContiguo()
+        self.metricas = MetricasHistoria()
+        self._secuencia = 0
         self.proyeccion = proyeccion
         self.fronteras.agregar(FronteraHistorica(0, 0, 0))
         self.checkpoints.agregar(checkpoint)
         self.metricas.copias_completas += 1
+        self.disponible = True
+        self.motivo_no_disponible = None
 
     def anotar(self, delta):
         """Recibe exclusivamente datos ya normalizados, nunca objetos C1 vivos."""
