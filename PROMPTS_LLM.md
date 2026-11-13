@@ -842,6 +842,93 @@ Utilicé Claude como herramienta de apoyo para comprender los requisitos, obtene
 > los resultados reales de las pruebas, las tareas completadas
 > y los acuerdos pendientes con Kim y Axel.
 
+
+#### 26. Integración del cazador con contrato C3 disponible (Bloque 3, T015-T020) — 12/11/2026
+
+- **Integrante**: Mariano
+- **Fecha**: 12/11/2026
+- **Herramienta**: Google Antigravity (IDE v2.0)
+- **Modelo**: Gemini 3.8 Flash / Claude Opus 4.6
+- **Uso de la respuesta**: Corregir pruebas de validación estricta de costo con try/except/else, agregar prueba directa de movimiento y agenda para rastreador; actualizar plan y tareas reflejando la disponibilidad de C3 (`dijkstra_acotado` y `MonticuloMin`); e implementar test-first las tareas T015 a T020 incorporando `rango` en `Enemigo` y `mapa.py`, creando `modelo/juego/cazador.py` con cálculo compartido acotado, desempate por menor ID e integración en `comportamiento.py` y `partida.py`.
+
+> Continuemos la capacidad 001 de Mariano sobre la rama nano.
+> 
+> Leé AGENTS.md, la constitución y los documentos de 001.
+> Inspeccioná el estado actual antes de editar y conservá
+> los cambios locales existentes.
+> 
+> C3 ya está disponible:
+> - modelo/estructuras/monticulo_min.py
+> - modelo/estructuras/dijkstra.py
+> - tests/test_niebla_ir_a.py
+> 
+> La función existente es:
+> dijkstra_acotado(origen, mapa, filtro_salida,
+>                 cota_rango=None, token_busqueda=1,
+>                 arreglo_dist=None, arreglo_marca=None)
+> 
+> Devuelve los arreglos de distancia y marca. Confirmá esta
+> interfaz en el código y reutilizala. Cada consumidor administra
+> sus propios arreglos y tokens.
+> 
+> Autorizo actualizar plan.md y tasks.md de 001 para reflejar
+> la disponibilidad de C3 y el diseño real de integración.
+> Conservá los identificadores. Si un ajuste de planificación
+> requiere commit previo, prepará el cambio y el comando para
+> que yo lo confirme antes de implementar.
+> 
+> Primero corregí las pruebas pendientes:
+> 1. test_FR001_validacion_estricta_costo captura su propio
+>    AssertionError. Usá try/except/else para que falle cuando
+>    el constructor acepte un valor inválido.
+> 2. Agregá una prueba directa del movimiento del rastreador
+>    y del instante de su siguiente turno con costo variable.
+> 
+> Después completá T015–T020:
+> 
+> - Escribí primero las pruebas de aceptación del cazador.
+> - Incorporá rango al final de la firma de Enemigo para
+>   conservar compatibilidad con llamadas posicionales.
+> - Cargá rango desde la ficha en Mapa.incorporar.
+> - Verificá su conservación por los caminos reales de carga
+>   y guardado. Reutilizá la reconstrucción existente cuando
+>   corresponda.
+> - Implementá cazador.py usando C3, arreglos por Sala.indice
+>   y tokens nuevos. Evitá reiniciar arreglos de todo el mapa
+>   en cada búsqueda.
+> - Calculá distancias compartidas desde el jugador hasta
+>   el rango máximo requerido por cazadores activos y vivos.
+> - Consultá únicamente distancias con la marca vigente.
+> - Integrá el cazador en resolver_turno.
+> 
+> Reglas:
+> Ataca si comparte sala con el jugador. Espera con costo
+> base 100 si falta ruta o d > rango. Si d <= rango, avanza
+> un paso por una ruta mínima. Entre primeras vecinas
+> igualmente óptimas, elige menor ID. Devuelve el costo
+> de la salida para programar el próximo turno.
+> 
+> Usá las puertas reales y el esqueleto completo. Comprobá
+> independencia de la niebla y del contenido no descargado.
+> Mantené separados los datos de búsqueda del cazador y
+> los del viaje «ir a».
+> 
+> Durante este bloque asegurá corrección mediante recálculo
+> cuando sea necesario. La reutilización selectiva se
+> completará en el bloque siguiente.
+> 
+> Ejecutá con venv\Scripts\python.exe:
+> -m tests.test_terreno_cazador
+> -m tests.test_niebla_ir_a
+> -m tests.test_motor_base
+> -m tests.test_partida
+> -m tests.test_planificador_rutas
+> 
+> Ejecutá además las regresiones afectadas de persistencia.
+> Registrá este prompt completo en PROMPTS_LLM.md.
+> Entregame resultados reales, archivos completos modificados,
+> tareas verificadas y comandos de commit. Yo hago los commits.
+
 ---
 
 ## 4. Inventario, retroceso, replay, controlador y vista — Axel
