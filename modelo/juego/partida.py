@@ -222,7 +222,8 @@ class Partida:
     def _accion(self, costo, efecto) -> None:
         ahora = self.reloj.tiempo_actual
         grupo = self.registro.abrir_grupo()
-        self.registro.notificar("abrir_accion", grupo=grupo, numero=self.acciones + 1)
+        self.registro.notificar("abrir_accion", grupo=grupo,
+                                numero=self.acciones + 1, reloj=ahora)
         self._observar_puertas()
         self.registro.inverso(lambda: setattr(self.reloj, "tiempo_actual", ahora))
         self.esperando = False
@@ -235,7 +236,8 @@ class Partida:
         self._avanzar()
         self._observar_puertas()
         self.registro.cerrar_grupo()
-        self.registro.notificar("cerrar_accion", grupo=grupo, numero=self.acciones)
+        self.registro.notificar("cerrar_accion", grupo=grupo,
+                                numero=self.acciones, reloj=self.reloj.tiempo_actual)
 
     def _marcar_rastro(self, sala) -> None:
         self.cambiar(sala, "ultimo_instante_jugador", self.reloj.tiempo_actual)
@@ -468,7 +470,8 @@ class Partida:
         self._notificar_invalidacion_rutas()
         self.esperando = True
         self.bitacora.agregar("Usas un pergamino de retroceso: el tiempo vuelve atrás.")
-        self.registro.notificar("retroceder", grupo=grupo, numero=self.acciones)
+        self.registro.notificar("retroceder", grupo=grupo,
+                                numero=self.acciones, reloj=self.reloj.tiempo_actual)
         return True
 
 

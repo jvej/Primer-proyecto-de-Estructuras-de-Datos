@@ -224,6 +224,8 @@ def copiar_valor(valor):
 
 def aplicar_delta(proyeccion, delta):
     """Aplica datos a una proyección propia; no ejecuta operaciones del juego."""
+    if not delta.efectivo:
+        return
     destino = delta.destino
     if delta.operacion == "ALTA":
         dato = copiar_valor(delta.nuevo)
@@ -273,6 +275,100 @@ def aplicar_delta(proyeccion, delta):
             secuencia.insert(delta.posicion_nueva, elemento)
     else:
         raise ValueError(f"Operación histórica desconocida: {delta.operacion}")
+
+
+def _secuencia_delta(proyeccion, delta):
+    if delta.destino == "inventario":
+        return proyeccion.inventario
+    if delta.destino == "actores_sala":
+        return proyeccion.salas[delta.token].actores
+    if delta.destino in ("estado_salas", "memoria_puertas"):
+        return getattr(proyeccion, delta.destino)
+    return None
+
+
+def _entidad_delta(proyeccion, delta):
+    if delta.destino == "partida":
+        return proyeccion
+    if delta.destino == "actor":
+        return proyeccion.actor(delta.token)
+    if delta.destino == "objeto":
+        return proyeccion.objeto(delta.token)
+    if delta.destino == "sala":
+        return proyeccion.salas[delta.token]
+    raise ValueError(f"Entidad histórica desconocida: {delta.destino}")
+
+
+def deshacer_delta(proyeccion, delta):
+    """Inverso analítico sobre datos propios, nunca una lambda del motor."""
+    from dataclasses import replace
+
+    if not delta.efectivo:
+        return
+    if delta.operacion == "ALTA":
+        if delta.destino == "sala":
+            proyeccion.salas[delta.token] = copiar_valor(delta.anterior)
+        else:
+            elementos = (proyeccion.actores if delta.destino == "actor"
+                         else proyeccion.objetos)
+            if not elementos or elementos[-1].token != delta.token:
+                raise ValueError("Alta histórica fuera de orden al recortar")
+            elementos.pop()
+        return
+    if delta.operacion == "ASIGNAR":
+        inverso = replace(delta, anterior=delta.nuevo, nuevo=delta.anterior)
+    elif delta.operacion == "INSERTAR":
+        inverso = replace(delta, operacion="QUITAR",
+                          posicion_anterior=delta.posicion_nueva)
+    elif delta.operacion == "QUITAR":
+        inverso = replace(delta, operacion="INSERTAR",
+                          posicion_nueva=delta.posicion_anterior)
+    else:
+        inverso = replace(delta, posicion_anterior=delta.posicion_nueva,
+                          posicion_nueva=delta.posicion_anterior)
+    aplicar_delta(proyeccion, inverso)
+
+
+def aplicar_persistente(proyeccion, delta):
+    """Reubica una operación por identidad y ajusta su anterior analítico."""
+    delta.efectivo = True
+    secuencia = _secuencia_delta(proyeccion, delta)
+    if delta.operacion == "ASIGNAR":
+        delta.anterior = copiar_valor(
+            secuencia[delta.campo] if secuencia is not None
+            else getattr(_entidad_delta(proyeccion, delta), delta.campo))
+    elif delta.operacion == "ALTA":
+        if delta.destino == "sala":
+            delta.anterior = proyeccion.salas[delta.token].copiar()
+    else:
+        posicion = None
+        for i, token in enumerate(secuencia):
+            if token == delta.elemento:
+                posicion = i
+                break
+        if delta.operacion in ("QUITAR", "MOVER"):
+            if posicion is None:
+                delta.efectivo = False
+            else:
+                delta.posicion_anterior = posicion
+                if delta.operacion == "MOVER":
+                    delta.posicion_nueva = min(delta.posicion_nueva, len(secuencia) - 1)
+        elif posicion is not None:
+            delta.efectivo = False
+        else:
+            # Las anclas sobreviven aunque desaparezca una posición del sufijo.
+            destino = min(delta.posicion_nueva, len(secuencia))
+            for i, token in enumerate(secuencia):
+                if token == delta.ancla_anterior:
+                    destino = i + 1
+                    break
+                if token == delta.ancla_siguiente:
+                    destino = i
+                    break
+            delta.posicion_nueva = destino
+        delta.anterior = (None if delta.operacion == "INSERTAR" or not delta.efectivo
+                          else delta.elemento)
+    aplicar_delta(proyeccion, delta)
 
 
 class NormalizadorHistorico:
@@ -364,6 +460,8 @@ class NormalizadorHistorico:
 
     def _emitir(self, operacion, destino, **datos):
         from modelo.juego.linea_tiempo import DeltaHistorico
+        if operacion == "ALTA" and destino == "sala":
+            datos["anterior"] = self.linea.proyeccion.salas[datos["token"]].copiar()
         delta = DeltaHistorico(operacion, destino, **datos)
         self.linea.anotar(delta)
         aplicar_delta(self.linea.proyeccion, delta)
@@ -458,15 +556,26 @@ class NormalizadorHistorico:
         self.linea.marcar_no_disponible(error)
         self._partida.registro.conectar_captura(None)
 
-    def deshacer_grupo(self, grupo=None, instante=None):
-        """Los inversos del motor no son cambios C1 ni deltas nuevos.
+    def _actualizar_historia(self, metodo, *args, **datos):
+        if not self.linea.disponible:
+            return
+        try:
+            getattr(self.linea, metodo)(*args, **datos)
+        except Exception as error:
+            self._invalidar(error)
 
-        Hasta implementar el recorte/reubicación de T029–T031, la proyección
-        no representa el estado restaurado. Se invalida antes de aceptar otro
-        cambio; jamás se usa esa foto obsoleta para interrumpir la partida.
-        """
-        self._invalidar(f"Historia no disponible tras deshacer el grupo {grupo}: "
-                        "recorte y reubicación históricos pendientes (T029–T031)")
+    def abrir_accion(self, numero, grupo=None, instante=None, reloj=None):
+        self._actualizar_historia(
+            "abrir_accion", numero, instante if reloj is None else reloj, grupo=grupo)
+
+    def cerrar_accion(self, numero, grupo=None, instante=None, reloj=None):
+        self._actualizar_historia(
+            "cerrar_accion", numero, instante if reloj is None else reloj, grupo=grupo)
+
+    def retroceder(self, numero, grupo=None, instante=None, reloj=None):
+        # Partida publica este hook después de terminar sus inversos y avisos.
+        self._actualizar_historia(
+            "recortar", grupo, instante if reloj is None else reloj)
 
     def _capturar_cambio(self, operacion, destino, campo, anterior, nuevo,
                          reversible, elemento=None, posicion_anterior=None,
@@ -558,7 +667,7 @@ def inicializar_historia(partida, checkpoint_cada):
     Repetirla antes de la primera acción reemplaza el checkpoint cero. Una
     incompatibilidad del motor o un fallo de proyección quedan diagnosticados
     en linea_tiempo.disponible/motivo_no_disponible y no salen hacia el juego.
-    Las fronteras periódicas, consultas y retroceso se incorporan en T026–T031.
+    Las notificaciones C1 conectan fronteras, checkpoints y recorte histórico.
     """
     from modelo.juego.linea_tiempo import K_DEFECTO, LineaTiempo
     from modelo.juego.registro import Registro
