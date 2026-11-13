@@ -2,7 +2,7 @@ import os
 
 from modelo.estructuras.cola_fifo import ColaFIFO
 from modelo.estructuras.ordenamiento import ordenar
-from controlador.orden import Orden
+from modelo.juego.orden import Orden
 
 MARCA = "CRIPTA-LOG"
 VERSION_LOG = 1
