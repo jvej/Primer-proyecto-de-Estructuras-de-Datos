@@ -51,6 +51,9 @@ class Partida:
         self._observadores_puertas = []
         self._observadores_invalidacion_rutas = []
         self._en_retroceso = False
+        from modelo.juego.cazador import PlanificadorCazador
+        self.planificador_cazador = PlanificadorCazador(self.mapa)
+        self.suscribir_invalidacion_rutas(self.planificador_cazador.invalidar_todo)
         self.suscribir_cambio_puerta(self._observar_cambio_puerta)
 
     def suscribir_cambio_puerta(self, observador) -> None:

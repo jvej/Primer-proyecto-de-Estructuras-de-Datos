@@ -57,11 +57,13 @@ class Mapa:
             ficha = resolutor.obtener(e["tipo"])
             vida_max = ficha["vida_max"]
             comportamiento = normalizar_comportamiento(ficha.get("comportamiento", "guardian"))
+            rango = ficha.get("rango", 0)
             enemigo = Enemigo(
                 ficha.get("nombre", e["tipo"]), e.get("vida", vida_max),
                 ficha["ataque"], ficha["defensa"], ficha["velocidad"],
                 comportamiento, e["instancia"], None, vida_max,
-                list(ficha.get("suelta", [])), ficha.get("regeneracion", 0), e["tipo"])
+                list(ficha.get("suelta", [])), ficha.get("regeneracion", 0), e["tipo"],
+                rango=rango)
             enemigo.mover_a(sala)
             self.enemigos.append(enemigo)
         for o in entrada.get("objetos", []):

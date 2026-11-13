@@ -67,7 +67,8 @@ class Enemigo(Actor):
     def __init__(self, nombre: str, vida: int, ataque: int, defensa: int, velocidad: int,
                  comportamiento: str = "guardian", id_instancia: str = "",
                  sala=None, vida_max: Optional[int] = None,
-                 suelta=None, regeneracion: int = 0, tipo: str = "") -> None:
+                 suelta=None, regeneracion: int = 0, tipo: str = "",
+                 rango: int = 0) -> None:
         super().__init__(nombre, vida, ataque, defensa, velocidad, sala, vida_max)
         self.comportamiento = comportamiento  
         self.id_instancia = id_instancia      
@@ -75,6 +76,9 @@ class Enemigo(Actor):
         self.suelta = [] if suelta is None else suelta  
         self.regeneracion = regeneracion       
         self.tipo = tipo                      
+        if type(rango) is not int or rango < 0:
+            raise ValueError("El rango debe ser un entero no negativo")
+        self.rango = rango
 
     def etiqueta(self) -> str:
         if self.id_instancia == "":
