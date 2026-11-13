@@ -81,7 +81,7 @@ from vista.controles_gui import (AYUDA_LINEAS, BOTONES, SIG_ENEMIGO, SIG_SUELO, 
 from controlador.orden import (ABRIR, ATACAR, CARGAR, EQUIPAR, ESPERAR, MOVER, Orden, PERGAMINO,
                                RECOGER, SALIR, SOLTAR, USAR, VER_REPETICIONES, es_clave)
 from vista.vista_base import Vista, lineas_mapa_conocido
-from controlador.orden import interpretar_ir_a
+from controlador.orden import IR_A, interpretar_ir_a
 from modelo.juego.conocimiento import ESTADO_EXPLORADA
 
 ANCHO, ALTO = 1280, 720
@@ -416,6 +416,10 @@ class VistaPygame(Vista):
         self.velocidad = 1
         self.en_pausa = False
         self.cerrada = False
+        self._orden_pendiente = None
+        self._partida_orden_pendiente = None
+        self._viaje_partida = None
+        self._viaje_foto = None
         for texto in self.sprites.avisos:
             self.mostrar_aviso(texto)
 
@@ -459,11 +463,27 @@ class VistaPygame(Vista):
     def pedir_orden(self, partida):
         self.partida = partida
         self.fin = None
+        pendiente = getattr(self, "_orden_pendiente", None)
+        dueña = getattr(self, "_partida_orden_pendiente", None)
+        self._descartar_pendiente()
+        if pendiente is not None and dueña is partida and not self.cerrada:
+            # Extraer solo QUIT conserva los demás eventos en su cola original.
+            if pygame.event.get(pygame.QUIT):
+                self.cerrada = True
+                return Orden(SALIR)
+            # Retirar antes de entregar: nunca se ejecuta desde el callback.
+            return self._entregar(pendiente)
         self.sonidos.musica("musica_cripta")
         while not self.cerrada:
             for evento in self._eventos():
                 resultado = None
                 if evento.type == pygame.KEYDOWN:
+                    if evento.key == pygame.K_v:
+                        orden = self._pedir_ir_a(partida)
+                        if orden is not None:
+                            return self._entregar(orden)
+                        # No reutilizar eventos del lote anterior al diálogo.
+                        break
                     shift = bool(evento.mod & pygame.KMOD_SHIFT)
                     resultado = orden_para_tecla(pygame.key.name(evento.key), shift,
                                                  self.enemigo_elegido, self.objeto_elegido)
@@ -508,6 +528,12 @@ class VistaPygame(Vista):
         return None
 
     def _entregar(self, orden):
+        if orden.tipo == IR_A:
+            self._viaje_partida = self.partida
+            self._viaje_foto = (self.partida.acciones, self.partida.jugador.sala)
+        else:
+            self._viaje_partida = None
+            self._viaje_foto = None
         self.ultima_orden = orden.tipo
         if orden.tipo == MOVER:
             self._correr_hacia(orden.argumento)
@@ -622,6 +648,16 @@ class VistaPygame(Vista):
         return True
 
     def mostrar_partida(self, partida):
+        if getattr(self, "_partida_orden_pendiente", None) is not partida:
+            self._descartar_pendiente()
+        if getattr(self, "_viaje_partida", None) is partida:
+            acciones, sala = self._viaje_foto
+            if partida.acciones > acciones and partida.jugador.sala is not sala:
+                self.ultima_orden = MOVER
+            self._viaje_foto = (partida.acciones, partida.jugador.sala)
+        else:
+            self._viaje_partida = None
+            self._viaje_foto = None
         if partida is not self.partida:
             self.animador.reiniciar(partida)
             self.mensajes_oidos = partida.bitacora.total_historico
@@ -683,7 +719,40 @@ class VistaPygame(Vista):
             self.avisos.pop(0)
 
     def mostrar_ayuda(self):
-        self._modal("Controles", list(AYUDA_LINEAS))
+        self._modal("Controles", list(AYUDA_LINEAS) + [
+            "V: ir a una sala explorada",
+            "Durante IR_A: Esc cancela; R cancela y usa un pergamino al terminar.",
+        ])
+
+    def _descartar_pendiente(self):
+        self._orden_pendiente = None
+        self._partida_orden_pendiente = None
+
+    def atender_viaje(self, partida) -> bool:
+        """Solo eventos/presentación. El controlador ejecuta las órdenes después."""
+        if self.cerrada:
+            self._descartar_pendiente()
+            return False
+        eventos = self._eventos()
+        if self.cerrada or any(e.type == pygame.QUIT for e in eventos):
+            self.cerrada = True
+            self._descartar_pendiente()
+            return False
+        continuar = True
+        for evento in eventos:
+            if evento.type == pygame.KEYDOWN:
+                if evento.key == pygame.K_ESCAPE:
+                    continuar = False
+                    break
+                if evento.key == pygame.K_r:
+                    self._orden_pendiente = Orden(PERGAMINO)
+                    self._partida_orden_pendiente = partida
+                    continuar = False
+                    break
+        self.mostrar_partida(partida)
+        self._dibujar_partida(partida)
+        self._mostrar_cuadro()
+        return continuar
 
     def mostrar_mapa(self, mapa):
         """El controlador suministra exclusivamente Partida.mapa_conocido()."""
@@ -722,7 +791,7 @@ class VistaPygame(Vista):
             self._mostrar_cuadro()
 
     def _pedir_ir_a(self, partida):
-        """Entrada preparada; sin control asociado hasta coordinar eventos C4.
+        """Entrada de V; devuelve una orden para el controlador normal.
 
         Solo devuelve Orden; no ejecuta el viaje ni enumera destinos precargados.
         Esc/QUIT cancelan este diálogo sin emitir ninguna orden de partida.
@@ -893,6 +962,7 @@ class VistaPygame(Vista):
         for evento in eventos:
             if evento.type == pygame.QUIT:
                 self.cerrada = True
+                self._descartar_pendiente()
         return eventos
 
     def _mostrar_cuadro(self):
