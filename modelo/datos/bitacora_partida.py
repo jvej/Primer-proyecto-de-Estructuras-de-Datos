@@ -65,6 +65,11 @@ class BitacoraPartida:
             self._archivo.close()
             self._archivo = None
 
+    def anotar_comentario(self, texto):
+        """No incrementa lineas: los comentarios no son acciones de replay."""
+        if self._archivo is not None:
+            self._escribir("# " + _limpio(texto))
+
     def _escribir(self, linea):
         self._archivo.write(linea + "\n")
         self._archivo.flush()
@@ -109,7 +114,7 @@ def leer_log(ruta):
     i += 1
     while i < len(lineas):
         linea = lineas[i].strip()
-        if linea != "":
+        if linea and not linea.startswith("#"):
             try:
                 ordenes.agregar(Orden.desde_texto(linea))
             except ValueError as error:
@@ -160,4 +165,4 @@ def podar_logs(carpeta, conservar):
         try:
             os.remove(pares[i][1])
         except OSError:
-            pass      
+            pass
