@@ -25,6 +25,9 @@ class ClienteOffline(FuenteDatos):
     def _ruta_general(self, id_cripta):
         return os.path.join(self.carpeta, "criptas", _seguro(id_cripta), "general.json")
 
+    def _ruta_llaves(self, id_cripta):
+        return os.path.join(self.carpeta, "criptas", _seguro(id_cripta), "llaves.json")
+
     def _ruta_version_cripta(self, id_cripta):
         return os.path.join(self.carpeta, "criptas", _seguro(id_cripta), "version.json")
 
@@ -56,6 +59,9 @@ class ClienteOffline(FuenteDatos):
 
     def datos_cripta(self, id_cripta):
         return self._leer("datos generales de " + str(id_cripta), self._ruta_general(id_cripta))
+
+    def llaves(self, id_cripta):
+        return self._leer("llaves de " + str(id_cripta), self._ruta_llaves(id_cripta))
 
     def pagina_esqueleto(self, id_cripta, pagina):
         return self._leer("esqueleto de %s página %s" % (id_cripta, pagina),

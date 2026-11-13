@@ -17,8 +17,8 @@ Las dependencias son:
 Herramientas de proceso (no son dependencias del programa):
 - [uv](https://docs.astral.sh/uv/) — instala Python 3.13 y spec-kit
 - **spec-kit `v1.0.10`** (`specify-cli`) — versión fija para todo el grupo
-- **Google Antigravity** (IDE v2.0.0 o superior) — agente de programación; en spec-kit su clave es `agy`
-
+- **Google Antigravity** (IDE v2.0.0 o superior; usamos 2.29.0) — agente de programación hasta el 2026-11-08; en spec-kit su clave es `agy`
+- **OpenAI Codex** (extensión de VS Code) — agente de programación desde el 2026-11-08, porque se agotó el cupo de Antigravity; usa las mismas skills de spec-kit
 ---
 
 ## Instalación
@@ -76,10 +76,12 @@ specify init --here --integration agy --script ps --ignore-agent-tools --extensi
 | `.specify/extensions/git/` | Extensión que crea la rama `NNN-...` de cada especificación (auto-commit desactivado) |
 | `.agents/skills/speckit-*/` | Comandos de spec-kit para Antigravity |
 | `.agents/rules/cripta.md` | Reglas del proyecto que el agente aplica siempre |
+| `AGENTS.md` | Las mismas reglas del proyecto, para Codex |
 | `specs/NNN-capacidad/` | `spec.md`, `plan.md`, `tasks.md` y artefactos de cada capacidad |
 
 En el chat de Antigravity (workspace abierto en la raíz del repositorio) los comandos se invocan con guion: `/speckit-constitution`, `/speckit-specify`, `/speckit-clarify`, `/speckit-plan`, `/speckit-tasks`, `/speckit-analyze`, `/speckit-implement`. El agente no hace commits: el orden en Git es especificación → plan y tareas → código. Cada prompt se registra en `PROMPTS_LLM.md`.
 
+En Codex (VS Code) los mismos comandos se invocan con `$`: `$speckit-implement`, `$speckit-analyze`, etc. Codex se usa en modo "Ask for approval" (nunca "Full access").
 ---
 
 ## Correr el juego

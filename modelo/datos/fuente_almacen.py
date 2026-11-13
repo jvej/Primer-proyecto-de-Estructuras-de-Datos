@@ -25,6 +25,13 @@ class FuenteAlmacen(FuenteDatos):
                                           "no están en la copia local")
         return self.almacen_cripta.leer_generales()
 
+    def llaves(self, id_cripta):
+        self._exigir_cripta(id_cripta)
+        if not self.almacen_cripta.tiene_llaves():
+            raise ErrorDatosNoDisponibles("llaves de %s" % id_cripta,
+                                          "no están en la copia local")
+        return self.almacen_cripta.leer_llaves()
+
     def pagina_esqueleto(self, id_cripta, pagina):
         self._exigir_cripta(id_cripta)
         if not self.almacen_cripta.tiene_pagina(pagina):

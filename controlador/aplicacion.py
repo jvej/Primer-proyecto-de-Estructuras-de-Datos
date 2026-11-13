@@ -9,11 +9,12 @@ from modelo.datos.bitacora_partida import (MAX_REPETICIONES, BitacoraPartida, En
                                            podar_logs)
 from controlador.controlador import Controlador
 from modelo.datos.ejecutor_red import EjecutorRed
-from modelo.juego.errores import ErrorCripta
+from modelo.juego.errores import ErrorCripta, ErrorPresupuesto, ErrorRed
 from modelo.datos.esqueleto import descargar_esqueleto
 from modelo.juego.inventario import Inventario
 from modelo.estructuras.ordenamiento import ordenar
 from modelo.juego.partida import Partida
+from modelo.juego.resolubilidad import ResultadoResolubilidad, verificar_resolubilidad
 from modelo.datos.precarga_contenido import PrecargaContenido
 from modelo.datos.puntajes import TablaPuntajes
 from modelo.datos.resolutor_catalogo import ResolutorCatalogo
@@ -46,9 +47,18 @@ class ErrorVersion(ErrorCripta):
     """Los datos de la cripta o del catálogo ya no son los de la partida a reconstruir."""
 
 
+class ErrorNoResoluble(ErrorCripta):
+    """Impide iniciar una partida y permite mostrar su diagnóstico en la vista."""
+
+    def __init__(self, reporte):
+        self.reporte = reporte
+        super().__init__(reporte.formatear_reporte())
+
+
 class Aplicacion:
     def __init__(self, fuente, presupuesto, carpeta=CARPETA_DEFECTO, cache_size=CACHE_DEFECTO,
-                 semilla=None, nombre="Jugador", registrar_log=True, registrar_puntajes=True):
+                 semilla=None, nombre="Jugador", registrar_log=True, registrar_puntajes=True,
+                 forzar=False):
         self.fuente = fuente
         self.presupuesto = presupuesto
         self.carpeta = carpeta
@@ -57,6 +67,8 @@ class Aplicacion:
         self.nombre = nombre
         self.registrar_log = registrar_log
         self.registrar_puntajes = registrar_puntajes
+        self.forzar = forzar
+        self.reporte_resolubilidad: ResultadoResolubilidad | None = None
         self.puntajes = TablaPuntajes(os.path.join(carpeta, "puntajes.txt"))
         self.ruta_guardado = os.path.join(carpeta, "guardados", "partida.bin")
 
@@ -104,19 +116,25 @@ class Aplicacion:
 
     # ------------------------------------------------------------ partida
     def crear_partida(self, id_cripta, semilla=None, ordenes_previas=None, exigir_versiones=None,
-                      partida_nueva=True, validar=None):
+                      partida_nueva=True, validar=None, forzar=None):
         anterior = (self.partida, self.ejecutor, self.precarga, self.log, self.ordenes)
         self.ejecutor = None
         self.log = None
         try:
             partida = self._armar(id_cripta, semilla, ordenes_previas, exigir_versiones,
-                                  partida_nueva, validar)
-        except BaseException:
+                                  partida_nueva, validar,
+                                  self.forzar if forzar is None else forzar)
+        except BaseException as error:
             if self.ejecutor is not None:
                 self.ejecutor.cerrar()
             if self.log is not None:
                 self.log.cerrar()
             self.partida, self.ejecutor, self.precarga, self.log, self.ordenes = anterior
+            if isinstance(error, ErrorNoResoluble):
+                self._cerrar_partida_actual()
+                self.partida = None
+                self.precarga = None
+                self.ordenes = []
             raise
         if anterior[1] is not None:
             anterior[1].cerrar()                      
@@ -124,14 +142,8 @@ class Aplicacion:
             anterior[3].cerrar()                      
         return partida
 
-    def _armar(self, id_cripta, semilla, ordenes_previas, exigir_versiones, partida_nueva,
-               validar=None):
-        if partida_nueva and self.partidas_creadas > 0 and not self._presupuesto_listo:
-            self.presupuesto.reiniciar()
-        if partida_nueva:
-            self._presupuesto_listo = False
-        self.partidas_creadas += 1
-
+    def _preparar_cripta(self, id_cripta, exigir_versiones=None):
+        """Comparte datos, control de versiones y esqueleto entre juego e inspección."""
         datos = self.fuente.datos_cripta(id_cripta)
         if "presupuesto_solicitudes" in datos:
             self.presupuesto.fijar_limite(datos["presupuesto_solicitudes"])
@@ -149,6 +161,53 @@ class Aplicacion:
         if not almacen_cripta.tiene_generales():
             almacen_cripta.guardar_generales(datos)
         esqueleto = descargar_esqueleto(self.fuente, id_cripta, almacen_cripta)
+        return datos, esqueleto, almacen_cripta
+
+    def _verificar_cripta(self, id_cripta, datos, esqueleto, almacen_cripta):
+        if almacen_cripta.tiene_llaves():
+            respuesta = almacen_cripta.leer_llaves()
+        else:
+            try:
+                respuesta = self.fuente.llaves(id_cripta)
+            except (ErrorRed, ErrorPresupuesto) as error:
+                causa = ("presupuesto_solicitudes agotado" if isinstance(error, ErrorPresupuesto)
+                         else "error de red")
+                self.reporte_resolubilidad = ResultadoResolubilidad(
+                    "NO VERIFICADA", motivo="no se pudo consultar /llaves: %s: %s" % (causa, error))
+                return self.reporte_resolubilidad
+            almacen_cripta.guardar_llaves(respuesta)
+
+        ubicaciones = respuesta["llaves"] if isinstance(respuesta, dict) else respuesta
+        catalogo = []
+        for ubicacion in ubicaciones:
+            id_llave = ubicacion["id"]
+            if self.local.disponible(id_llave):
+                ficha = self.local.obtener(id_llave)
+                if ficha is not None:
+                    catalogo.append(ficha)
+        self.reporte_resolubilidad = verificar_resolubilidad(
+            esqueleto, ubicaciones, datos["sala_inicial"], datos["sala_salida"],
+            datos["llave_salida"], catalogo_llaves=catalogo)
+        return self.reporte_resolubilidad
+
+    def verificar(self, id_cripta) -> ResultadoResolubilidad:
+        """Inspecciona sin inicializar motor, ejecutor, precarga ni bitácora."""
+        datos, esqueleto, almacen_cripta = self._preparar_cripta(id_cripta)
+        return self._verificar_cripta(id_cripta, datos, esqueleto, almacen_cripta)
+
+    def _armar(self, id_cripta, semilla, ordenes_previas, exigir_versiones, partida_nueva,
+               validar=None, forzar=False):
+        if partida_nueva and self.partidas_creadas > 0 and not self._presupuesto_listo:
+            self.presupuesto.reiniciar()
+        if partida_nueva:
+            self._presupuesto_listo = False
+        self.partidas_creadas += 1
+
+        datos, esqueleto, almacen_cripta = self._preparar_cripta(id_cripta, exigir_versiones)
+        if partida_nueva and ordenes_previas is None and exigir_versiones is None:
+            reporte = self._verificar_cripta(id_cripta, datos, esqueleto, almacen_cripta)
+            if not reporte.es_resoluble() and not forzar:
+                raise ErrorNoResoluble(reporte)
 
         self.ejecutor = EjecutorRed()
         resolutor = ResolutorCatalogo(self.fuente, self.ejecutor, self.local, self.presupuesto)
@@ -179,7 +238,8 @@ class Aplicacion:
             validar(partida)         
 
         if self.registrar_log:
-            encabezado = EncabezadoLog(id_cripta, version, self.version_catalogo, semilla,
+            encabezado = EncabezadoLog(id_cripta, str(datos.get("version", "")),
+                                       self.version_catalogo, semilla,
                                        self.nombre, fecha_actual())
             self.log = BitacoraPartida(self._ruta_log_nueva(id_cripta), encabezado, self.ordenes)
         return partida

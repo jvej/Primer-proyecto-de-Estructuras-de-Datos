@@ -81,6 +81,11 @@ class ClienteHTTP(FuenteDatos):
         return self._get("datos generales de " + str(id_cripta),
                          "/criptas/" + quote(str(id_cripta)))
 
+    def llaves(self, id_cripta):
+        # _get contabiliza cada intento antes de enviar, también tras un 429.
+        return self._get("llaves de " + str(id_cripta),
+                         "/criptas/%s/llaves" % quote(str(id_cripta), safe=""))
+
     def pagina_esqueleto(self, id_cripta, pagina):
         return self._get("esqueleto de %s página %s" % (id_cripta, pagina),
                          "/criptas/%s/salas?pagina=%d" % (quote(str(id_cripta)), pagina))
