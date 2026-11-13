@@ -2,7 +2,7 @@
 
 **Branch**: `004-linea-de-tiempo` | **Date**: 2026-11-13 | **Spec**: [spec.md](spec.md)
 
-**Responsable**: Axel. Revisión de alcance: instrumentar los puntos existentes, reutilizar comentarios de IR_A e incorporar la integración limitada en `controlador/aplicacion.py`, **autorizado por Jeferson**. Esta revisión solo modifica `plan.md` y `tasks.md`; no implementa código ni modifica `spec.md` o contratos. T001–T009 ya están hechas y confirmadas.
+**Responsable**: Axel. Revisión de alcance: instrumentar los puntos existentes, reutilizar comentarios de IR_A e incorporar la integración limitada en `controlador/aplicacion.py`, **autorizado por Jeferson**. Esta revisión solo modifica `plan.md` y `tasks.md`; no implementa código ni modifica `spec.md` o contratos. T001–T009 ya están hechas y confirmadas. C1 (T012–T018) se conserva implementada; T010/T011 se reabren para recuperar la compatibilidad de órdenes. La implementación de esta corrección y sus pruebas esperan la indicación «sigue» de Axel.
 
 ## Summary
 
@@ -27,7 +27,7 @@ Para FR-014 y replay se reutiliza `# ir a X`: su interpretación llama al mismo 
 |---|---|
 | I. Estructuras propias | Arreglos contiguos y binaria propia; no se proponen dict/set como índice/caché, heapq, bisect, collections, grafos externos, sorted() ni list.sort() |
 | II. Determinismo | Misma semilla/versiones y mismas líneas intercaladas; orden estable de deltas; consultas sin azar |
-| III. MVC | Modelo histórico solo datos; presentación en controlador/vistas; retirar import de controlador en bitácora mediante parser inyectado. La dependencia existente en persistencia se comunica a Kim, sin refactorizarla desde esta tarea |
+| III. MVC | Modelo histórico solo datos; presentación en controlador/vistas; ubicar Orden, constantes y funciones actuales en modelo/juego/orden.py, sin imports, y mantener controlador/orden.py como reexportación completa. Bitácora importa desde modelo sin cambiar leer_log(ruta); Kim cambia el import de persistencia al mismo módulo |
 | IV. Datos generales | Sin ids/nombres de criptas concretas; semilla fija solo en escenarios sintéticos |
 | V. Presupuesto HTTP | Consultas y observaciones de reconstrucción locales; no precargar ni descargar para consultar; el ensamblado mantiene su contador ordinario |
 | VI. Rendimiento medido | Matriz definida; ninguna afirmación de 50 ms o K definitivo hasta ejecutar las mediciones |
@@ -50,12 +50,13 @@ Kim entregó las marcas IR_A en `69dbc30`, pendiente de verificar con T007/T008.
 | `modelo/juego/linea_tiempo.py` (nuevo) | Deltas, grupos, checkpoints, recorte/reubicación y consultas |
 | `modelo/juego/resumen_historico.py` (nuevo) | Proyección, copia explícita, normalización/adopción de entidades y filtrado histórico |
 | `modelo/juego/partida.py` | Solo `cambiar`, `_lista_agregar/_lista_quitar`, `_inv_agregar/_inv_quitar/_inv_al_frente`, `_accion` y `usar_pergamino`: instrumentación sin cambiar las operaciones/inversos actuales |
-| `controlador/orden.py` | HISTORIA fuera de `ORDENES_DE_PARTIDA`; parser de selector |
+| `modelo/juego/orden.py` (nuevo) | Recibir íntegro el contenido actual de `controlador/orden.py`, sin imports ni cambios de comportamiento; única definición de `Orden`, constantes y funciones. En T032, incorporar HISTORIA fuera de `ORDENES_DE_PARTIDA` y el parser de selector |
+| `controlador/orden.py` | Reexportación completa de todos los nombres actuales desde `modelo.juego.orden`, incluidas funciones auxiliares; conservar compatibilidad de imports e identidad de `Orden`, sin duplicar su definición |
 | `controlador/controlador.py` | Solo HISTORIA: despacho sin cancelar IR_A, presentación y acceso desde el flujo final; no editar `_ejecutar_ir_a` por cuenta de Axel |
-| `controlador/reproductor.py` | Leer/intercalar comentarios existentes, observar sin viajar, replay completo antes de consultar t y propagar K; lector compartible con carga |
-| `controlador/aplicacion.py` | **autorizado por Jeferson**: en `_armar`, llamar `inicializar_historia` después de `partida.iniciar()` y antes del bucle de órdenes previas, propagar K; conservar en `self.ordenes` y `registrar_comentario` las líneas intercaladas (órdenes y `# ir a X`), ofrecer `lineas_para_reconstruir()` y conectar el aplicador; inyectar el parser de bitácora en sus llamadores propios y facilitar acceso de solo lectura al reporte existente. Solo estas adaptaciones, sujetas a las restricciones obligatorias de abajo |
+| `controlador/reproductor.py` | En T011, retirar la inyección del parser y restaurar la llamada `leer_log(ruta_log)`; en tareas posteriores, leer/intercalar comentarios existentes, observar sin viajar, replay completo antes de consultar t y propagar K; lector compartible con carga |
+| `controlador/aplicacion.py` | **autorizado por Jeferson**: en `_armar`, llamar `inicializar_historia` después de `partida.iniciar()` y antes del bucle de órdenes previas, propagar K; conservar en `self.ordenes` y `registrar_comentario` las líneas intercaladas (órdenes y `# ir a X`), ofrecer `lineas_para_reconstruir()` y conectar el aplicador; facilitar acceso de solo lectura al reporte existente; no requiere inyección de parser de bitácora. Solo estas adaptaciones, sujetas a las restricciones obligatorias de abajo |
 | `controlador/resumen_historia.py` (nuevo) | Formateador común sin importar vistas |
-| `modelo/datos/bitacora_partida.py` | Solo retirar dependencia de `controlador.orden`: parser/fábrica inyectado como adaptación mínima; conservar formato, encabezado, escritura y omisión de comentarios de su API ordinaria |
+| `modelo/datos/bitacora_partida.py` | Retirar la inyección del parser, importar `Orden` desde `modelo.juego.orden` y restaurar `leer_log(ruta)` y `listar_logs(carpeta, maximo=MAX_REPETICIONES)` con su firma y comportamiento originales; conservar formato, encabezado, escritura y omisión de comentarios de su API ordinaria |
 | `vista/vista_consola.py` | Parser/ayuda, resumen histórico y final; reporte canónico, marca cazador y conservar costos |
 | `vista/vista_pygame.py` | Diálogo/panel L/Escape, modo final y presentación de reporte/cazador; preservar costos |
 | `vista/controles_gui.py` | L historia, H/F1 ayuda; botón/texto de ayuda correspondiente |
@@ -67,7 +68,7 @@ Kim entregó las marcas IR_A en `69dbc30`, pendiente de verificar con T007/T008.
 | `tests/test_historia_persistencia.py` (nuevo) | FR-007,008,014 y contrato de comentarios/carga |
 | `tests/test_bench_linea_tiempo.py` (nuevo) | Integridad de las mediciones SC-001,005 |
 
-No se crea `modelo/datos/registro_reconstruccion.py`. Los benches `historial` e `inventario` se repiten sin modificarlos. Los demás archivos de motor/datos solo aparecen en pedidos a sus dueños.
+La migración conserva todos los nombres que hoy se importan desde `controlador.orden`, incluida la misma clase `Orden` por ambas rutas. No se modifican tests existentes ni `controlador/repeticiones.py`: sus llamadas ordinarias deben funcionar sin adaptaciones. Este enfoque reemplaza las indicaciones de parser inyectado de los documentos auxiliares que permanecen fuera de esta revisión. No se crea `modelo/datos/registro_reconstruccion.py`. Los benches `historial` e `inventario` se repiten sin modificarlos. Los demás archivos de motor/datos solo aparecen en pedidos a sus dueños.
 
 ### Restricciones obligatorias de Jeferson
 
@@ -119,7 +120,7 @@ Son contratos mínimos propuestos, no trabajo que Axel incorpora a su lista de a
 | **Kim**, tramo IR_A de `controlador/controlador.py:Controlador._ejecutar_ir_a` | **Entregado en `69dbc30`, pendiente de verificar con T007/T008**: comentario `# ir a X` antes de cada observación exterior efectiva, después del callback de cancelación, incluidos intentos sin paso | T043 conserva pendiente la verificación de posición, frecuencia y ausencia de observación fantasma. Sin nueva sintaxis ni nuevas órdenes |
 | **Kim**, contrato IR_A/modelo existente | Confirmar que reproducir la marca llama una vez a `Partida._observar_puertas()` con grupo cerrado, sin planificar, viajar ni consumir tiempo | Adaptador en reproductor: `reproducir_observacion_ir_a(partida, destino: int) -> None`; usa método existente, no requiere editar Partida fuera de puntos únicos |
 | **Kim**, `persistencia_partida.py:foto_de`, `PersistenciaPartida.cargar` y guardado v4 | Conservar comentarios `# ir a X` intercalados con órdenes como cadenas en el campo de líneas ya existente; al cargar, usar el lector/aplicador de reproductor en vez de interpretar cada línea como Orden | `iterar_lineas_reconstruccion(lineas)`, `aplicar_linea_reconstruccion(controlador, linea) -> bool`. Ningún bloque/campo/versión binaria nuevo; no saltarse la validación antes de reemplazar la partida |
-| **Kim**, `persistencia_partida.py` (dependencia MVC existente) | Retirar el import de `controlador.orden` y recibir parser/aplicador como callback, no importar reproductor desde modelo | Retirar la dependencia corresponde a la dueña; Axel solo ofrece funciones en controlador. Entrega obligatoria de T046, sin cambiar el formato del guardado |
+| **Kim**, `persistencia_partida.py` (dependencia MVC existente) | Para resolver MVC basta sustituir `from controlador.orden import Orden` por `from modelo.juego.orden import Orden`; no necesita parser inyectado | El cambio del import corresponde a Kim en T046, sin edición de ese archivo por Axel ni cambio del formato. La conservación de comentarios y conexión del aplicador de reconstrucción siguen siendo la entrega de carga v4 |
 | **Mariano**, `agenda_eventos.py:AgendaEventos.siguiente` y frontera del motor | Confirmar mediante caso de eventos simultáneos que se entrega el estado exigido antes de cada decisión; si no, indicar el ajuste mínimo a cargo de Mariano | Axel no edita agenda ni `_avanzar`, ni drena eventos desde historia. FR-002 no se declara probado mientras falle este caso |
 | **Mariano/Kim**, solo si una prueba demuestra mutación observable posterior a inicio que elude C1 | Indicar punto único ya existente o adaptación mínima en el archivo del dueño | Primero resolver adopción en `resumen_historico.py`; no solicitar cambios preventivos en actor, sala, objetos, mapa, conocimiento, inventario o efectos |
 
@@ -127,7 +128,7 @@ No se piden cambios en `actor.py`, `sala.py`, `objetos.py` por inicialización, 
 
 ## Dependencias y paralelismo del alcance actualizado
 
-T011/T024/T045/T048 son implementación propia de Axel, **autorizado por Jeferson**, y dejan de ser pedidos externos. Orden por contratos y archivo compartido: T010 → T011; T011 + T023 → T024; T024 + T044 → T045; T045 → T048; T047 + T048 → T049. T047 requiere T024 para inicialización y K en ambas fuentes de replay. No solapar cambios en aplicación ni en main (T048 → T049 → T061).
+T010 migra el contrato de órdenes al modelo y restaura el lector ordinario; T011 retira la inyección en reproductor y verifica compatibilidad, sin cambios en aplicación. T024/T045/T048 son implementación propia de Axel en aplicación, **autorizado por Jeferson**, y dejan de ser pedidos externos. Orden por contratos: T010 → T011; T011 + T023 → T024; T024 + T044 → T045; T045 → T048; T047 + T048 → T049. T047 requiere T024 para inicialización y K en ambas fuentes de replay. No solapar cambios en aplicación ni en main (T048 → T049 → T061).
 
 Las ramas de núcleo, vistas y bench avanzan cuando sus dependencias técnicas estén listas, sin esperar el cierre global T050. T031 usa el inicializador directamente y T051 usa el contrato de presentación; no requieren esperar el ensamblado. Las dependencias externas restantes son T025 (Mariano, simultáneos), T043 (Kim, entregado en 69dbc30 y pendiente de verificar con T007/T008) y T046 (Kim, carga v4 e import MVC, sin cambio de responsabilidad/alcance). T025 y T046 conservan sus tareas; T046 requiere T044/T045 para cerrar. Estas entregas condicionan sus casos reales de integración en T050/T065, no el inicio de código independiente.
 ## Complejidad y memoria
@@ -152,7 +153,7 @@ K no acota eventos automáticos ni tamaño del mapa. Los directorios conservan c
 
 Repetir `bench_historial` y `bench_inventario` (§5.6) sin cambiarlos. Como deshacen Registro directamente o usan Inventario sin Partida, añadir en el bench nuevo variantes integradas que sí midan C1. Elegir K por resultados y documentarlos durante implementación; esta revisión no ejecuta ni inventa mediciones.
 
-Pruebas nuevas cubren todos los FR/SC, comentarios en inicio/bloqueo posterior/cancelación de IR_A, carga con observación sin paso, reubicación, inventario completo, simultaneidad, L/H/F1 y pantalla final. Las regresiones se ejecutan sin modificar los tests existentes. Guía en [quickstart.md](quickstart.md).
+Pruebas nuevas cubren todos los FR/SC, comentarios en inicio/bloqueo posterior/cancelación de IR_A, carga con observación sin paso, reubicación, inventario completo, simultaneidad, L/H/F1 y pantalla final. Las regresiones se ejecutan sin modificar los tests existentes. Tras «sigue», ejecutar con `venv\Scripts\python.exe -m tests.<modulo>`: `test_ir_a_compuesto`, `test_replay_puntajes`, `test_integracion_comentarios_002`, `test_partida`, `test_motor_base`, `test_conocimiento_partida`, `test_inventario_partida`, `test_controlador`, `test_mapa_consola`, `test_revision`, `test_resolubilidad`, `test_resolubilidad_integracion`, `test_terreno_cazador`, `test_historia_persistencia`. Comprobar también que ambas rutas exportan los mismos objetos y que `leer_log(ruta)`/`listar_logs` mantienen la API anterior. Los fallos de historia futura y de la entrega de Kim se informan por separado; una regresión de firma no se acepta como fallo esperado. Guía en [quickstart.md](quickstart.md).
 
 ## Riesgos y cierre de integración
 
@@ -163,4 +164,4 @@ Pruebas nuevas cubren todos los FR/SC, comentarios en inicio/bloqueo posterior/c
 - **Token/alta o copia filtra estado actual:** normalizar al primer C1, copiar dinámicos por valor y filtrar conocimiento histórico.
 - **Latencia/memoria mayores de lo esperado:** medir tamaño real de salida, capacidad reservada y liberación de checkpoints; default pendiente de datos.
 
-El diseño reducido y los contratos quedan listos para desglosar tareas propias y pedidos externos por separado. No se marca como implementado ningún contrato pendiente.
+La revisión documental de órdenes termina aquí, antes de tocar código o ejecutar pruebas. T010/T011 permanecen pendientes hasta implementar y validar el enfoque nuevo tras «sigue»; C1 (T012–T018) se conserva. No se hacen commits ni se marca como implementado ningún contrato pendiente.
