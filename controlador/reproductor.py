@@ -2,9 +2,79 @@ from controlador.aplicacion import Aplicacion
 from controlador.controlador import Controlador
 from modelo.datos.almacen_cripta import AlmacenCripta
 from modelo.datos.almacen_fichas import AlmacenFichas
-from modelo.datos.bitacora_partida import ErrorLog, leer_log
+from modelo.datos.bitacora_partida import ErrorLog, SEPARADOR, leer_log
 from modelo.datos.fuente_almacen import FuenteAlmacen
 from modelo.juego.errores import ErrorCripta
+from modelo.juego.orden import Orden
+
+
+def _destino_comentario_ir_a(linea):
+    partes = linea.split()
+    if partes[:3] != ["#", "ir", "a"]:
+        return None
+    if (len(partes) != 4 or not partes[3].isascii()
+            or not partes[3].isdigit() or int(partes[3]) <= 0):
+        raise ValueError("marca de observación inválida: %r" % linea)
+    return int(partes[3])
+
+
+def iterar_lineas_reconstruccion(lineas):
+    """Entrega cadenas validadas, con las observaciones en su posición original.
+
+    Omite blancos y otros comentarios; una orden o marca IR_A mal formada
+    produce ValueError, para no reconstruir silenciosamente un flujo distinto.
+    """
+    for linea in lineas:
+        linea = linea.strip()
+        if not linea:
+            continue
+        if linea.startswith("#"):
+            if _destino_comentario_ir_a(linea) is None:
+                continue
+        else:
+            Orden.desde_texto(linea)
+        yield linea
+
+
+def reproducir_observacion_ir_a(partida, destino: int) -> None:
+    """Repite solo la observación exterior; destino no se usa para viajar."""
+    if type(destino) is not int or destino <= 0:
+        raise ValueError("el destino de la observación debe ser un entero positivo")
+    if partida.registro.grupo_abierto() is not None:
+        raise RuntimeError("la observación requiere el grupo del registro cerrado")
+    partida._observar_puertas()
+
+
+def aplicar_linea_reconstruccion(controlador, linea) -> bool:
+    """Aplica una línea; devuelve la aceptación de la orden o de la observación.
+
+    Los blancos y demás comentarios devuelven False sin pasar por ejecutar.
+    Los errores de formato se propagan al llamador.
+    """
+    linea = linea.strip()
+    if not linea:
+        return False
+    if linea.startswith("#"):
+        destino = _destino_comentario_ir_a(linea)
+        if destino is None:
+            return False
+        reproducir_observacion_ir_a(controlador.partida, destino)
+        return True
+    return controlador.ejecutar(Orden.desde_texto(linea))
+
+
+def _leer_log_reconstruccion(ruta_log):
+    """Reutiliza la validación ordinaria y recupera los comentarios del cuerpo."""
+    encabezado, ordenes = leer_log(ruta_log)
+    with open(ruta_log, "r", encoding="utf-8") as archivo:
+        for linea in archivo:
+            if linea.strip() == SEPARADOR:
+                break
+        try:
+            lineas = tuple(iterar_lineas_reconstruccion(archivo))
+        except ValueError as error:
+            raise ErrorLog(str(error)) from error
+    return encabezado, ordenes, lineas
 
 
 class ResultadoReplay:
@@ -23,12 +93,13 @@ class ResultadoReplay:
 
 
 class Reproduccion:
-    def __init__(self, encabezado, partida, ordenes, aplicacion):
+    def __init__(self, encabezado, partida, ordenes, aplicacion, lineas=()):
         self.encabezado = encabezado
         self.partida = partida
         self.ordenes = ordenes          
         self.total = len(ordenes)
         self.aplicacion = aplicacion
+        self.lineas = lineas  # Cadenas intercaladas para reconstrucción, sin contar comentarios.
 
     def cerrar(self):
         if self.aplicacion is not None:
@@ -39,7 +110,7 @@ class Reproduccion:
 def preparar_reproduccion(ruta_log, fuente, presupuesto, carpeta, cache_size=25):
     resultado = ResultadoReplay()
     try:
-        encabezado, ordenes = leer_log(ruta_log)
+        encabezado, ordenes, lineas = _leer_log_reconstruccion(ruta_log)
     except ErrorLog as error:
         resultado.anotar("No se puede reproducir: %s" % error)
         return None, resultado
@@ -91,7 +162,7 @@ def preparar_reproduccion(ruta_log, fuente, presupuesto, carpeta, cache_size=25)
         aplicacion.cerrar()
         return None, resultado
     resultado.partida = partida
-    return Reproduccion(encabezado, partida, ordenes, aplicacion), resultado
+    return Reproduccion(encabezado, partida, ordenes, aplicacion, lineas), resultado
 
 
 def anotar_final(resultado, partida, aplicacion=None):
