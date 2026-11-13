@@ -19,7 +19,9 @@
 - Q: ¿Qué consultas iniciales, actuales e inválidas se admiten? → A: `historia #1` muestra el estado inicial; si N es el número de acciones realizadas en la historia vigente, `historia #(N+1)` muestra el estado actual, justo antes de la próxima acción. Un k menor que 1 o mayor que N+1 se rechaza con un mensaje. Un t negativo o no entero se rechaza con un mensaje; `historia 0` muestra el estado del instante 0 (FR-003, FR-006).
 - Q: ¿Cómo se presenta un estado histórico con derrota o victoria? → A: Si en el instante consultado el jugador ya había sido derrotado o había ganado, el resumen lo indica (FR-004).
 - Q: ¿Cuándo se puede consultar historia y qué ocurre con el resultado? → A: Durante la partida y en la pantalla final; consultar nunca cambia el resultado (FR-019).
-- Q: ¿Cómo se consulta historia en cada interfaz? → A: En Pygame, H abre un cuadro donde se escribe t o #k y un panel con el resumen; Escape lo cierra sin afectar la partida. En consola se usan `historia <t>` e `historia #k` (FR-020).
+- Q: ¿Cómo se consulta historia en cada interfaz? → A: En Pygame se abre un cuadro donde se escribe t o #k y un panel con el resumen; Escape lo cierra sin afectar la partida. En consola se usan `historia <t>` e `historia #k`. La tecla definitiva de Pygame se precisa en la aclaración posterior (FR-020).
+- Q: ¿En qué instante quedan los cambios no reversibles que sobreviven a un pergamino? → A: Los posteriores al reloj restaurado pasan a ese instante, después de sus eventos y antes de la siguiente decisión; esto incluye el consumo del pergamino y las observaciones de «ir a» dentro del intervalo revertido. Los de instante menor o igual conservan su instante. `historia <reloj actual>` e `historia #(N+1)` siempre coinciden con el estado actual (FR-010).
+- Q: ¿Qué tecla abre historia en Pygame? → A: L abre historia; H y F1 siguen siendo ayuda (FR-020).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -48,7 +50,7 @@ Como jugador, quiero consultar el estado desde el inicio por tiempo o por númer
 13. **test_FR006_historia_cero**: **Given** una partida, **When** se ejecuta `historia 0`, **Then** se muestra el estado del instante 0.
 14. **test_FR004_resumen_derrota_o_victoria**: **Given** un instante en el que el jugador ya había sido derrotado o había ganado, **When** se consulta ese instante, **Then** el resumen indica la derrota o la victoria correspondiente.
 15. **test_FR019_historia_durante_y_al_final**: **Given** una partida en curso o su pantalla final, **When** se consulta historia, **Then** la consulta está disponible y no cambia el resultado de la partida.
-16. **test_FR020_historia_en_pygame_y_consola**: **Given** la interfaz de Pygame, **When** se pulsa H y se escribe t o #k, **Then** se muestra el resumen en un panel que se cierra con Escape sin afectar la partida; **Given** la consola, **When** se introduce `historia <t>` o `historia #k`, **Then** se muestra el resumen correspondiente.
+16. **test_FR020_historia_en_pygame_y_consola**: **Given** la interfaz de Pygame, **When** se pulsa L y se escribe t o #k, **Then** se muestra el resumen en un panel que se cierra con Escape sin afectar la partida, y H y F1 siguen abriendo ayuda; **Given** la consola, **When** se introduce `historia <t>` o `historia #k`, **Then** se muestra el resumen correspondiente.
 
 ---
 
@@ -64,7 +66,8 @@ Como jugador, quiero que la historia refleje únicamente lo que sigue siendo par
 
 1. **test_FR009_historia_sin_acciones_revertidas**: **Given** acciones ejecutadas y después revertidas con un pergamino, **When** se consulta la historia que permanece, **Then** no aparecen esas acciones ni sus cambios revertidos.
 2. **test_FR009_antorcha_revertida**: **Given** una entrada con antorcha que reveló salas y luego fue revertida por un pergamino, **When** se consulta la historia resultante, **Then** no se muestran como reveladas las salas cuyo conocimiento procedía de esa entrada revertida.
-3. **test_FR010_memoria_fuera_de_accion**: **Given** una actualización de la memoria de una puerta observada durante un viaje automático, fuera de una acción del jugador y sin consumir tiempo, **When** se consulta su instante, **Then** esa actualización forma parte del estado histórico y permanece después de un pergamino que no la revierte.
+3. **test_FR010_memoria_fuera_de_accion**: **Given** una actualización de la memoria de una puerta observada durante un viaje automático, fuera de una acción del jugador y sin consumir tiempo, **When** se consulta su instante, **Then** esa actualización forma parte del estado histórico; después de un pergamino permanece en ese instante si es menor o igual al reloj restaurado y pasa al instante restaurado si era posterior.
+4. **test_FR010_reubicar_no_reversibles_tras_pergamino**: **Given** un consumo de pergamino y cambios fuera de acción posteriores al reloj que restaura, incluidas observaciones de «ir a», **When** se usa el pergamino, **Then** esos cambios no reversibles pasan al instante restaurado después de sus eventos y antes de la siguiente decisión, mientras los anteriores o simultáneos conservan su instante; `historia <reloj actual>` e `historia #(N+1)` muestran el mismo estado actual.
 
 ---
 
@@ -126,14 +129,14 @@ Como jugador, quiero ver el reporte de resolubilidad al iniciar, el costo de cad
 - El instante consultado supera el reloj actual: `historia` lo rechaza con un mensaje (FR-006).
 - El instante solicitado en una reproducción supera el final: se muestra el estado final con la indicación de terminación anterior (FR-008).
 - El pergamino revierte conocimiento de salas reveladas por una antorcha: ese conocimiento revertido no aparece en la historia restante (FR-009).
-- Un cambio fuera de una acción no consume tiempo y no es revertido por el pergamino: permanece en su instante histórico (FR-010).
+- Un cambio no reversible sobrevive al pergamino con tiempo posterior al reloj restaurado: pasa al instante restaurado después de sus eventos y antes de la siguiente decisión; si su tiempo era menor o igual, lo conserva. La consulta del reloj actual coincide con la consulta previa a la próxima acción y con el estado actual (FR-010).
 - El jugador pide `historia #k` después de un retroceso: los números corresponden a la historia vigente; la próxima acción reutiliza el número de la primera eliminada (FR-003).
 - No se ha realizado ninguna acción: `historia #1` muestra el estado inicial, que también es el actual (FR-003).
 - Con N acciones vigentes, k menor que 1 o mayor que N+1 se rechaza; k igual a N+1 muestra el estado actual (FR-003).
 - Un t negativo o no entero se rechaza; t igual a 0 muestra el estado del instante 0 (FR-006).
 - El estado consultado ya corresponde a una derrota o victoria: el resumen lo indica (FR-004).
 - Se consulta desde la pantalla final: historia sigue disponible y no cambia el resultado (FR-019).
-- Se cierra el panel histórico de Pygame con Escape: la partida no se ve afectada (FR-020).
+- Se abre historia en Pygame con L y se cierra con Escape: la partida no se ve afectada y H y F1 siguen siendo ayuda (FR-020).
 
 ## Requirements *(mandatory)*
 
@@ -148,7 +151,7 @@ Como jugador, quiero ver el reporte de resolubilidad al iniciar, el costo de cad
 - **FR-007**: `--replay partida.log --hasta <t>` DEBE reproducir la partida hasta t e imprimir el mismo resumen histórico, con la misma interpretación del instante, sin crear una interfaz.
 - **FR-008**: Si t es posterior al final de la partida reproducida, `--replay partida.log --hasta <t>` DEBE mostrar el estado final e indicar que la partida terminó antes del instante solicitado.
 - **FR-009**: Las acciones revertidas por un pergamino y sus cambios revertidos DEBEN dejar de existir en la línea de tiempo. Esto incluye el conocimiento de salas reveladas por una entrada con antorcha que haya sido revertida.
-- **FR-010**: Los cambios ocurridos fuera de una acción del jugador DEBEN formar parte de la línea de tiempo en su instante, aunque no consuman tiempo. Si el pergamino no los revierte, DEBEN permanecer en ella, incluida la actualización de memoria de una puerta observada durante un viaje automático.
+- **FR-010**: Los cambios ocurridos fuera de una acción del jugador DEBEN formar parte de la línea de tiempo aunque no consuman tiempo, incluida la actualización de memoria de una puerta observada durante un viaje automático. Todo cambio no reversible que sobreviva a un pergamino, incluido su consumo, DEBE conservar su instante si es menor o igual al reloj restaurado; si era posterior, DEBE pasar al instante restaurado, después de los eventos de ese instante y antes de la siguiente decisión. `historia <reloj actual>` e `historia #(N+1)` DEBEN coincidir siempre con el estado actual.
 - **FR-011**: La frecuencia K de puntos de control DEBE configurarse con `--checkpoint-cada K`. Su valor por defecto DEBE justificarse con las mediciones de rendimiento.
 - **FR-012**: DEBE existir un punto de control en el instante 0 y luego uno exactamente cada K acciones del jugador. Después del punto inicial, NO DEBE haber más de una copia completa por cada K acciones ni más de K acciones entre dos puntos de control.
 - **FR-013**: Fuera de los puntos de control solo DEBE guardarse lo necesario para reconstruir los cambios.
@@ -157,7 +160,7 @@ Como jugador, quiero ver el reporte de resolubilidad al iniciar, el costo de cad
 - **FR-016**: Se DEBE mostrar el costo de cada salida de la sala actual.
 - **FR-017**: Los cazadores DEBEN distinguirse visualmente del resto de enemigos.
 - **FR-019**: Historia DEBE poder consultarse durante la partida y en la pantalla final, sin cambiar nunca el resultado de la partida.
-- **FR-020**: En Pygame, la tecla H DEBE abrir un cuadro donde se escribe t o #k y un panel con el resumen; Escape DEBE cerrar el panel sin afectar la partida. En consola, la consulta DEBE realizarse con `historia <t>` o `historia #k`.
+- **FR-020**: En Pygame, la tecla L DEBE abrir un cuadro donde se escribe t o #k y un panel con el resumen; Escape DEBE cerrar el panel sin afectar la partida. H y F1 DEBEN seguir abriendo ayuda. En consola, la consulta DEBE realizarse con `historia <t>` o `historia #k`.
 
 ### Key Entities *(include if feature involves data)*
 
