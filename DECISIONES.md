@@ -929,6 +929,153 @@ Registrar es O(1) (una línea al final). Mostrar es O(m) para leer más el costo
 
 ---
 
+## 16. Línea de tiempo (004, Parte II)
+
+**Responsable:** Axel. **Referencias:** [especificación](specs/004-linea-de-tiempo/spec.md) y [plan](specs/004-linea-de-tiempo/plan.md). Decisiones de FR-001..014, FR-019/020 y evidencia de SC-001..005; T064.
+
+### 16.1 Problema
+
+Consultar el estado desde el inicio por tiempo (`historia <t>`) o antes de una acción (`historia #k`), sin cambiar la partida ni gastar el pergamino, que conserva su límite de cinco acciones. La historia debe representar la rama vigente tras retroceder, incluidos los cambios no reversibles. SC-001 exige una consulta máxima menor de 50 ms con al menos 5000 acciones.
+
+### 16.2 Alternativas consideradas
+
+| Decisión elegida | Alternativa descartada | Motivo |
+|---|---|---|
+| **C1:** capturar deltas en `Registro.cambiar`, `_lista_*` y `_inv_*`, leyendo el reloj al anotar | Copiar el estado completo en cada acción o comparar todo el mundo para descubrir cambios | El trabajo sigue a los cambios reales y conserva anterior/nuevo, instante y reversibilidad; copiar todo cuesta según el tamaño del mundo aun cuando cambia poco |
+| Checkpoint de proyección cada K acciones; selección O(1) por `#k` y binaria propia por t | Reconstruir siempre desde cero sin checkpoints o hacia atrás desde una copia actual | Ambas alternativas recorren un tramo que crece con la historia; los checkpoints limitan la aplicación a un máximo de K acciones |
+| Proyección copiada por valor, con bases inmutables compartidas, sin agenda, funciones ni azar | Copiar `Partida` o conservar referencias a sus datos dinámicos vivos | Las referencias modificarían el pasado; copiar el motor arrastraría infraestructura y funciones innecesarias. Consultar solo reconstruye datos, sin ejecutar eventos ni consumir azar |
+| Recortar el sufijo al usar el pergamino y reubicar sus no reversibles al reloj restaurado | Borrar todo el sufijo, registrar el retroceso como otra acción o reconstruir recorriendo el prefijo | Borrar todo perdería consumo y observaciones persistentes; conservar la rama revertida mostraría acciones inexistentes. El recorte solo toca el sufijo y libera sus checkpoints |
+| Reconstruir mediante órdenes y marcas existentes `# ir a X` | Nuevo formato de log/binario, persistir deltas o volver a ejecutar el viaje IR_A | Cada marca reproduce una observación exterior sin tiempo ni grupo; se conserva la secuencia real sin rediseñar formatos ni adivinar viajes/cancelaciones |
+| `Orden` en `modelo/juego/orden.py`, con reexportación desde `controlador/orden.py` | Mantener el import de controlador desde datos o exigir un parser inyectado a cada lector | Cumple MVC conservando la misma clase por ambas rutas y las llamadas ordinarias `leer_log(ruta)` y `listar_logs`, sin romper sus consumidores |
+| HISTORIA fuera del log, de la bitácora y del grupo; tecla L | Tratarla como acción o asignarle H/F1 | Es una consulta sin efectos ni cancelación de IR_A; H y F1 ya abren ayuda |
+
+### 16.3 Decisión
+
+El checkpoint 0 se toma después de iniciar la partida y antes de reconstruir órdenes. Después se copia la proyección exactamente cada K acciones aceptadas. `#k` selecciona el bloque con `(k-1)//K`; t usa búsqueda binaria propia y el corte anterior a la decisión de ese instante. La consulta copia ese checkpoint, aplica los deltas necesarios y genera el resumen con datos históricos.
+
+Al retroceder se eliminan reversibles y checkpoints del sufijo. Los cambios no reversibles posteriores al reloj restaurado pasan a ese instante, después de sus eventos y antes de la siguiente decisión; los anteriores o simultáneos conservan su tiempo. Esta operación solo reconstruye la proyección: no reaplica persistentes sobre el motor ni cambia los inversos del pergamino.
+
+Replay reconstruye todas las órdenes, marcas y pergaminos antes de resolver `--hasta`, para no consultar una rama eliminada después. K es configuración del proceso (`--checkpoint-cada`), no un campo persistido. La fidelidad de carga v4 depende de las entregas indicadas en 16.6.
+
+**K elegido = 10**, fijado en T063 (`7a7c435`). Es el único de los tres valores que cumple el máximo estricto de 50 ms tanto en la carga de 5000 acciones como en los peores casos medidos, en las dos corridas históricas. Con D=1000 retiene 180557.5 KiB frente a 172607.7 KiB con K=50: aproximadamente un **5 % más de memoria** (4.6 %). Se acepta ese costo para reducir el tramo reconstruido. El tiempo de consulta crece con **K × deltas por acción**, además de copiar la proyección y construir la salida; las pausas del proceso pueden alterar los máximos.
+
+### 16.4 Análisis de complejidad
+
+A = acciones vigentes; D = deltas totales; S = tamaño de proyección; B = `1+floor(A/K)` checkpoints; E_K = deltas de hasta K acciones; U = deltas exteriores; L = operaciones sobre secuencias/inventario; R = tamaño del resumen.
+
+| Operación | Costo |
+|---|---|
+| Captura C1 | O(1) amortizado más normalización/ubicación real; memoria según el cambio |
+| Crear checkpoint | O(S), una vez cada K acciones |
+| Consultar por `#k` | O(S + E_K + U + L + R); selección de checkpoint O(1) |
+| Consultar por t | O(log B + S + E_K + U + L + R) |
+| Historia retenida | O(D + A + B·S), incluida la capacidad reservada |
+| Sin checkpoints / desde actual | O(S + deltas hasta el destino / posteriores al destino + L + R) |
+| Foto por acción (referencia) | O(S + R) por consulta; fotos O(A·S) |
+| Recorte | Proporcional a los deltas/persistentes del sufijo y al tamaño de las fotos liberadas; sin recorrer el prefijo |
+
+K limita acciones, no la cantidad de eventos/deltas de cada acción ni el tamaño del resumen. Los arreglos conservan capacidad reservada al recortar y limpian las referencias retiradas.
+
+### 16.5 Evidencia empírica
+
+**Equipo:** Intel Core i7-8665U a 1.90 GHz (4 núcleos, 8 hilos), 31.78 GiB de RAM, Windows 11 Pro de 64 bits (compilación 26300), Python 3.13.9 del entorno virtual. **Semilla de línea de tiempo:** 20261113. Estas mediciones de Parte II tienen su propio equipo y no sustituyen las de las secciones anteriores.
+
+Comandos desde la raíz: `venv\Scripts\python.exe main.py --bench linea_tiempo` y `venv\Scripts\python.exe main.py --bench historial inventario`. Sin HTTP ni vista; no se modificaron los benches. Se excluye preparación y se valida equivalencia antes de medir. Los tiempos de consulta incluyen copia, aplicación y construcción del resumen; las fases instrumentadas se miden en otra pasada. `tracemalloc` se usa para memoria, fuera del cronometraje; incluye bases compartidas, deltas, directorios y reserva real.
+
+**5000 acciones, ejecución adicional durante T064 (2026-11-14).** Carga mixta de 16 salas: 21884 deltas, 5000 exteriores y 18 bases; recoger/soltar, movimientos, esperas, evento interior y cambios exteriores. Tres repeticiones sobre 17 objetivos, alternando `#k` y t: 51 muestras por alternativa. La carga segura adicional tiene 5000 acciones y 10000 deltas, con las seis variantes equivalentes antes de medir.
+
+| Variante | Máximo (ms) | Mediana (ms) | Retenida (KiB) | Checkpoints |
+|---|---:|---:|---:|---:|
+| K=10 | 0.0677 | 0.0271 | 8462.2 | 501 |
+| K=50 | 0.1960 | 0.0276 | 7075.6 | 101 |
+| K=200 | 0.5791 | 0.0678 | 6815.4 | 26 |
+| Sin checkpoints periódicos | 18.2527 | 0.2076 | 6728.7 | 1 |
+| Desde la copia actual | 315.4758 | 134.0021 | 6728.7 | 1 |
+| Foto por acción | 0.0244 | 0.0191 | 23485.6 | 1 + 5001 fotos |
+
+El conteo del bench incluye el checkpoint 0; la referencia por acción conserva además 5001 fotos y la traza común. La memoria incluye la proyección actual de trabajo. Los máximos de K=10/50/200 en la carga de 5000 de la corrida 1 de T063 fueron 0.0617/0.2157/0.6686 ms. Ambas ejecuciones quedan muy por debajo de 50 ms en esta carga; la densidad de deltas decide entre los K.
+
+**Peor caso real, N=600.** Dos salas con D−2 cazadores activos en la inicial y vida ampliada antes del checkpoint 0 para sostener las esperas; D exacto se comprueba por C1 en todas las acciones. Se consultan ambas APIs en cada objetivo, incluidos los finales de bloque con K−1 acciones por reconstruir. Corrida 1: salida de T063 suministrada por Axel; corrida 2: repetición manual suministrada por Axel. No se sustituyen por la ejecución adicional de T064.
+
+| D por acción | K | Corrida 1 máx/mediana (ms) | Corrida 2 máx/mediana (ms) | Retenida/pico, corrida 1 (KiB) | Máx. grupos/deltas | Checkpoints |
+|---:|---:|---:|---:|---:|---:|---:|
+| 100 | 10 | 3.5785 / 1.2071 | 1.1959 / 0.9223 | 17872.2 / 17905.6 | 9 / 900 | 61 |
+| 100 | 50 | 19.7613 / 2.6252 | 7.0223 / 1.9460 | 17044.4 / 17077.8 | 49 / 4900 | 13 |
+| 100 | 200 | 105.8679 / 10.9830 | 16.9835 / 6.2279 | 16889.2 / 17035.5 | 199 / 19900 | 4 |
+| 1000 | 10 | 45.1258 / 24.3986 | 36.0871 / 24.8103 | 180557.5 / 180872.1 | 9 / 9000 | 61 |
+| 1000 | 50 | 343.3691 / 36.8403 | 355.1113 / 36.3436 | 172607.7 / 172922.4 | 49 / 49000 | 13 |
+| 1000 | 200 | 242.3210 / 87.1505 | 223.2240 / 85.6998 | 171117.1 / 171431.8 | 199 / 199000 | 4 |
+
+**Recorte de 1 a 5 grupos (T064).** K=50, siete muestras por caso y mismo sufijo con prefijos crecientes. Cada celda temporal muestra máximo/mediana en ms. Los conteos incluyen persistentes reubicados y liberación de un checkpoint por caso.
+
+| Grupos | N=200 | N=2000 | N=5000 | Visitas al sufijo/prefijo | Persistentes | Bytes liberados |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 0.0672 / 0.0506 | 0.0732 / 0.0647 | 0.0805 / 0.0744 | 7 / 0 | 1 | 3400 |
+| 2 | 0.1104 / 0.0949 | 0.1814 / 0.1212 | 0.2235 / 0.1406 | 17 / 0 | 2 | 3344 |
+| 3 | 0.1657 / 0.1523 | 0.1991 / 0.1803 | 0.1996 / 0.1907 | 30 / 0 | 3 | 3288 |
+| 4 | 0.2887 / 0.2427 | 0.3001 / 0.2777 | 0.2984 / 0.2882 | 54 / 0 | 4 | 3232 |
+| 5 | 0.4267 / 0.3331 | 0.4794 / 0.3583 | 0.3986 / 0.3730 | 75 / 0 | 5 | 3176 |
+
+Siempre hubo **0 visitas al prefijo**. La reserva antes/después permaneció en 1544/1544, 20544/20544 y 49280/49280 casillas para N=200, 2000 y 5000 respectivamente: liberar las fotos no copia ni reduce los directorios.
+
+**Sobrecosto C1 integrado (T064).** Mediana de cinco repeticiones de 100 ciclos con `_inv_al_frente`, `_inv_quitar` y `_inv_agregar` dentro de `_accion`; incluye normalización y fronteras, excluye inicio y checkpoints periódicos. Cada caso produjo 500 deltas y se comprobó igualdad del resultado vivo e inventario histórico.
+
+| Objetos | Sin C1 (µs/ciclo) | Con C1 (µs/ciclo) | Extra (µs) | Extra (%) |
+|---:|---:|---:|---:|---:|
+| 10 | 16.854 | 67.979 | 51.125 | 303.3 |
+| 100 | 21.629 | 79.591 | 57.962 | 268.0 |
+| 1000 | 76.604 | 228.435 | 151.831 | 198.2 |
+
+**Repetición de historial (§5.6, T064).** A = inversos; B = copia completa. Tiempos en ms y memoria en KiB (el bench la rotula KB y divide entre 1024). Se conservaron las cargas y el procedimiento del bench existente.
+
+| Caso | Salas | Activos | Eventos | A ciclo | A deshacer | A historial (inversos) | B 1 copia | B 1 copia (KiB) | B 5 copias (KiB) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Típico | 20 | 10 | 18 | 0.095 | 0.056 | 83.7 (265) | 1.96 | 53.6 | 268.0 |
+| Típico | 200 | 10 | 18 | 0.101 | 0.059 | 83.7 (265) | 14.07 | 442.7 | 2213.7 |
+| Típico | 1000 | 10 | 18 | 0.110 | 0.059 | 81.5 (265) | 77.50 | 1991.5 | 9957.3 |
+| Peor caso | 200 | 200 | 398 | 3.441 | 1.756 | 1657.1 (5205) | 19.73 | 512.0 | 2560.2 |
+| Peor caso | 1000 | 1000 | 1998 | 20.937 | 10.810 | 9160.7 (26005) | 91.12 | 2362.6 | 11813.1 |
+
+Con diez activos, A mantiene aproximadamente 0.1 ms por ciclo al crecer de 20 a 1000 salas; B pasa de 1.96 a 77.50 ms por copia. Con 1000 activos A también crece, hasta 20.937 ms por ciclo. Este bench deshace directamente `Registro` y el de inventario usa la estructura sin `Partida`: **ninguno mide el sobrecosto C1**, que corresponde a la tabla integrada anterior.
+
+**Repetición de inventario (§5.6, T064).** `main.py --bench historial inventario` ejecuta primero inventario según el orden del despachador. Mejor de cinco corridas, µs por operación; mismas alternativas del bench existente, sin instrumentación añadida.
+
+| Soltar el objeto visto y deshacer | Lista con cursor | Lista sin cursor | Arreglo | Pila |
+|---|---:|---:|---:|---:|
+| n=10, medio | 1.19 | 1.67 | 0.13 | 1.77 |
+| n=100, último | 1.19 | 7.37 | 0.12 | 24.91 |
+| n=1000, medio | 1.19 | 35.49 | 0.65 | 100.42 |
+| n=10000, primero | 1.16 | 1.26 | 10.59 | 0.53 |
+| n=10000, medio | 1.17 | 343.69 | 5.35 | 961.41 |
+| n=10000, último | 1.19 | 688.22 | 0.12 | 1908.42 |
+
+Equipar y deshacer con cursor quedó entre 2.61 y 3.11 µs en todos los tamaños/posiciones. Recorrer n=10/100/1000/10000 tomó 1.11/7.21/67.55/677.33 µs con lista y 0.18/0.99/9.14/90.26 µs con arreglo. Se repite la tendencia de costo independiente de la posición con cursor, a cambio de un recorrido más lento.
+
+### 16.6 Límites conocidos y entregas externas
+
+Con D=1000 se repitió la anomalía: el máximo de K=50 fue **343.3691 y 355.1113 ms**, peor que K=200 (**242.3210 y 223.2240 ms**), aunque las medianas sí siguen el orden esperado. Los máximos observados no son una cota universal; la elección de K se apoya en ambas corridas y no solo en medianas.
+
+**Diagnóstico desde consola, sin crear archivos ni modificar el bench.** Se importaron sus funciones con `venv\Scripts\python.exe -B -` y se registraron pausas mediante `gc.callbacks`, con D=1000, N=600, los tres K y equivalencia validada. Es una exploración adicional: se agregó una consulta cronometrada antes de `medir_consulta`, por lo que cambió la presión de asignaciones y no reproduce exactamente la secuencia del bench original.
+
+| K | Consulta del máximo diagnóstico | Repetición | Total (ms) | GC dentro de la consulta |
+|---:|---|---:|---:|---|
+| 10 | `historia #420` (419 acciones completadas) | 1 | 48.9791 | Generación 0: 0.5533 ms |
+| 50 | `historia 21900` (219 acciones completadas) | 3 | 303.8953 | Generación 2: 271.0896 ms |
+| 200 | `historia #290` (289 acciones completadas) | 1 | 346.5908 | Generación 2: 277.5270 ms |
+
+Se confirmó que una recolección de generación 2 explica la mayor parte de esos dos picos diagnósticos. No se reprodujo el orden K=50 peor que K=200 en esta exploración, ni se instrumentaron las corridas históricas: **la causa y el objetivo exactos de sus máximos de 343/355 ms siguen sin confirmar**. La recolección de basura dependiente de la secuencia de asignaciones sigue siendo una explicación posible para la anomalía repetida, no una conclusión probada sobre aquellas dos corridas.
+
+| Entrega | Estado al documentar T064 |
+|---|---|
+| T025, Mariano: eventos simultáneos | Pendiente; `test_FR002_eventos_simultaneos_y_predecision` en rojo |
+| T043, Kim: marcas `# ir a` | Entregado en `69dbc30`, pendiente de verificar en T050; integrar el commit no equivale a cerrar su aceptación |
+| T046, Kim: carga v4 e import de `persistencia_partida.py` | Pendiente; casos `test_FR014` en rojo, incluido MVC. Falta conservar/aplicar las marcas y retirar el import de controlador |
+| FR-010: inverso y persistente sobre destino compartido | Kim informó una corrección en su rama, todavía no integrada; `test_FR010` sigue en rojo en esta rama |
+
+Estos estados corresponden a la evidencia de integración comunicada por Axel; T064 es documental y no ejecuta el cierre T050/T065. No se declara completa la fidelidad histórica de carga ni la frontera de simultáneos. Archivos antiguos con marcas incompletas no permiten inventar las observaciones faltantes. K=10 cumple los casos medidos, pero K no limita los deltas por acción ni elimina pausas del sistema.
+
+---
+
 # Cómo reproducir las mediciones
 
 Desde la raíz del repositorio:
