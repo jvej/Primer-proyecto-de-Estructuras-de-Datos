@@ -55,6 +55,17 @@ class Registro:
     def __init__(self, max_acciones=MAX_ACCIONES) -> None:
         self._grupos = PilaAcotada(max_acciones)
         self._abierto = None
+        self._memoria_protegida = None
+        self._generaciones_memoria = None
+
+    def _proteger_memoria_puertas(self, memoria):
+        """Vinculo privado de Partida; solo este arreglo recibe barreras."""
+        if self._memoria_protegida is memoria:
+            return
+        if self._memoria_protegida is not None:
+            raise RuntimeError("la memoria protegida no puede sustituirse")
+        self._memoria_protegida = memoria
+        self._generaciones_memoria = [0] * len(memoria)
 
     def abrir_grupo(self) -> None:
         self._abierto = []
@@ -75,12 +86,26 @@ class Registro:
     def cambiar(self, objeto, campo: str | int, valor) -> None:
         if isinstance(objeto, list) and isinstance(campo, int):
             anterior = objeto[campo]
+            protegido = objeto is self._memoria_protegida
+            generaciones = self._generaciones_memoria
+            if protegido:
+                generacion = generaciones[campo]
             objeto[campo] = valor
 
             if self._abierto is not None:
-                self._abierto.append(
-                    lambda: objeto.__setitem__(campo, anterior)
-                )
+                if protegido:
+                    def deshacer_celda():
+                        if generaciones[campo] == generacion:
+                            objeto[campo] = anterior
+                    self._abierto.append(deshacer_celda)
+                else:
+                    self._abierto.append(
+                        lambda: objeto.__setitem__(campo, anterior)
+                    )
+            elif protegido:
+                # Una observacion permanente invalida inversos previos incluso
+                # si su valor coincide. Las generaciones nunca se deshacen.
+                generaciones[campo] += 1
             return
 
         anterior = getattr(objeto, campo)

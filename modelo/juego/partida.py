@@ -33,6 +33,7 @@ class Partida:
         self.semilla = semilla
         self.mapa = Mapa(esqueleto)
         self.conocimiento = ConocimientoMapa(len(self.mapa.salas), self.mapa.salas, self.mapa)
+        self.registro._proteger_memoria_puertas(self.conocimiento.memoria_puertas)
         self.precarga = precarga
         self.resolutor = resolutor
         self.inventario = inventario
@@ -133,7 +134,9 @@ class Partida:
             for direccion in range(len(DIRECCIONES)):
                 if sala.salidas[direccion] is salida:
                     pos = sala.indice * 4 + direccion
-                    if memoria[pos] != estado:
+                    if memoria[pos] != estado or self.registro.grupo_abierto() is None:
+                        # Fuera de accion, observar el mismo valor tambien
+                        # establece una barrera para los inversos anteriores.
                         self.cambiar(memoria, pos, estado)
 
     def _observar_puertas(self) -> None:
