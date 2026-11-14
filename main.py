@@ -51,6 +51,7 @@ BENCHES = (
     ("lista_ordenada", "bench_lista_ordenada.py"),
     ("inventario", "bench_inventario.py"),    
     ("historial", "bench_historial.py"),      
+    ("linea_tiempo", "bench_linea_tiempo.py"),
     ("ordenamiento", "bench_ordenamiento.py"),  
     ("guardado", "bench_guardado_binario.py"),  
 )
