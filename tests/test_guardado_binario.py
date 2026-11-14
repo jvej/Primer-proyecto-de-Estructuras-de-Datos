@@ -7,6 +7,11 @@ RUTA = "prueba_partida.bin"
 
 def armar_partida(n):
     p = PartidaGuardada(1250, 42, 27, 3)
+    # Fixture explícito: mapa sintético de n salas, todas exploradas,
+    # sin memoria de puertas; los bloques físicos son independientes.
+    p.n_salas_conocidas = n
+    p.estados_salas = [2] * n
+    p.memoria_puertas = [0] * (4 * n)
     p.inventario = ["itm_daga", "itm_llave_negra"]
     for i in range(n):
         id_sala = (i * 37) % n + 1
@@ -51,6 +56,9 @@ for s in t.salas:
     assert igual(s, original)
 print("carga completa OK")
 v = PartidaGuardada(0, 1, 10, 1)
+v.n_salas_conocidas = 1  # Mapa de una sala explorada, sin bloques de contenido.
+v.estados_salas = [2]
+v.memoria_puertas = [0] * 4
 v.inventario = ["poción ñ"]
 guardar(RUTA, v)
 assert cargar_general(RUTA).inventario == ["poción ñ"]
