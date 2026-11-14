@@ -69,6 +69,20 @@ class Vista(ABC):
         """Recibe el resumen ya formateado, sin leer el estado actual."""
         self.mostrar_aviso(texto)
 
+    def mostrar_reporte_resolubilidad(self, reporte):
+        """Presenta el resultado existente con su formato canónico."""
+        self.mostrar_aviso(reporte.formatear_reporte())
+
+    def _mostrar_reporte_inicio(self):
+        """Consume el proveedor de la aplicación una vez por reporte nuevo."""
+        proveedor = getattr(self, "proveedor_reporte_resolubilidad", None)
+        if not callable(proveedor):
+            return
+        reporte = proveedor()
+        if reporte is not None and reporte is not getattr(self, "_reporte_presentado", None):
+            self.mostrar_reporte_resolubilidad(reporte)
+            self._reporte_presentado = reporte
+
     def pedir_orden_final(self, partida):
         """HISTORIA o SALIR para consultar/cerrar el final; None continúa la sesión.
 

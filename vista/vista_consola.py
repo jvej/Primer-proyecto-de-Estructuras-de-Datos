@@ -19,6 +19,8 @@ Comandos (los números se cuentan desde 1, como se muestran en pantalla):
     guardar | cargar | salir | ayuda
 """
 
+import unicodedata
+
 from controlador.orden import (ABRIR, AYUDA, ATACAR, CARGAR, EQUIPAR, ESPERAR, GUARDAR, INV_ANTERIOR,
                    INV_INICIO, INV_ORDENAR, INV_SIGUIENTE, INVENTARIO, MOVER, Orden,
                    PERGAMINO, PUNTAJES, RECOGER, SALIR, SOLTAR, USAR)
@@ -238,6 +240,7 @@ class VistaConsola(Vista):
             return None
 
     def mostrar_partida(self, partida):
+        self._mostrar_reporte_inicio()
         jugador = partida.jugador
         sala = partida.sala_actual()
         escribir = self._salida
@@ -309,6 +312,9 @@ class VistaConsola(Vista):
     def mostrar_aviso(self, texto):
         self._salida(texto)
 
+    def mostrar_reporte_resolubilidad(self, reporte):
+        self._salida(reporte.formatear_reporte())
+
     def mostrar_ayuda(self):
         self._salida(AYUDA_TEXTO)
 
@@ -345,7 +351,10 @@ class VistaConsola(Vista):
             i += 1
 
     def _texto_enemigo(self, enemigo):
-        return "%s  vida %d/%d" % (enemigo.etiqueta(), enemigo.vida, enemigo.vida_max)
+        comportamiento = unicodedata.normalize("NFD", str(enemigo.comportamiento or "")).strip().lower()
+        comportamiento = "".join(letra for letra in comportamiento if unicodedata.category(letra) != "Mn")
+        marca = " [CAZADOR]" if comportamiento == "cazador" else ""
+        return "%s%s  vida %d/%d" % (enemigo.etiqueta(), marca, enemigo.vida, enemigo.vida_max)
 
     def _texto_objeto(self, objeto):
         return "%s (%s)  peso %s  valor %s" % (objeto.nombre, objeto.clase, objeto.peso, objeto.valor)

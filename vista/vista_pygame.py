@@ -690,6 +690,7 @@ class VistaPygame(Vista):
         self.partida = partida
         self.enemigo_elegido = ajustar_posicion(self.enemigo_elegido, len(partida.enemigos_en_sala()))
         self.objeto_elegido = ajustar_posicion(self.objeto_elegido, len(partida.objetos_en_sala()))
+        self._mostrar_reporte_inicio()
 
     def mostrar_inventario(self, partida):
         self.partida = partida
@@ -721,6 +722,9 @@ class VistaPygame(Vista):
         self._modal("Tabla de puntajes", lineas)
 
     def mostrar_aviso(self, texto):
+        if str(texto).startswith("ESTADO:"):
+            self._mostrar_panel_texto("Resolubilidad", str(texto))
+            return
         print(texto)
         fin = pygame.time.get_ticks() + DURACION_AVISO_MS
         for linea in str(texto).splitlines():
@@ -783,6 +787,12 @@ class VistaPygame(Vista):
         return None
 
     def mostrar_historia(self, texto):
+        self._mostrar_panel_texto("Historia", texto)
+
+    def mostrar_reporte_resolubilidad(self, reporte):
+        self._mostrar_panel_texto("Resolubilidad", reporte.formatear_reporte())
+
+    def _mostrar_panel_texto(self, titulo, texto):
         """Panel completo: ajusta renglones, permite desplazamiento y cierra con Esc."""
         lineas = []
         for linea in texto.splitlines():
@@ -825,7 +835,7 @@ class VistaPygame(Vista):
             inicio = max(0, min(inicio, max(0, len(lineas) - visibles)))
             self._dibujar_fondo_de_dialogo()
             caja = self._caja_centrada(1000, 580, ALTO // 2)
-            self._texto(self.fuente_media, "Historia", DORADO, caja.centerx, caja.y + 18, centro=True)
+            self._texto(self.fuente_media, titulo, DORADO, caja.centerx, caja.y + 18, centro=True)
             for i, linea in enumerate(lineas[inicio:inicio + visibles]):
                 self._texto(self.fuente, linea, TEXTO, caja.x + 28, caja.y + 58 + i * 22)
             self._texto(self.fuente_chica, "Flechas / rueda / RePag / AvPag / Inicio / Fin: recorrer. Esc: cerrar.",
@@ -1345,8 +1355,11 @@ class VistaPygame(Vista):
             centro = (SALA.x + 330 + columna * 112 + fila * 56, SUELO_Y - fila * 70)
             tipo = _tipo_de_enemigo(enemigo.comportamiento)
             color = self._color_de(tipo)
+            etiqueta = _acortar_ids(enemigo.etiqueta())
+            if tipo == "cazador":
+                etiqueta += " [CAZADOR]"
             rect = self._dibujar_actor(enemigo, tipo, color, centro,
-                                       _acortar_ids(enemigo.etiqueta()), i == self.enemigo_elegido, -1)
+                                       etiqueta, i == self.enemigo_elegido, -1)
             self.zonas.append((rect, ("enemigo", i)))
         if len(enemigos) > MAX_ENEMIGOS_DIBUJADOS:
             self._texto(self.fuente_chica, "+%d enemigos más" % (len(enemigos) - MAX_ENEMIGOS_DIBUJADOS),
@@ -1368,6 +1381,13 @@ class VistaPygame(Vista):
         if elegido:
             pygame.draw.rect(self.pantalla, SELECCION, rect.inflate(12, 12), 3)
             self._texto(self.fuente_chica, "objetivo", SELECCION, rect.centerx, rect.y - 34, centro=True)
+        if nombre_sprite == "cazador":
+            # El distintivo tiene forma propia y texto sin el recorte de la etiqueta.
+            x, y = rect.right + 10, rect.y + 6
+            pygame.draw.polygon(self.pantalla, TEXTO,
+                                ((x, y - 7), (x + 6, y), (x, y + 7), (x - 6, y)), 2)
+            self._texto(self.fuente_chica, "[CAZADOR]", TEXTO, centro[0], rect.y - 18, centro=True)
+            etiqueta = etiqueta.removesuffix(" [CAZADOR]")
         self._texto(self.fuente_chica, etiqueta, TEXTO, centro[0], rect.bottom + 6,
                     centro=True, ancho_max=116)
         self._barra_vida(pygame.Rect(centro[0] - 40, rect.bottom + 24, 80, 7), actor.vida, actor.vida_max)
