@@ -590,7 +590,8 @@ Utilicé Claude como herramienta de apoyo para comprender los requisitos, obtene
 - **Fecha**: 07/11/2026
 - **Herramienta**: Google Antigravity (IDE v2.0)
 - **Modelo**: Gemini 3.8 Flash / Claude Opus 4.6
-- **Uso de la respuesta**: Generar los artefactos de la fase de planificación de spec-kit (plan.md, esearch.md, data-model.md, 	asks.md) y el reporte de análisis de consistencia para la capacidad 001 (terreno, cazador e invalidación de rutas), estructurados en cuatro bloques técnicos (costos de movimiento, contrato C2 de puertas, contrato C3 del cazador e invalidación/benchmarking) bajo las restricciones de la constitución.
+- **Uso de la respuesta**: Generar los artefactos de la fase de planificación de spec-kit (plan.md, 
+esearch.md, data-model.md, 	asks.md) y el reporte de análisis de consistencia para la capacidad 001 (terreno, cazador e invalidación de rutas), estructurados en cuatro bloques técnicos (costos de movimiento, contrato C2 de puertas, contrato C3 del cazador e invalidación/benchmarking) bajo las restricciones de la constitución.
 
 > Continuemos con la planificación de mi capacidad
 > 001-terreno-cazador.
@@ -762,8 +763,7 @@ Utilicé Claude como herramienta de apoyo para comprender los requisitos, obtene
 > 
 > Al terminar, mostrámelos resultados reales, las tareas
 > completadas, los archivos modificados y cualquier pendiente.
-> Entregame el contenido completo de los archivos modificados
-> para copiar y pegar.
+> 
 
 
 #### 25. Inspección e implementación de puertas, avisos y retroceso (Bloque 2, T011-T014) — 07/11/2026
@@ -928,6 +928,65 @@ Utilicé Claude como herramienta de apoyo para comprender los requisitos, obtene
 > Registrá este prompt completo en PROMPTS_LLM.md.
 > Entregame resultados reales, archivos completos modificados,
 > tareas verificadas y comandos de commit. Yo hago los commits.
+
+#### 27. Invalidación reactiva de rutas con reutilización selectiva (Bloque 4, T021-T023) - 12/11/2026
+
+- **Integrante**: Mariano
+- **Fecha**: 12/11/2026
+- **Herramienta**: Google Antigravity (IDE v2.0)
+- **Modelo**: Gemini 3.8 Flash / Claude Opus 4.6
+- **Uso de la respuesta**: Implementar test-first las pruebas de invalidación reactiva de rutas para cazadores (FR-008) cubriendo cierre de puertas en ruta, apertura habilitante, apertura de atajo más barato, movimiento del jugador entre turnos, activación con mayor rango, retroceso con pergamino y cambios de puertas fuera de región; implementar en `cazador.py` la reutilización selectiva diferenciando $R_{\text{activo}}$ y $R_{\text{utilizado}}$ con verificación de validez por posición de jugador, cota de rango y filtrado de puertas afectadas según C2; corregir la doble invalidación en `Partida._notificar_invalidacion_rutas`; actualizar plan.md, research.md y tasks.md.
+
+> Continuemos T021–T023 sobre el cazador implementado.
+> 
+> Leé el código actual de Partida, conocimiento, planificador
+> de «ir a», cazador y registro de retroceso. Respetá los
+> contratos existentes de Kim y Mariano.
+> 
+> Primero escribí pruebas de FR-008 para:
+> - Cierre de una puerta de la ruta.
+> - Apertura que habilita una ruta antes imposible.
+> - Apertura que crea un atajo más barato.
+> - Movimiento del jugador entre turnos.
+> - Activación de un cazador con mayor rango.
+> - Retroceso que restaura puertas, jugador y enemigos.
+> - Cambios de puertas fuera de la región calculada.
+> 
+> Compará las decisiones optimizadas con un cálculo desde
+> cero sobre el mismo estado. Comprobá acción, primera
+> vecina y costo de movimiento.
+> 
+> Implementá la reutilización diferenciando R_activo y
+> R_utilizado. Conservá el campo únicamente cuando se pueda
+> demostrar que sigue siendo válido. Usá marcas vigentes
+> para reconocer distancias calculadas.
+> 
+> Conectá la invalidación con los avisos C2 existentes.
+> Revisá _notificar_invalidacion_rutas: actualmente permite
+> observadores y una llamada directa a cache_rutas.
+> Elegí una integración que evite invalidar dos veces
+> el mismo componente por un único aviso.
+> 
+> Después del pergamino descartá los datos derivados de rutas.
+> Verificá que la memoria de puertas del jugador conserve
+> las reglas de observación y retroceso. El cazador consulta
+> el estado real aunque el jugador recuerde otro.
+> 
+> Autorizo ajustar plan.md, research.md y tasks.md de 001
+> para documentar la justificación y trazabilidad del cambio.
+> Si cambia una regla funcional, corregí primero spec.md
+> y prepará su commit antes del código.
+> 
+> Ejecutá las pruebas completas con venv\Scripts\python.exe:
+> -m tests.test_terreno_cazador
+> -m tests.test_partida
+> -m tests.test_conocimiento_partida
+> -m tests.test_planificador_rutas
+> y las regresiones de retroceso.
+> 
+> Registrá este prompt #27 textualmente en PROMPTS_LLM.md.
+> Entregame archivos completos modificados, resultados reales,
+> pendientes y comandos de git para que yo haga el commit.
 
 ---
 

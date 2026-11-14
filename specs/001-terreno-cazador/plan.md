@@ -136,6 +136,8 @@ bench/
    - Incrementar `token_busqueda += 1` en cada ejecución; solo los nodos con `marca[i] == token_busqueda` se consideran alcanzados.
 
 ### Bloque 4: Invalidación Reactiva y Mediciones (SC-001..SC-006)
+
+**Estado**: **IMPLEMENTADO (T021-T023)**. Verificado mediante 28 pruebas automatizadas de aceptacin y regresin en `tests/test_terreno_cazador.py`. La invalidacin reactiva distingue $R_{\text{activo}}$ de $R_{\text{utilizado}}$, suscribe `PlanificadorCazador.notificar_cambio_puerta` al contrato C2 ignorando puertas exteriores ($d > R_{\text{utilizado}}$), y descarta incondicionalmente las rutas tras retroceso con pergamino, eliminando redundancias en `_notificar_invalidacion_rutas`.
 1. **Criterios de Invalidación del Campo Compartido**:
    - Se diferencian **$R_{\text{activo}}$** (el rango del cazador que necesita actuar) y **$R_{\text{utilizado}}$** (la cota máxima usada en el cálculo previo).
    - El campo compartido sigue siendo válido si:

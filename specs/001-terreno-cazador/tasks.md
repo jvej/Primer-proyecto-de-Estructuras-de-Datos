@@ -64,13 +64,13 @@
 
 **Propósito**: Garantizar la equivalencia observable estricta con un cálculo desde cero ante eventos dinámicos.
 
-- [ ] T021 [US3] Agregar pruebas de aceptación en `tests/test_terreno_cazador.py` para:
+- [x] T021 [US3] Agregar pruebas de aceptación en `tests/test_terreno_cazador.py` para:
   - Puerta de la ruta cerrada entre dos turnos del cazador (Apéndice B).
   - Apertura de puerta que desbloquea ruta previamente inaccesible dentro del rango.
   - Desplazamiento del jugador a una nueva sala entre turnos del cazador.
   - Activación de cazador que requiere $R_{\text{activo}} > R_{\text{utilizado}}$ (FR-008). -> `python -m tests.test_terreno_cazador`
-- [ ] T022 [US3] Implementar en `modelo/juego/cazador.py` la lógica de invalidación reactiva diferenciando $R_{\text{activo}}$ y $R_{\text{utilizado}}$, conservando distancias si el jugador no se movió, no aumenta el rango requerido y ninguna puerta con extremo $\le R_{\text{utilizado}}$ cambió de estado (FR-008). -> `python -m tests.test_terreno_cazador`
-- [ ] T023 [US3] Conectar el despachador de puertas de `Partida` (Contrato C2) con la caché de rutas del cazador (FR-008). -> `python -m tests.test_terreno_cazador`
+- [x] T022 [US3] Implementar en `modelo/juego/cazador.py` la lógica de invalidación reactiva diferenciando $R_{\text{activo}}$ y $R_{\text{utilizado}}$, conservando distancias si el jugador no se movió, no aumenta el rango requerido y ninguna puerta con extremo $\le R_{\text{utilizado}}$ cambió de estado (FR-008). -> `python -m tests.test_terreno_cazador`
+- [x] T023 [US3] Conectar el despachador de puertas de `Partida` (Contrato C2) con la caché de rutas del cazador (FR-008). -> `python -m tests.test_terreno_cazador`
 
 ---
 
