@@ -41,6 +41,7 @@ from controlador.reproductor import reproducir
 CARPETA_PROYECTO = os.path.dirname(os.path.abspath(__file__))
 
 BENCHES = (
+    ("mapa_conocido", "bench_mapa_conocido.py"),
     ("agenda", "bench_motor.py"),             
     ("red", "bench_red.py"),              
     ("resolubilidad", "bench_resolubilidad.py"),
