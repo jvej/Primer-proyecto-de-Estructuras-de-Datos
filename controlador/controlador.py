@@ -13,6 +13,9 @@ from controlador.orden import (ABRIR, AYUDA, ATACAR, CARGAR, EQUIPAR, ESPERAR, G
                                ORDENES_DE_PARTIDA, PERGAMINO, PUNTAJES, RECOGER, SALIR, SOLTAR, USAR,
                                VER_REPETICIONES, clave_de_argumento, es_clave)
 from modelo.juego.sala import DIRECCIONES
+from modelo.juego.orden import HISTORIA, interpretar_historia
+from modelo.juego.linea_tiempo import ErrorHistoriaNoDisponible
+from controlador.resumen_historia import formatear_resumen
 
 
 class Controlador:
@@ -65,17 +68,35 @@ class Controlador:
         C1. El callback debe limitarse a eventos/presentación, sin ejecutar
         acciones de juego. Sus excepciones se propagan; no se ocultan.
         """
-        self._observadores_viaje.append(funcion)
+        if (getattr(funcion, "__self__", None) is self.vista
+                and callable(getattr(type(self.vista), "retirar_historia_pendiente", None))):
+            def atender_y_consultar(partida):
+                continuar = funcion(partida)
+                # El callback ya terminó: frontera estable anterior al paso.
+                orden = self.vista.retirar_historia_pendiente(partida)
+                if orden is not None and orden.tipo == HISTORIA:
+                    self._consultar_historia(orden)
+                    if getattr(self.vista, "cerrada", False) is True:
+                        return False
+                return continuar
+            self._observadores_viaje.append(atender_y_consultar)
+        else:
+            self._observadores_viaje.append(funcion)
 
     def ejecutar(self, orden):
         """Ejecuta una orden. Devuelve True si fue aceptada (las rechazadas no cambian
         nada ni consumen tiempo; el motivo queda en la bitácora de la partida)."""
         if isinstance(orden, str):
+            if orden.strip().lower().split()[:1] == [HISTORIA]:
+                # También los errores textuales de HISTORIA quedan fuera de IR_A.
+                return self._consultar_historia(Orden(HISTORIA, orden.strip()[len(HISTORIA):].strip()))
             try:
                 orden = interpretar_ir_a(orden)
             except ValueError as error:
                 self._avisar(str(error))
                 return False
+        if orden.tipo == HISTORIA:
+            return self._consultar_historia(orden)
         if self._viaje_activo:
             self._token_viaje += 1
             if orden.tipo == IR_A:
@@ -86,6 +107,30 @@ class Controlador:
         if orden.tipo in ORDENES_DE_PARTIDA:
             return self._ejecutar_de_partida(orden)
         return self._ejecutar_de_interfaz(orden)
+
+    def _consultar_historia(self, orden):
+        """Consulta de interfaz: nunca usa bitácora ni rechazo del juego."""
+        try:
+            p = self.partida
+            if p is None:
+                raise ErrorHistoriaNoDisponible("No hay una partida para consultar.")
+            validada = interpretar_historia("historia %s" % orden.argumento,
+                                           p.reloj.tiempo_actual, p.acciones)
+            linea = getattr(p, "linea_tiempo", None)
+            if linea is None:
+                raise ErrorHistoriaNoDisponible("La historia no se ha inicializado.")
+            selector = validada.argumento
+            resumen = (linea.consultar_accion(int(selector[1:])) if selector.startswith("#")
+                       else linea.consultar_t(int(selector)))
+            texto = formatear_resumen(resumen)
+        except (ValueError, ErrorHistoriaNoDisponible) as error:
+            if self.vista is not None:
+                self.vista.mostrar_aviso("Historia no disponible: %s" % error)
+            return False
+        if self.vista is not None:
+            mostrar = getattr(self.vista, "mostrar_historia", self.vista.mostrar_aviso)
+            mostrar(texto)
+        return True
 
     def _ejecutar_ir_a(self, orden):
         p = self.partida
@@ -320,10 +365,19 @@ class Controlador:
             self.vista.mostrar_partida(self.partida)
             self.ejecutar(self.vista.pedir_orden(self.partida))
         if self.partida.estado != "jugando":
-            self.vista.mostrar_partida(self.partida)
-            self.vista.mostrar_fin(self.partida)
-            if self.al_terminar is not None:
-                self.vista.mostrar_aviso(self.al_terminar(self.partida))
+            if getattr(self, "_final_presentado", None) is not self.partida:
+                self._final_presentado = self.partida
+                self.vista.mostrar_partida(self.partida)
+                self.vista.mostrar_fin(self.partida)
+                if self.al_terminar is not None:
+                    self.vista.mostrar_aviso(self.al_terminar(self.partida))
+            pedir_final = getattr(type(self.vista), "pedir_orden_final", None)
+            while not self._terminado and callable(pedir_final):
+                orden = pedir_final(self.vista, self.partida)
+                if orden is None:
+                    break
+                if orden.tipo in (HISTORIA, SALIR):
+                    self.ejecutar(orden)
 
     def correr_sesion(self, listar_criptas, crear_partida):
         while not self._terminado:

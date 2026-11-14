@@ -65,6 +65,21 @@ class Vista(ABC):
         """True si esta vista puede mostrar una repetición paso a paso."""
         return False
 
+    def mostrar_historia(self, texto):
+        """Recibe el resumen ya formateado, sin leer el estado actual."""
+        self.mostrar_aviso(texto)
+
+    def pedir_orden_final(self, partida):
+        """HISTORIA o SALIR para consultar/cerrar el final; None continúa la sesión.
+
+        Las vistas anteriores conservan su flujo sin una entrada adicional.
+        """
+        return None
+
+    def retirar_historia_pendiente(self, partida):
+        """Orden recogida entre pasos; el controlador la atiende fuera del callback."""
+        return None
+
     def mostrar_mapa(self, mapa):
         """Presentación textual compatible; recibe datos ya filtrados por Partida."""
         self.mostrar_aviso("\n".join(lineas_mapa_conocido(mapa)))
