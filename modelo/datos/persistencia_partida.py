@@ -3,7 +3,7 @@ import os
 from modelo.juego.errores import ErrorCripta
 from modelo.datos.guardado_binario import (ErrorFormato, PartidaGuardada, SalaGuardada, cargar_general,
                               guardar, leer_sala)
-from controlador.orden import Orden
+from modelo.juego.orden import Orden
 from modelo.juego.sala import DIRECCIONES
 
 
@@ -22,7 +22,7 @@ def foto_de(partida, version_catalogo, nombre, ordenes, solicitudes=0):
     for objeto in partida.inventario.objetos():
         foto.inventario.append(objeto.id)
     for orden in ordenes:
-        foto.ordenes.append(orden.a_texto())
+        foto.ordenes.append(orden if isinstance(orden, str) else orden.a_texto())
     for sala in partida.mapa.salas:
         if not sala.incorporada and sala.ultimo_instante_jugador is None:
             continue                         
@@ -54,14 +54,14 @@ class PersistenciaPartida:
         carpeta = os.path.dirname(self.ruta)
         if carpeta:
             os.makedirs(carpeta, exist_ok=True)
-        foto = foto_de(partida, app.version_catalogo, app.nombre, app.ordenes,
+        foto = foto_de(partida, app.version_catalogo, app.nombre, app.lineas_para_reconstruir(),
                        app.presupuesto.realizadas)
         try:
             guardar(self.ruta, foto)
         except OSError as error:
             return "No se pudo guardar la partida: %s" % error
         return "Partida guardada en %s (%d acciones, %d salas)." % (
-            self.ruta, len(foto.ordenes), len(foto.salas))
+            self.ruta, len(app.ordenes), len(foto.salas))
 
     def cargar(self):
         if not os.path.exists(self.ruta):
@@ -71,19 +71,12 @@ class PersistenciaPartida:
         except (ErrorFormato, OSError) as error:
             raise ErrorCarga("No se pudo leer el archivo de partida: %s" % error)
 
-        ordenes = []
-        for linea in general.ordenes:
-            try:
-                ordenes.append(Orden.desde_texto(linea))
-            except ValueError as error:
-                raise ErrorCarga("El archivo de partida está dañado: %s" % error)
-
         app = self.aplicacion
         marca = app.presupuesto.marca()
 
         def validar(partida):
             """Compara la re-simulación con la foto guardada. Corre dentro de
-            crear_partida, ANTES de reemplazar la partida actual: si lanza, la aplicación,
+            preparar_reconstruccion, ANTES de reemplazar la partida actual: si lanza, la aplicación,
             el controlador y el log siguen con la partida que se estaba jugando."""
             try:
                 sala_guardada = leer_sala(self.ruta, general.sala_actual)
@@ -160,15 +153,19 @@ class PersistenciaPartida:
                                  % ", ".join(diferencias))
 
         try:
-            partida = app.crear_partida(general.id_cripta, semilla=general.semilla,
-                                        ordenes_previas=ordenes, partida_nueva=False,
-                                        exigir_versiones=(general.version_cripta,
-                                                          general.version_catalogo),
-                                        validar=validar)
+            with app.preparar_reconstruccion(
+                    general.id_cripta, semilla=general.semilla,
+                    exigir_versiones=(general.version_cripta,
+                                      general.version_catalogo)) as (partida, aplicar_linea):
+                for numero, linea in enumerate(general.ordenes, 1):
+                    if not aplicar_linea(linea):
+                        raise ErrorCarga("La línea %d (%s) fue rechazada al reconstruir la partida."
+                                         % (numero, linea))
+                validar(partida)
         except ErrorCarga:
             raise
-        except ErrorCripta as error:
-            raise ErrorCarga("No se puede cargar la partida guardada: %s" % error)
+        except (ErrorCripta, ValueError, OSError) as error:
+            raise ErrorCarga("No se puede cargar la partida guardada: %s" % error) from error
         app.presupuesto.continuar(general.solicitudes, marca)
-        partida.bitacora.agregar("Partida cargada: %d acciones re-ejecutadas." % len(ordenes))
+        partida.bitacora.agregar("Partida cargada: %d acciones re-ejecutadas." % len(app.ordenes))
         return partida

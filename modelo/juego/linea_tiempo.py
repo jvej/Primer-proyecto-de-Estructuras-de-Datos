@@ -1,0 +1,322 @@
+"""Almacenamiento histórico independiente de la pila reversible del motor."""
+
+from dataclasses import dataclass, replace
+
+from modelo.juego.resumen_historico import (
+    ProyeccionHistorica, aplicar_delta, copiar_valor)
+
+
+# Candidato inicial; T063 debe respaldarlo o sustituirlo con mediciones.
+K_DEFECTO = 50
+OPERACIONES = ("ASIGNAR", "INSERTAR", "QUITAR", "MOVER", "ALTA")
+
+
+class ErrorHistoriaNoDisponible(RuntimeError):
+    """Se informa solo al consultar; un fallo histórico no detiene el motor."""
+
+
+class ArregloContiguo:
+    """Directorio cuya reducción lógica solo libera elementos del sufijo."""
+
+    def __init__(self):
+        self._datos = []
+        self.longitud = 0
+        self.capacidad = 0
+
+    def __len__(self):
+        return self.longitud
+
+    def __iter__(self):
+        for i in range(self.longitud):
+            yield self._datos[i]
+
+    def __getitem__(self, posicion):
+        if type(posicion) is not int or not 0 <= posicion < self.longitud:
+            raise IndexError("Posición fuera del directorio histórico")
+        return self._datos[posicion]
+
+    def agregar(self, elemento):
+        if self.longitud == self.capacidad:
+            capacidad = max(4, self.capacidad * 2)
+            nuevos = [None] * capacidad
+            for i in range(self.longitud):
+                nuevos[i] = self._datos[i]
+            self._datos = nuevos
+            self.capacidad = capacidad
+        self._datos[self.longitud] = elemento
+        self.longitud += 1
+
+    def truncar(self, longitud):
+        if type(longitud) is not int or not 0 <= longitud <= self.longitud:
+            raise ValueError("Longitud histórica inválida")
+        while self.longitud > longitud:
+            self.longitud -= 1
+            self._datos[self.longitud] = None
+
+
+@dataclass(slots=True)
+class DeltaHistorico:
+    operacion: str
+    destino: str
+    campo: str | int | None = None
+    token: int | None = None
+    anterior: object = None
+    nuevo: object = None
+    reversible: bool = False
+    grupo: int | None = None
+    frontera: int = 0
+    elemento: int | None = None
+    posicion_anterior: int | None = None
+    posicion_nueva: int | None = None
+    ancla_anterior: int | None = None
+    ancla_siguiente: int | None = None
+    secuencia_origen: int = 0
+    instante_origen: int = 0
+    instante: int = 0
+    efectivo: bool = True
+
+    def __post_init__(self):
+        if self.operacion not in OPERACIONES:
+            raise ValueError(f"Operación histórica inválida: {self.operacion}")
+        self.anterior = copiar_valor(self.anterior)
+        self.nuevo = copiar_valor(self.nuevo)
+
+
+@dataclass(slots=True)
+class GrupoHistorico:
+    identidad: int
+    numero: int
+    cursor_inicio: int
+    cursor_fin: int | None = None
+
+
+@dataclass(slots=True)
+class FronteraHistorica:
+    acciones_completadas: int
+    reloj: int
+    cursor: int
+
+
+@dataclass(slots=True)
+class PuntoControl:
+    acciones_completadas: int
+    reloj: int
+    cursor: int
+    proyeccion: object
+
+
+@dataclass(slots=True)
+class MetricasHistoria:
+    copias_completas: int = 0
+    acciones_aplicadas: int = 0
+    externos_aplicados: int = 0
+    prefijo_visitado: int = 0
+    cambios_visitados_en_recorte: int = 0
+
+
+class LineaTiempo:
+    def __init__(self, checkpoint_cada=K_DEFECTO, leer_reloj=None):
+        if type(checkpoint_cada) is not int or checkpoint_cada <= 0:
+            raise ValueError("checkpoint_cada debe ser un entero positivo")
+        if not callable(leer_reloj):
+            raise ValueError("La línea de tiempo necesita un lector de reloj")
+        self.checkpoint_cada = checkpoint_cada
+        self._leer_reloj = leer_reloj
+        self.deltas = ArregloContiguo()
+        self.grupos = ArregloContiguo()
+        self.fronteras = ArregloContiguo()
+        self.checkpoints = ArregloContiguo()
+        self.metricas = MetricasHistoria()
+        self._secuencia = 0
+        self.proyeccion = None
+        self.disponible = False
+        self.motivo_no_disponible = "La historia todavía no se ha inicializado"
+
+    def marcar_no_disponible(self, error):
+        """Conserva el diagnóstico por valor, sin retener excepciones ni el motor."""
+        if isinstance(error, Exception):
+            motivo = f"{type(error).__name__}: {error}"
+            traza = error.__traceback__
+            if traza is not None:
+                while traza.tb_next is not None:
+                    traza = traza.tb_next
+                codigo = traza.tb_frame.f_code
+                motivo += f" ({codigo.co_filename}:{traza.tb_lineno}, {codigo.co_name})"
+        else:
+            motivo = str(error)
+        self.disponible = False
+        self.motivo_no_disponible = motivo
+        # Una proyección parcial no puede confundirse con una foto consultable.
+        self.proyeccion = None
+
+    def exigir_disponible(self):
+        if not self.disponible:
+            raise ErrorHistoriaNoDisponible(self.motivo_no_disponible)
+
+    @property
+    def cursor(self):
+        return len(self.deltas)
+
+    def iniciar(self, proyeccion):
+        """Recibe la proyección propia del inicio y conserva una copia en b=0."""
+        if not isinstance(proyeccion, ProyeccionHistorica):
+            raise TypeError("El inicio requiere una ProyeccionHistorica")
+        if (proyeccion.reloj != 0 or proyeccion.acciones != 0
+                or self._leer_reloj() != 0):
+            raise ValueError("La historia debe iniciarse en la frontera 0, antes de acciones")
+        sala_inicial = None
+        for sala in proyeccion.salas:
+            if sala.base.id == proyeccion.jugador.sala:
+                sala_inicial = sala
+                break
+        if (sala_inicial is None or not sala_inicial.incorporada
+                or sala_inicial.ultimo_instante_jugador is None):
+            raise ValueError("La proyección debe tomarse después de Partida.iniciar()")
+        checkpoint = PuntoControl(0, 0, 0, proyeccion.copiar())
+        # Repetir la inicialización en la frontera cero reemplaza su foto.
+        self.deltas = ArregloContiguo()
+        self.grupos = ArregloContiguo()
+        self.fronteras = ArregloContiguo()
+        self.checkpoints = ArregloContiguo()
+        self.metricas = MetricasHistoria()
+        self._secuencia = 0
+        self.proyeccion = proyeccion
+        self.fronteras.agregar(FronteraHistorica(0, 0, 0))
+        self.checkpoints.agregar(checkpoint)
+        self.metricas.copias_completas += 1
+        self.disponible = True
+        self.motivo_no_disponible = None
+
+    def anotar(self, delta):
+        """Recibe exclusivamente datos ya normalizados, nunca objetos C1 vivos."""
+        if not isinstance(delta, DeltaHistorico):
+            raise TypeError("Se requiere un DeltaHistorico normalizado")
+        instante = self._leer_reloj()
+        self._secuencia += 1
+        delta.secuencia_origen = self._secuencia
+        delta.instante_origen = instante
+        delta.instante = instante
+        delta.frontera = len(self.grupos)
+        self.deltas.agregar(delta)
+
+    def abrir_accion(self, numero, reloj, cursor_preaccion=None, grupo=None):
+        self.exigir_disponible()
+        if numero != len(self.grupos) + 1:
+            raise ValueError("Número de acción histórica fuera de secuencia")
+        cursor = self.cursor if cursor_preaccion is None else cursor_preaccion
+        frontera = self.fronteras[numero - 1]
+        frontera.reloj, frontera.cursor = reloj, cursor
+        self.grupos.agregar(GrupoHistorico(
+            numero if grupo is None else grupo, numero, cursor))
+
+    def cerrar_accion(self, numero, reloj, cursor_postaccion=None, grupo=None):
+        self.exigir_disponible()
+        if numero != len(self.grupos) or self.grupos[numero - 1].cursor_fin is not None:
+            raise ValueError("No hay una acción histórica abierta con ese número")
+        cursor = self.cursor if cursor_postaccion is None else cursor_postaccion
+        self.grupos[numero - 1].cursor_fin = cursor
+        self.proyeccion.reloj = reloj
+        self.fronteras.agregar(FronteraHistorica(numero, reloj, cursor))
+        if numero % self.checkpoint_cada == 0:
+            self.checkpoints.agregar(PuntoControl(
+                numero, reloj, cursor, self.proyeccion.copiar()))
+            self.metricas.copias_completas += 1
+
+    def _copiar_hasta(self, checkpoint, cursor):
+        copia = checkpoint.proyeccion.copiar()
+        self.metricas.acciones_aplicadas = 0
+        self.metricas.externos_aplicados = 0
+        ultimo_grupo = None
+        for i in range(checkpoint.cursor, cursor):
+            delta = self.deltas[i]
+            if delta.grupo is None:
+                self.metricas.externos_aplicados += 1
+            elif delta.grupo != ultimo_grupo:
+                self.metricas.acciones_aplicadas += 1
+                ultimo_grupo = delta.grupo
+            aplicar_delta(copia, delta)
+        return copia
+
+    def consultar_accion(self, k):
+        self.exigir_disponible()
+        if type(k) is not int or not 1 <= k <= len(self.grupos) + 1:
+            raise ValueError("El número de acción debe estar entre 1 y N+1")
+        b = k - 1
+        checkpoint = self.checkpoints[b // self.checkpoint_cada]
+        frontera = self.fronteras[b]
+        cursor = self.cursor if b == len(self.grupos) else frontera.cursor
+        copia = self._copiar_hasta(checkpoint, cursor)
+        copia.reloj = frontera.reloj
+        return copia.resumir()
+
+    def consultar_t(self, t):
+        self.exigir_disponible()
+        actual = self._leer_reloj()
+        if type(t) is not int or t < 0 or t > actual:
+            raise ValueError("El instante debe ser un entero entre 0 y el reloj actual")
+        if t == actual and self.proyeccion.estado != "jugando":
+            return self.consultar_accion(len(self.grupos) + 1)
+        # Último checkpoint con reloj <= t, mediante binaria propia.
+        izquierda, derecha = 0, len(self.checkpoints)
+        while izquierda < derecha:
+            medio = (izquierda + derecha) // 2
+            if self.checkpoints[medio].reloj <= t:
+                izquierda = medio + 1
+            else:
+                derecha = medio
+        checkpoint = self.checkpoints[izquierda - 1]
+        limite = self.cursor
+        for b in range(checkpoint.acciones_completadas,
+                       min(len(self.grupos),
+                           checkpoint.acciones_completadas + self.checkpoint_cada)):
+            if self.fronteras[b].reloj >= t:
+                limite = self.grupos[b].cursor_inicio
+                break
+        cursor = checkpoint.cursor
+        while cursor < limite and self.deltas[cursor].instante <= t:
+            cursor += 1
+        copia = self._copiar_hasta(checkpoint, cursor)
+        copia.reloj = t
+        return copia.resumir()
+
+    def recortar(self, grupo, reloj_restaurado):
+        """Compacta solo el sufijo retirado, sin copiar directorios ni fotos.
+
+        Restaura la proyección mediante inversos analíticos y reaplica los
+        persistentes sobre esos datos propios, sin ejecutar el motor.
+        """
+        self.exigir_disponible()
+        if not len(self.grupos) or self.grupos[len(self.grupos) - 1].identidad != grupo:
+            raise ValueError("El grupo retirado no es el último de la historia")
+        ultimo = self.grupos[len(self.grupos) - 1]
+        inicio = ultimo.cursor_inicio
+        numero = ultimo.numero - 1
+        sufijo = []
+        persistentes = []
+        self.metricas.prefijo_visitado = 0
+        self.metricas.cambios_visitados_en_recorte = 0
+        for i in range(inicio, self.cursor):
+            delta = self.deltas[i]
+            sufijo.append(delta)
+            self.metricas.cambios_visitados_en_recorte += 1
+            if not delta.reversible:
+                persistentes.append(replace(
+                    delta, grupo=None, frontera=numero,
+                    instante=min(delta.instante, reloj_restaurado)))
+        self.deltas.truncar(inicio)
+        for delta in persistentes:
+            self.deltas.agregar(delta)
+        self.grupos.truncar(numero)
+        self.fronteras.truncar(numero + 1)
+        frontera = self.fronteras[numero]
+        frontera.reloj, frontera.cursor = reloj_restaurado, self.cursor
+        self.checkpoints.truncar(1 + numero // self.checkpoint_cada)
+        self.metricas.copias_completas = len(self.checkpoints)
+        from modelo.juego.resumen_historico import deshacer_delta, aplicar_persistente
+        for delta in reversed(sufijo):
+            deshacer_delta(self.proyeccion, delta)
+            self.metricas.cambios_visitados_en_recorte += 1
+        for delta in persistentes:
+            aplicar_persistente(self.proyeccion, delta)
+            self.metricas.cambios_visitados_en_recorte += 1
+        self.proyeccion.reloj = reloj_restaurado

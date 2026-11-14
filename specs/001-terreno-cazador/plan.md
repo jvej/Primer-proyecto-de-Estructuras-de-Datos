@@ -1,4 +1,4 @@
-﻿# Implementation Plan: Terreno, cazador e invalidación de rutas
+# Implementation Plan: Terreno, cazador e invalidación de rutas
 
 **Branch**: `001-terreno-cazador` | **Date**: 2026-11-07 | **Spec**: [specs/001-terreno-cazador/spec.md](spec.md)  
 **Author**: Mariano (Motor del juego)
@@ -71,7 +71,8 @@ modelo/juego/
 main.py                  # Integración del comando --bench cazador
 
 modelo/estructuras/
-└── monticulo_min.py     # Montículo binario propio provisto por Kim (Contrato C3 - PENDIENTE)
+├── dijkstra.py          # Búsqueda dijkstra_acotado compartida (Contrato C3 - DISPONIBLE)
+└── monticulo_min.py     # Montículo binario propio provisto por Kim (Contrato C3 - DISPONIBLE)
 
 tests/
 ├── test_terreno_cazador.py  # Pruebas de aceptación automatizadas vinculadas a FR-001..FR-008
@@ -121,9 +122,9 @@ bench/
    - Agregar parámetro opcional `rango: int = 0` al final del constructor de `Enemigo` (`modelo/juego/actor.py`), compatible con todos los enemigos de P1.
    - En `mapa.incorporar`: leer `ficha.get("rango", 0)` y validar entero $\ge 0$.
    - **Coordinación con Kim**: En el guardado binario v4 (`guardado_binario.py`), coordinar si los enemigos cazadores persisten `rango` o si la carga v4 lo reconstruye desde el catálogo (Contrato C7).
-2. **Dependencia de Kim (Contrato C3 - PENDIENTE)**:
-   - Kim provee `modelo/estructuras/monticulo_min.py` y `dijkstra_acotado`.
-   - Se acordó la firma con filtro de salidas (`filtro_salida(salida) -> bool`), cota máxima de rango y arreglos reutilizables con marcas de búsqueda.
+2. **Dependencia de Kim (Contrato C3 - DISPONIBLE)**:
+   - Kim entregó `modelo/estructuras/monticulo_min.py` y `modelo/estructuras/dijkstra.py` con `dijkstra_acotado(origen, mapa, filtro_salida, cota_rango=None, token_busqueda=1, arreglo_dist=None, arreglo_marca=None)`.
+   - Se reutiliza la firma sin modificarla: cada consumidor (el cazador de Mariano y el viaje «ir a» de Kim) administra de forma independiente sus propios arreglos de distancia y marca y sus tokens de búsqueda para evitar interferencias.
 3. **Cálculo Compartido desde el Jugador**:
    - Realizar una única búsqueda Dijkstra desde la sala del jugador acotada a $R_{\text{utilizado}} = \max(\{c.rango \text{ activos}\})$.
    - Cada cazador en sala $u$ consulta localmente sus salidas abiertas:

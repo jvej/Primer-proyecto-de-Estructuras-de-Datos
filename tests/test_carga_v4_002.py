@@ -1,5 +1,6 @@
 """Carga v4 estricta: replay, transacción y conservación de inversos C1/C2."""
 
+from contextlib import contextmanager
 from pathlib import Path
 import struct
 import unittest
@@ -160,29 +161,30 @@ class PruebasCargaV4(unittest.TestCase):
     def test_P_Q_R_validacion_solo_lectura_mantiene_inversos_y_flags(self):
         app, c = self.escenario([(RECOGER, 1), (MOVER, "N")])
         self.guardar(c)
-        crear_original = app.crear_partida
+        preparar_original = app.preparar_reconstruccion
         inspecciones = []
 
-        def crear(*args, **kwargs):
-            self.assertIs(kwargs["partida_nueva"], False)
-            self.assertEqual(kwargs["ordenes_previas"], app.ordenes)
+        @contextmanager
+        def preparar(*args, **kwargs):
             self.assertEqual(kwargs["exigir_versiones"],
                              (app.partida.version_cripta, app.version_catalogo))
-            validar_original = kwargs["validar"]
-
-            def validar(p):
+            with preparar_original(*args, **kwargs) as (p, aplicar):
                 conocimiento, registro = p.conocimiento, p.registro
                 estados, memoria = conocimiento.estado_salas, conocimiento.memoria_puertas
                 grupos = registro._grupos
-                elementos = grupos.elementos()
-                antes = self.foto(p)
-                validar_original(p)
+                def aplicar_comprobando(linea):
+                    aceptada = aplicar(linea)
+                    inspecciones.append((self.foto(p), grupos.elementos()))
+                    return aceptada
+                yield p, aplicar_comprobando
+                antes, elementos = inspecciones[-1]
                 self.assertEqual(self.foto(p), antes)
                 self.assertIs(p.conocimiento, conocimiento)
                 self.assertIs(p.registro, registro)
                 self.assertIs(registro._grupos, grupos)
                 self.assertIs(conocimiento.estado_salas, estados)
                 self.assertIs(conocimiento.memoria_puertas, memoria)
+                self.assertEqual(len(elementos), len(grupos.elementos()))
                 for a, b in zip(elementos, grupos.elementos()):
                     self.assertIs(a, b)
                 capturados = []
@@ -193,42 +195,81 @@ class PruebasCargaV4(unittest.TestCase):
                             if objeto is estados or objeto is memoria:
                                 capturados.append(objeto)
                 self.assertTrue(capturados)
-                inspecciones.append(True)
-            kwargs["validar"] = validar
-            return crear_original(*args, **kwargs)
 
-        # La rama local aún no incorpora 003: estos guardas detectan llamadas
-        # indebidas a sus puntos de verificación, sin implementar resolubilidad.
-        with patch.object(app, "verificar", create=True, side_effect=AssertionError("verificar")) as verificar:
-            with patch.object(app, "_verificar_cripta", create=True,
+        with patch.object(app, "verificar", side_effect=AssertionError("verificar")) as verificar:
+            with patch.object(app, "_verificar_cripta",
                               side_effect=AssertionError("resolubilidad")) as verificar_cripta:
-                with patch.object(app, "crear_partida", side_effect=crear):
+                with patch.object(app, "preparar_reconstruccion", side_effect=preparar):
                     self.assertTrue(c.ejecutar(Orden(CARGAR)))
                 verificar.assert_not_called()
                 verificar_cripta.assert_not_called()
-        self.assertEqual(inspecciones, [True])
+        self.assertEqual(len(inspecciones), 2)
 
     def test_contadores_e_indices_reconstruidos_invalidos_se_rechazan(self):
         for caso in ("contador", "indice", "estado"):
             with self.subTest(caso=caso):
                 app, c = self.escenario()
                 self.guardar(c)
-                crear_original = app.crear_partida
+                preparar_original = app.preparar_reconstruccion
 
-                def crear(*args, **kwargs):
-                    validar_original = kwargs["validar"]
-                    def validar(p):
+                @contextmanager
+                def preparar(*args, **kwargs):
+                    with preparar_original(*args, **kwargs) as (p, aplicar):
                         if caso == "contador":
                             p.conocimiento.num_exploradas += 1
                         elif caso == "indice":
                             p.mapa.salas[-1].indice = 0
                         else:
                             p.conocimiento.estado_salas[-1] = 9
-                        validar_original(p)
-                    kwargs["validar"] = validar
-                    return crear_original(*args, **kwargs)
-                with patch.object(app, "crear_partida", side_effect=crear):
+                        yield p, aplicar
+                with patch.object(app, "preparar_reconstruccion", side_effect=preparar):
                     self.rechazar(app, c, "contadores|índices|estado de sala")
+
+    def test_FR014_lineas_intercaladas_repetidas_y_pergamino(self):
+        pasos = [(RECOGER, 1), (MOVER, "N"), (MOVER, "N"), (MOVER, "S"), (MOVER, "S")]
+        app, c = self.escenario(pasos)
+        self.assertTrue(c.ejecutar(Orden(IR_A, 3)))
+        # Dos observaciones exteriores legítimas sin movimiento adicional.
+        for _ in range(2):
+            app.registrar_comentario("ir a 3")
+            c.partida._observar_puertas()
+        lineas = app.lineas_para_reconstruir()
+        self.assertEqual(lineas[-5:], ["mover N", "# ir a 3", "mover N", "# ir a 3", "# ir a 3"])
+        original = c.partida
+        esperado = self.foto(original)
+        self.guardar(c)
+        guardada = gb.cargar_todo(c.persistencia.ruta)
+        self.assertEqual(guardada.ordenes, lineas)
+        self.assertTrue(c.ejecutar(Orden(CARGAR)))
+        self.assertEqual(app.lineas_para_reconstruir(), lineas)
+        self.assertEqual(self.foto(c.partida), esperado)
+        self.assertEqual(Path(app.log.ruta).read_text(encoding="utf-8").splitlines()[-len(lineas):], lineas)
+        self.assertTrue(original.usar_pergamino())
+        self.assertTrue(c.ejecutar(Orden(PERGAMINO)))
+        self.assertEqual(self.foto(c.partida), self.foto(original))
+
+    def test_FR014_orden_rechazada_y_formato_invalido_conservan_sesion(self):
+        for linea, motivo in (("mover S", "rechazada"), ("orden inexistente", "cargar")):
+            with self.subTest(linea=linea):
+                app, c = self.escenario()
+                self.guardar(c)
+                foto = gb.cargar_todo(c.persistencia.ruta)
+                foto.ordenes.append(linea)
+                gb.guardar(c.persistencia.ruta, foto)
+                anteriores = app.lineas_para_reconstruir()
+                self.rechazar(app, c, motivo)
+                self.assertEqual(app.lineas_para_reconstruir(), anteriores + ["esperar"])
+
+    def test_FR014_comentarios_ignorados_no_rechazan_carga(self):
+        app, c = self.escenario()
+        self.guardar(c)
+        foto = gb.cargar_todo(c.persistencia.ruta)
+        foto.ordenes = ["# comentario informativo", "", "# ir a 2", "# ir a 2"]
+        gb.guardar(c.persistencia.ruta, foto)
+        self.assertTrue(c.ejecutar(Orden(CARGAR)))
+        self.assertEqual(app.lineas_para_reconstruir(), ["# ir a 2", "# ir a 2"])
+        self.assertEqual(c.partida.acciones, 0)
+
 
 
 if __name__ == "__main__":

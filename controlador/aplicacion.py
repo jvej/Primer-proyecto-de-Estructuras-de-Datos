@@ -1,5 +1,6 @@
 import os
 import time
+from contextlib import contextmanager
 
 from modelo.datos.almacen_cripta import AlmacenCripta
 from modelo.datos.almacen_fichas import AlmacenFichas
@@ -12,8 +13,10 @@ from modelo.datos.ejecutor_red import EjecutorRed
 from modelo.juego.errores import ErrorCripta, ErrorPresupuesto, ErrorRed
 from modelo.datos.esqueleto import descargar_esqueleto
 from modelo.juego.inventario import Inventario
+from modelo.juego.linea_tiempo import K_DEFECTO
 from modelo.estructuras.ordenamiento import ordenar
 from modelo.juego.partida import Partida
+from modelo.juego.resumen_historico import inicializar_historia
 from modelo.juego.resolubilidad import ResultadoResolubilidad, verificar_resolubilidad
 from modelo.datos.precarga_contenido import PrecargaContenido
 from modelo.datos.puntajes import TablaPuntajes
@@ -58,7 +61,7 @@ class ErrorNoResoluble(ErrorCripta):
 class Aplicacion:
     def __init__(self, fuente, presupuesto, carpeta=CARPETA_DEFECTO, cache_size=CACHE_DEFECTO,
                  semilla=None, nombre="Jugador", registrar_log=True, registrar_puntajes=True,
-                 forzar=False):
+                 forzar=False, checkpoint_cada=K_DEFECTO):
         self.fuente = fuente
         self.presupuesto = presupuesto
         self.carpeta = carpeta
@@ -68,6 +71,7 @@ class Aplicacion:
         self.registrar_log = registrar_log
         self.registrar_puntajes = registrar_puntajes
         self.forzar = forzar
+        self.checkpoint_cada = checkpoint_cada
         self.reporte_resolubilidad: ResultadoResolubilidad | None = None
         self.puntajes = TablaPuntajes(os.path.join(carpeta, "puntajes.txt"))
         self.ruta_guardado = os.path.join(carpeta, "guardados", "partida.bin")
@@ -81,6 +85,7 @@ class Aplicacion:
         self.log = None
         self.ultimo_log = None       
         self.ordenes = []            
+        self._lineas_reconstruccion = []
         self.partidas_creadas = 0
         self._presupuesto_listo = False  
         os.makedirs(carpeta, exist_ok=True)
@@ -117,30 +122,51 @@ class Aplicacion:
     # ------------------------------------------------------------ partida
     def crear_partida(self, id_cripta, semilla=None, ordenes_previas=None, exigir_versiones=None,
                       partida_nueva=True, validar=None, forzar=None):
-        anterior = (self.partida, self.ejecutor, self.precarga, self.log, self.ordenes)
-        self.ejecutor = None
-        self.log = None
         try:
-            partida = self._armar(id_cripta, semilla, ordenes_previas, exigir_versiones,
-                                  partida_nueva, validar,
-                                  self.forzar if forzar is None else forzar)
-        except BaseException as error:
-            if self.ejecutor is not None:
-                self.ejecutor.cerrar()
-            if self.log is not None:
-                self.log.cerrar()
-            self.partida, self.ejecutor, self.precarga, self.log, self.ordenes = anterior
-            if isinstance(error, ErrorNoResoluble):
-                self._cerrar_partida_actual()
-                self.partida = None
-                self.precarga = None
-                self.ordenes = []
+            with self._armar(id_cripta, semilla, ordenes_previas, exigir_versiones,
+                             partida_nueva, validar,
+                             self.forzar if forzar is None else forzar) as (partida, _):
+                pass
+        except ErrorNoResoluble:
+            self._cerrar_partida_actual()
+            self.partida = None
+            self.precarga = None
+            self.ordenes = []
+            self._lineas_reconstruccion = []
             raise
-        if anterior[1] is not None:
-            anterior[1].cerrar()                      
-        if anterior[3] is not None:
-            anterior[3].cerrar()                      
         return partida
+
+    @contextmanager
+    def preparar_reconstruccion(self, id_cripta, semilla=None, exigir_versiones=None):
+        """Contexto para la carga v4 sin reemplazar todavía la sesión actual.
+
+        Firma: preparar_reconstruccion(id_cripta, semilla=None,
+        exigir_versiones=None) -> ContextManager[tuple[Partida,
+        Callable[[str], bool]]]. Entrega (partida_candidata, aplicar_linea).
+        aplicar_linea(linea: str) -> bool usa siempre el mismo controlador
+        candidato, sin vista; conserva las líneas aceptadas en su orden real.
+        Blancos y otros comentarios devuelven True sin ejecutarse ni guardarse;
+        una orden rechazada devuelve False y obliga a abortar la carga. Un
+        formato inválido lanza ValueError.
+
+        Persistencia debe reconstruir y validar DENTRO del with, y lanzar una
+        excepción si falla. Solo una salida normal publica la partida y su log;
+        cualquier excepción cierra los recursos candidatos y conserva la sesión
+        anterior. El callback solo puede usarse dentro del with. Las solicitudes
+        realizadas durante el intento siguen contando en el presupuesto.
+        """
+        limite = self.presupuesto.limite
+        anteriores = (self.partidas_creadas, self._presupuesto_listo,
+                      self.version_catalogo, self.almacen_catalogo, self.local)
+        try:
+            with self._armar(id_cripta, semilla, [], exigir_versiones, False,
+                             preparar_controlador=True) as candidato:
+                yield candidato
+        except BaseException:
+            (self.partidas_creadas, self._presupuesto_listo,
+             self.version_catalogo, self.almacen_catalogo, self.local) = anteriores
+            self.presupuesto.fijar_limite(limite)
+            raise
 
     def _preparar_cripta(self, id_cripta, exigir_versiones=None):
         """Comparte datos, control de versiones y esqueleto entre juego e inspección."""
@@ -195,8 +221,14 @@ class Aplicacion:
         datos, esqueleto, almacen_cripta = self._preparar_cripta(id_cripta)
         return self._verificar_cripta(id_cripta, datos, esqueleto, almacen_cripta)
 
+    @contextmanager
     def _armar(self, id_cripta, semilla, ordenes_previas, exigir_versiones, partida_nueva,
-               validar=None, forzar=False):
+               validar=None, forzar=False, preparar_controlador=False):
+        # Import local: reproductor también importa Aplicacion.
+        from controlador.reproductor import (aplicar_linea_reconstruccion,
+                                             iterar_lineas_reconstruccion)
+        from modelo.juego.orden import Orden
+
         if partida_nueva and self.partidas_creadas > 0 and not self._presupuesto_listo:
             self.presupuesto.reiniciar()
         if partida_nueva:
@@ -209,40 +241,105 @@ class Aplicacion:
             if not reporte.es_resoluble() and not forzar:
                 raise ErrorNoResoluble(reporte)
 
-        self.ejecutor = EjecutorRed()
-        resolutor = ResolutorCatalogo(self.fuente, self.ejecutor, self.local, self.presupuesto)
-        precarga = PrecargaContenido(self.fuente, id_cripta, esqueleto, self.ejecutor,
-                                     self.presupuesto, resolutor, almacen_cripta,
-                                     reserva=RESERVA_PRECARGA)
-        inventario = Inventario(datos["inventario_max"], ordenar)
-        bitacora = BitacoraPantalla(MENSAJES_EN_PANTALLA)
-        if semilla is None:
-            semilla = self.semilla_fija if self.semilla_fija is not None else semilla_nueva()
+        ejecutor = EjecutorRed()
+        log = None
+        adoptada = False
+        activo = True
+        partida = None
+        try:
+            # La caché candidata no desaloja fichas ni modifica la caché viva.
+            def ficha_en_uso(id_ficha):
+                return partida is not None and partida.ficha_en_uso(id_ficha)
 
-        partida = Partida(datos, esqueleto, precarga, resolutor, inventario, bitacora, semilla)
-        self.partida = partida         
-        self.precarga = precarga
-        partida.iniciar()
+            local = AlmacenLocalCache(self.cache_size, self.almacen_catalogo, ficha_en_uso)
+            resolutor = ResolutorCatalogo(self.fuente, ejecutor, local, self.presupuesto)
+            precarga = PrecargaContenido(self.fuente, id_cripta, esqueleto, ejecutor,
+                                         self.presupuesto, resolutor, almacen_cripta,
+                                         reserva=RESERVA_PRECARGA)
+            inventario = Inventario(datos["inventario_max"], ordenar)
+            bitacora = BitacoraPantalla(MENSAJES_EN_PANTALLA)
+            if semilla is None:
+                semilla = self.semilla_fija if self.semilla_fija is not None else semilla_nueva()
 
-        self.ordenes = []
-        if ordenes_previas:
-            reconstructor = Controlador(partida)       
+            partida = Partida(datos, esqueleto, precarga, resolutor, inventario, bitacora, semilla)
+            partida.iniciar()
+            inicializar_historia(partida, self.checkpoint_cada)
+
+            # El inicio ordinario no necesita un planificador de reconstrucción.
+            # La carga v4 sí lo obtiene antes de recibir su callback candidato.
+            reconstructor = Controlador(partida) if preparar_controlador else None
+            ordenes = []
+            lineas = []
             numero = 0
-            for orden in ordenes_previas:
-                numero += 1
-                if not reconstructor.ejecutar(orden):
-                    raise ErrorVersion("la orden %d (%s) fue rechazada al reconstruir la partida"
-                                       % (numero, orden.a_texto()))
-                self.ordenes.append(orden)
-        if validar is not None:
-            validar(partida)         
+            rechazada = False
 
-        if self.registrar_log:
-            encabezado = EncabezadoLog(id_cripta, str(datos.get("version", "")),
-                                       self.version_catalogo, semilla,
-                                       self.nombre, fecha_actual())
-            self.log = BitacoraPartida(self._ruta_log_nueva(id_cripta), encabezado, self.ordenes)
-        return partida
+            def aplicar_linea(linea: str) -> bool:
+                nonlocal reconstructor, numero, rechazada
+                if not activo:
+                    raise RuntimeError("La reconstrucción candidata ya terminó")
+                if rechazada:
+                    raise ErrorVersion("la reconstrucción contiene una orden rechazada")
+                try:
+                    for texto in iterar_lineas_reconstruccion((linea,)):
+                        if reconstructor is None:
+                            reconstructor = Controlador(partida)
+                        comentario = texto.startswith("#")
+                        if not comentario:
+                            numero += 1
+                        if not aplicar_linea_reconstruccion(reconstructor, texto):
+                            rechazada = True
+                            return False
+                        if comentario:
+                            texto = "# " + texto[1:].lstrip()
+                        else:
+                            orden = Orden.desde_texto(texto)
+                            ordenes.append(orden)
+                            texto = orden.a_texto()
+                        lineas.append(texto)
+                        return True
+                    return True
+                except BaseException:
+                    rechazada = True
+                    raise
+
+            if ordenes_previas is not None:
+                for orden in ordenes_previas:
+                    texto = orden if isinstance(orden, str) else orden.a_texto()
+                    if not aplicar_linea(texto) and rechazada:
+                        raise ErrorVersion("la orden %d (%s) fue rechazada al reconstruir la partida"
+                                           % (numero, texto))
+            if validar is not None:
+                validar(partida)
+
+            yield partida, aplicar_linea
+            if rechazada:
+                raise ErrorVersion("la reconstrucción contiene una línea inválida o rechazada")
+            if self.registrar_log:
+                encabezado = EncabezadoLog(id_cripta, str(datos.get("version", "")),
+                                           self.version_catalogo, semilla,
+                                           self.nombre, fecha_actual())
+                log = BitacoraPartida(self._ruta_log_nueva(id_cripta), encabezado)
+                for texto in lineas:
+                    if texto.startswith("#"):
+                        log.anotar_comentario(texto[2:])
+                    else:
+                        log.anotar(Orden.desde_texto(texto))
+
+            ejecutor_anterior, log_anterior = self.ejecutor, self.log
+            self.partida, self.precarga, self.ejecutor = partida, precarga, ejecutor
+            self.local, self.log = local, log
+            self.ordenes, self._lineas_reconstruccion = ordenes, lineas
+            adoptada = True
+            if ejecutor_anterior is not None:
+                ejecutor_anterior.cerrar()
+            if log_anterior is not None:
+                log_anterior.cerrar()
+        finally:
+            activo = False
+            if not adoptada:
+                ejecutor.cerrar()
+                if log is not None:
+                    log.cerrar()
 
     def _ruta_log_nueva(self, id_cripta):
         carpeta = os.path.join(self.carpeta, "partidas")
@@ -257,12 +354,19 @@ class Aplicacion:
 
     def registrar_orden(self, orden):
         self.ordenes.append(orden)
+        self._lineas_reconstruccion.append(orden.a_texto())
         if self.log is not None:
             self.log.anotar(orden)
 
     def registrar_comentario(self, texto: str) -> None:
+        # Mismo saneamiento y prefijo que BitacoraPartida.anotar_comentario.
+        self._lineas_reconstruccion.append("# " + str(texto).replace("\n", " ").replace("\r", " "))
         if self.log is not None:
             self.log.anotar_comentario(texto)
+
+    def lineas_para_reconstruir(self) -> list[str]:
+        """Copia de órdenes y comentarios intercalados tal como se escriben al log."""
+        return self._lineas_reconstruccion.copy()
 
     def al_terminar(self, partida):
         lineas = []

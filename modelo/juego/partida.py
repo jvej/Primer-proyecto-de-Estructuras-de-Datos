@@ -52,6 +52,9 @@ class Partida:
         self._observadores_puertas = []
         self._observadores_invalidacion_rutas = []
         self._en_retroceso = False
+        from modelo.juego.cazador import PlanificadorCazador
+        self.planificador_cazador = PlanificadorCazador(self.mapa)
+        self.suscribir_invalidacion_rutas(self.planificador_cazador.invalidar_todo)
         self.suscribir_cambio_puerta(self._observar_cambio_puerta)
 
     def suscribir_cambio_puerta(self, observador) -> None:
@@ -108,6 +111,11 @@ class Partida:
         self._avanzar()
 
     def cambiar(self, objeto, campo, valor) -> None:
+        """Delega una sola captura C1, también desde el adaptador de daño IR_A.
+
+        Los avisos C2 de puertas siguen siendo responsabilidad de su punto
+        único; no se vuelve a capturar desde sus observadores.
+        """
         self.registro.cambiar(objeto, campo, valor)
 
     def _explorar_sala(self, sala) -> None:
@@ -158,12 +166,20 @@ class Partida:
             self.agenda.cancelar(evento)
 
     def _lista_agregar(self, lista, elemento, registrar=True) -> None:
+        self.registro.capturar_cambio(
+            "INSERTAR", lista, None, None, elemento,
+            registrar and self.registro.grupo_abierto() is not None,
+            elemento=elemento, posicion_nueva=len(lista))
         lista.append(elemento)
         if registrar:
             self.registro.inverso(lambda: lista.remove(elemento))
 
     def _lista_quitar(self, lista, elemento, registrar=True) -> None:
         posicion = lista.index(elemento)
+        self.registro.capturar_cambio(
+            "QUITAR", lista, None, elemento, None,
+            registrar and self.registro.grupo_abierto() is not None,
+            elemento=elemento, posicion_anterior=posicion)
         del lista[posicion]
         if registrar:
             self.registro.inverso(lambda: lista.insert(posicion, elemento))
@@ -208,7 +224,9 @@ class Partida:
 
     def _accion(self, costo, efecto) -> None:
         ahora = self.reloj.tiempo_actual
-        self.registro.abrir_grupo()
+        grupo = self.registro.abrir_grupo()
+        self.registro.notificar("abrir_accion", grupo=grupo,
+                                numero=self.acciones + 1, reloj=ahora)
         self._observar_puertas()
         self.registro.inverso(lambda: setattr(self.reloj, "tiempo_actual", ahora))
         self.esperando = False
@@ -221,6 +239,8 @@ class Partida:
         self._avanzar()
         self._observar_puertas()
         self.registro.cerrar_grupo()
+        self.registro.notificar("cerrar_accion", grupo=grupo,
+                                numero=self.acciones, reloj=self.reloj.tiempo_actual)
 
     def _marcar_rastro(self, sala) -> None:
         self.cambiar(sala, "ultimo_instante_jugador", self.reloj.tiempo_actual)
@@ -447,26 +467,48 @@ class Partida:
         self._inv_quitar(pergamino)              # se consume sin registrar: no vuelve al deshacer
         self._en_retroceso = True
         try:
-            self.registro.deshacer_ultimo()
+            grupo = self.registro.deshacer_ultimo()
         finally:
             self._en_retroceso = False
         self._notificar_invalidacion_rutas()
         self.esperando = True
         self.bitacora.agregar("Usas un pergamino de retroceso: el tiempo vuelve atrás.")
+        self.registro.notificar("retroceder", grupo=grupo,
+                                numero=self.acciones, reloj=self.reloj.tiempo_actual)
         return True
 
 
     def _inv_agregar(self, objeto) -> None:
+        if self.registro.captura_activa() and not self.inventario.lleno():
+            self.registro.capturar_cambio(
+                "INSERTAR", self.inventario, None, None, objeto,
+                not objeto.es_pergamino() and self.registro.grupo_abierto() is not None,
+                elemento=objeto, posicion_nueva=len(self.inventario),
+                token=self.registro.token_de(objeto), usos=objeto.usos)
         self.inventario.agregar(objeto)
         if not objeto.es_pergamino():
             self.registro.inverso(lambda: self.inventario.quitar(objeto))
 
     def _inv_quitar(self, objeto) -> None:
+        if self.registro.captura_activa():
+            indice = self.inventario.indice_de(objeto)
+            self.registro.capturar_cambio(
+                "QUITAR", self.inventario, None, objeto, None,
+                not objeto.es_pergamino() and self.registro.grupo_abierto() is not None,
+                elemento=objeto, posicion_anterior=indice,
+                token=self.registro.token_de(objeto), usos=objeto.usos)
         posicion = self.inventario.quitar(objeto)
         if not objeto.es_pergamino():
             self.registro.inverso(lambda: self.inventario.restaurar(objeto, posicion))
 
     def _inv_al_frente(self, objeto) -> None:
+        if self.registro.captura_activa():
+            indice = self.inventario.indice_de(objeto)
+            self.registro.capturar_cambio(
+                "MOVER", self.inventario, None, indice, 0,
+                self.registro.grupo_abierto() is not None,
+                elemento=objeto, posicion_anterior=indice, posicion_nueva=0,
+                token=self.registro.token_de(objeto), usos=objeto.usos)
         posicion = self.inventario.quitar(objeto)
         self.inventario.agregar_al_frente(objeto)
 

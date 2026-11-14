@@ -1,5 +1,6 @@
 ﻿from modelo.juego.combate import calcular_dano
 from modelo.juego.costos import COSTO_ATACAR, COSTO_ESPERAR
+from modelo.juego.mapa import normalizar_comportamiento
 from modelo.juego.sala import DIRECCIONES, Sala
 
 
@@ -7,10 +8,27 @@ def resolver_turno(partida, enemigo, ahora) -> int:
     if partida.jugador.sala is enemigo.sala:
         _atacar(partida, enemigo)
         return COSTO_ATACAR
-    elif enemigo.comportamiento == "errante":
+    comp = normalizar_comportamiento(enemigo.comportamiento)
+    if comp == "errante":
         return _errante(partida, enemigo)
-    elif enemigo.comportamiento == "rastreador":
+    elif comp == "rastreador":
         return _rastreador(partida, enemigo, ahora)
+    elif comp == "cazador":
+        return _cazador(partida, enemigo)
+    return COSTO_ESPERAR
+
+
+def _cazador(partida, enemigo) -> int:
+    planificador = getattr(partida, "planificador_cazador", None)
+    if planificador is None:
+        from modelo.juego.cazador import PlanificadorCazador
+        planificador = PlanificadorCazador(partida.mapa)
+        partida.planificador_cazador = planificador
+
+    vecino, salida = planificador.decidir_movimiento(enemigo, partida)
+    if vecino is not None and salida is not None:
+        _ir_a(partida, enemigo, vecino)
+        return salida.costo
     return COSTO_ESPERAR
 
 

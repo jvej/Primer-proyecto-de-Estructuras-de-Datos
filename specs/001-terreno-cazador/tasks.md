@@ -49,14 +49,14 @@
 
 ## Phase 4: Bloque 3 - Comportamiento del Cazador y Búsqueda (Contrato C3)
 
-**Propósito**: Integrar la búsqueda de costo mínimo con montículo propio y desempate determinista por menor ID. *(Dependencia: Requiere entrega de C3 de Kim para `monticulo_min.py` - PENDIENTE)*.
+**Propósito**: Integrar la búsqueda de costo mínimo con montículo propio y desempate determinista por menor ID. *(Contrato C3 disponible en `modelo/estructuras/monticulo_min.py` y `dijkstra.py`)*.
 
-- [ ] T015 [US2] Escribir pruebas de aceptación del cazador en `tests/test_terreno_cazador.py`: ataque al compartir sala, espera por falta de ruta, espera por $d > rango$, avance en límite exacto $d == rango$, preferencia de ruta más barata con más pasos y desempate por menor ID entero (FR-003, FR-004, FR-005, FR-006, FR-007). -> `python -m tests.test_terreno_cazador`
-- [ ] T016 [US2] Incorporar campo `rango: int = 0` en `Enemigo` (`modelo/juego/actor.py`) y cargarlo desde la ficha en `mapa.py` coordinado con C5, identificando la compatibilidad de guardado/carga con Kim (FR-004). -> `python -m tests.test_terreno_cazador`
-- [ ] T017 [US2] Integrar `monticulo_min.py` y función `dijkstra_acotado` provistos por Kim (Contrato C3 - PENDIENTE) en `modelo/estructuras/` (FR-005). -> `python -m tests.test_terreno_cazador`
-- [ ] T018 [US2] Implementar en `modelo/juego/cazador.py` el cálculo compartido desde la posición del jugador acotado a $R_{\text{utilizado}}$, con arreglos contiguos de tamaño $N$ indexados por `Sala.indice` y token de búsqueda $O(1)$ sin reinicialización (FR-005). -> `python -m tests.test_terreno_cazador`
-- [ ] T019 [US2] Implementar en `modelo/juego/comportamiento.py` la función `_cazador(partida, enemigo)`: verificar sala compartida (atacar), consultar distancia mínima hacia el jugador, verificar $d \le rango$, desempatar por menor `id` entero de sala vecina abierta y avanzar agendando con `salida.costo` (FR-003, FR-004, FR-005, FR-006). -> `python -m tests.test_terreno_cazador`
-- [ ] T020 [US2] Agregar prueba de aceptación de cazador operando con salas no descargadas y niebla de guerra activa del jugador, validando que no abre puertas cerradas (FR-007). -> `python -m tests.test_terreno_cazador`
+- [x] T015 [US2] Escribir pruebas de aceptación del cazador en `tests/test_terreno_cazador.py`: ataque al compartir sala, espera por falta de ruta, espera por $d > rango$, avance en límite exacto $d == rango$, preferencia de ruta más barata con más pasos y desempate por menor ID entero (FR-003, FR-004, FR-005, FR-006, FR-007). -> `python -m tests.test_terreno_cazador`
+- [x] T016 [US2] Incorporar campo `rango: int = 0` en `Enemigo` (`modelo/juego/actor.py`) y cargarlo desde la ficha en `mapa.py` coordinado con C5, identificando la compatibilidad de guardado/carga con Kim (FR-004). -> `python -m tests.test_terreno_cazador`
+- [x] T017 [US2] Integrar `monticulo_min.py` y función `dijkstra_acotado` (Contrato C3 disponible) en la arquitectura del cazador en `modelo/juego/cazador.py` (FR-005). -> `python -m tests.test_terreno_cazador`
+- [x] T018 [US2] Implementar en `modelo/juego/cazador.py` el cálculo compartido desde la posición del jugador acotado a $R_{\text{utilizado}}$, con arreglos contiguos de tamaño $N$ indexados por `Sala.indice` y token de búsqueda $O(1)$ sin reinicialización (FR-005). -> `python -m tests.test_terreno_cazador`
+- [x] T019 [US2] Implementar en `modelo/juego/comportamiento.py` la función `_cazador(partida, enemigo)`: verificar sala compartida (atacar), consultar distancia mínima hacia el jugador, verificar $d \le rango$, desempatar por menor `id` entero de sala vecina abierta y avanzar agendando con `salida.costo` (FR-003, FR-004, FR-005, FR-006). -> `python -m tests.test_terreno_cazador`
+- [x] T020 [US2] Agregar prueba de aceptación de cazador operando con salas no descargadas y niebla de guerra activa del jugador, validando que no abre puertas cerradas (FR-007). -> `python -m tests.test_terreno_cazador`
 
 ---
 

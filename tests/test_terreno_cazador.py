@@ -67,15 +67,17 @@ def test_FR001_validacion_estricta_costo():
     for invalido in valores_invalidos:
         try:
             Salida(s1, s2, costo=invalido)
-            assert False, f"Salida debió rechazar costo inválido: {invalido!r}"
-        except (ValueError, TypeError, AssertionError):
+        except ValueError:
             pass
+        else:
+            raise AssertionError(f"Salida debió rechazar costo inválido: {invalido!r}")
 
         try:
             s1.conectar("O", s2, costo=invalido)
-            assert False, f"Sala.conectar debió rechazar costo inválido: {invalido!r}"
-        except (ValueError, TypeError, AssertionError):
+        except ValueError:
             pass
+        else:
+            raise AssertionError(f"Sala.conectar debió rechazar costo inválido: {invalido!r}")
 
 
 def test_FR001_carga_costos_desde_mapa():
@@ -190,6 +192,45 @@ def test_FR002_movimiento_enemigos_consume_costo_salida():
     assert errante.evento_pendiente is not None
     assert errante.evento_pendiente.tiempo_siguiente == 300, (
         f"Siguiente turno del errante debió ser 300, obtenido {errante.evento_pendiente.tiempo_siguiente}"
+    )
+    esc.cerrar()
+
+
+def test_FR002_movimiento_rastreador_consume_costo_salida():
+    """FR-002: El rastreador sigue el rastro a través de una salida con costo variable
+    y programa su próximo turno según max(1, costo*100//velocidad)."""
+    puertas = [(1, 2, {"costo": 200})]
+    salas = esqueleto_linea(3, puertas)
+    esc = armar(salas)
+    p = esc.partida
+
+    # Rastreador con velocidad 150 en sala 1
+    rastreador = Enemigo("Rata", 10, 2, 0, 150, "rastreador", "e-101", None, 10, [], 0, "tipo_rata")
+    rastreador.mover_a(p.mapa.sala(1))
+    p.mapa.enemigos.append(rastreador)
+
+    # El jugador se mueve de 1 a 2 consumiendo la salida de costo 200 (reloj pasa a t=200)
+    assert p.mover("N")
+    assert p.reloj.tiempo_actual == 200
+    assert p.sala_actual().id == 2
+
+    # Agendamos el turno del rastreador para que actúe en t=200
+    agendar_turno(p, rastreador, p.reloj.tiempo_actual)
+    assert rastreador.evento_pendiente is not None
+    assert rastreador.evento_pendiente.tiempo_siguiente == 200
+
+    # Ejecutamos el turno del rastreador
+    evento = p.agenda.siguiente()
+    assert evento is not None
+    assert evento.actor is rastreador
+    evento.ejecutar(evento.tiempo_siguiente)
+
+    # El rastreador sigue el rastro hacia sala 2 por la salida de costo 200
+    assert rastreador.sala.id == 2, f"Rastreador debió moverse a sala 2, está en {rastreador.sala.id}"
+    # Su siguiente turno: 200 + max(1, 200 * 100 // 150) = 200 + 133 = 333
+    assert rastreador.evento_pendiente is not None
+    assert rastreador.evento_pendiente.tiempo_siguiente == 333, (
+        f"Siguiente turno del rastreador debió ser 333, obtenido {rastreador.evento_pendiente.tiempo_siguiente}"
     )
     esc.cerrar()
 
@@ -365,6 +406,224 @@ def test_FR008_restauracion_no_duplica_registros_ni_emite_avisos_durante_retroce
     esc.cerrar()
 
 
+# ==============================================================================
+# BLOQUE 3: CAZADOR Y CONTRATO C3 (FR-003, FR-004, FR-005, FR-006, FR-007)
+# ==============================================================================
+
+
+def test_FR003_cazador_ataca_al_compartir_sala():
+    """FR-003: El cazador ataca en su turno si comparte sala con el jugador."""
+    salas = esqueleto_linea(2)
+    esc = armar(salas)
+    p = esc.partida
+
+    cazador = Enemigo("Cazador", 10, 4, 1, 100, "cazador", "c-1", None, 10, [], 0, "ent_cazador", rango=300)
+    cazador.mover_a(p.sala_actual())  # Sala 1
+    p.mapa.enemigos.append(cazador)
+
+    vida_previa = p.jugador.vida
+    agendar_turno(p, cazador, p.reloj.tiempo_actual)
+
+    # Cazador actúa en t=0
+    evento = p.agenda.siguiente()
+    assert evento is not None
+    assert evento.actor is cazador
+    evento.ejecutar(evento.tiempo_siguiente)
+
+    # Debe haber atacado al jugador
+    assert p.jugador.vida < vida_previa, "El cazador debió atacar al jugador"
+    assert cazador.sala is p.sala_actual(), "El cazador debe permanecer en la sala"
+    # Siguiente turno agendado con COSTO_ATACAR (100) -> t=100
+    assert cazador.evento_pendiente is not None
+    assert cazador.evento_pendiente.tiempo_siguiente == 100
+    esc.cerrar()
+
+
+def test_FR004_cazador_espera_sin_ruta_o_costo_mayor_a_rango():
+    """FR-004: Si falta ruta abierta o el costo mínimo excede el rango, espera con costo base 100."""
+    # Caso 1: Puerta cerrada sin ruta abierta
+    puertas_cerradas = [(1, 2, {"cerrada": True, "llave": "itm_llave_oro"})]
+    salas1 = esqueleto_linea(2, puertas_cerradas)
+    esc1 = armar(salas1)
+    p1 = esc1.partida
+
+    c1 = Enemigo("Cazador1", 10, 4, 1, 100, "cazador", "c-1", None, 10, [], 0, "ent_cazador", rango=500)
+    c1.mover_a(p1.mapa.sala(2))
+    p1.mapa.enemigos.append(c1)
+
+    agendar_turno(p1, c1, p1.reloj.tiempo_actual)
+    evento1 = p1.agenda.siguiente()
+    assert evento1 is not None
+    evento1.ejecutar(evento1.tiempo_siguiente)
+
+    assert c1.sala.id == 2, "Sin ruta, cazador debe permanecer en sala 2"
+    assert c1.evento_pendiente is not None
+    assert c1.evento_pendiente.tiempo_siguiente == 100, "Debe esperar con costo base 100"
+    esc1.cerrar()
+
+    # Caso 2: Ruta abierta pero costo (300) supera rango (200)
+    puertas_caras = [(1, 2, {"costo": 300})]
+    salas2 = esqueleto_linea(2, puertas_caras)
+    esc2 = armar(salas2)
+    p2 = esc2.partida
+
+    c2 = Enemigo("Cazador2", 10, 4, 1, 100, "cazador", "c-2", None, 10, [], 0, "ent_cazador", rango=200)
+    c2.mover_a(p2.mapa.sala(2))
+    p2.mapa.enemigos.append(c2)
+
+    agendar_turno(p2, c2, p2.reloj.tiempo_actual)
+    evento2 = p2.agenda.siguiente()
+    assert evento2 is not None
+    evento2.ejecutar(evento2.tiempo_siguiente)
+
+    assert c2.sala.id == 2, "Costo > rango: cazador debe esperar"
+    assert c2.evento_pendiente is not None
+    assert c2.evento_pendiente.tiempo_siguiente == 100
+    esc2.cerrar()
+
+
+def test_FR004_cazador_avanza_en_limite_exacto_de_rango():
+    """FR-004: Si el costo mínimo iguala exactamente el rango (d == rango), avanza."""
+    puertas = [(1, 2, {"costo": 200})]
+    salas = esqueleto_linea(2, puertas)
+    esc = armar(salas)
+    p = esc.partida
+
+    # Cazador en sala 2 con rango 200 exacto
+    c = Enemigo("Cazador", 10, 4, 1, 100, "cazador", "c-1", None, 10, [], 0, "ent_cazador", rango=200)
+    c.mover_a(p.mapa.sala(2))
+    p.mapa.enemigos.append(c)
+
+    agendar_turno(p, c, p.reloj.tiempo_actual)
+    evento = p.agenda.siguiente()
+    assert evento is not None
+    evento.ejecutar(evento.tiempo_siguiente)
+
+    # d == rango: debe avanzar a la sala 1
+    assert c.sala.id == 1, "En límite exacto d == rango, el cazador debe avanzar"
+    assert c.evento_pendiente is not None
+    assert c.evento_pendiente.tiempo_siguiente == 200, "Siguiente turno debe reflejar salida.costo=200"
+    esc.cerrar()
+
+
+def test_FR005_cazador_elige_ruta_menor_costo_con_mas_pasos():
+    """FR-005: Prefiere ruta de menor costo con más pasos frente a otra con menos pasos y mayor costo."""
+    # Grafo cuadrado:
+    # Sala 1 (0,0): N a 2 (costo 50), E a 4 (costo 300)
+    # Sala 2 (0,1): S a 1 (costo 50), E a 3 (costo 50)
+    # Sala 3 (1,1): O a 2 (costo 50), S a 4 (costo 50)
+    # Sala 4 (1,0): O a 1 (costo 300), N a 3 (costo 50)
+    # Cazador en Sala 1 con rango 400. Jugador en Sala 4.
+    # Ruta directa 1 -> 4: costo 300 (1 paso).
+    # Ruta alterna 1 -> 2 -> 3 -> 4: costo 50 + 50 + 50 = 150 (3 pasos).
+    salas = [
+        {"id": 1, "nombre": "Sala 1", "salidas": {"N": {"sala": 2, "costo": 50}, "E": {"sala": 4, "costo": 300}}},
+        {"id": 2, "nombre": "Sala 2", "salidas": {"S": {"sala": 1, "costo": 50}, "E": {"sala": 3, "costo": 50}}},
+        {"id": 3, "nombre": "Sala 3", "salidas": {"O": {"sala": 2, "costo": 50}, "S": {"sala": 4, "costo": 50}}},
+        {"id": 4, "nombre": "Sala 4", "salidas": {"O": {"sala": 1, "costo": 300}, "N": {"sala": 3, "costo": 50}}},
+    ]
+    esc = armar(salas)
+    p = esc.partida
+
+    p.jugador.mover_a(p.mapa.sala(4))
+    cazador = Enemigo("Cazador", 10, 4, 1, 100, "cazador", "c-1", None, 10, [], 0, "ent_cazador", rango=400)
+    cazador.mover_a(p.mapa.sala(1))
+    p.mapa.enemigos.append(cazador)
+
+    agendar_turno(p, cazador, p.reloj.tiempo_actual)
+    evento = p.agenda.siguiente()
+    assert evento is not None
+    evento.ejecutar(evento.tiempo_siguiente)
+
+    # Debe haber elegido sala 2 (ruta barata de 150) en lugar de sala 4 directa (300)
+    assert cazador.sala.id == 2, f"Cazador debió elegir sala 2 (ruta barata), está en {cazador.sala.id}"
+    assert cazador.evento_pendiente is not None
+    assert cazador.evento_pendiente.tiempo_siguiente == 50
+    esc.cerrar()
+
+
+def test_FR006_cazador_desempate_por_menor_id_primera_vecina():
+    """FR-006: Cuando varias primeras vecinas permiten el mismo costo mínimo, elige menor ID."""
+    # Cazador en sala 1, Jugador en sala 4.
+    # Vecinas de sala 1: sala 5 (costo 100) y sala 2 (costo 100).
+    # Desde ambas se llega a sala 4 con costo adicional 100 (total 200).
+    # Vecina de menor ID: 2 < 5.
+    salas = [
+        {"id": 1, "nombre": "Sala 1", "salidas": {"N": {"sala": 5, "costo": 100}, "S": {"sala": 2, "costo": 100}}},
+        {"id": 2, "nombre": "Sala 2", "salidas": {"N": {"sala": 1, "costo": 100}, "E": {"sala": 4, "costo": 100}}},
+        {"id": 4, "nombre": "Sala 4", "salidas": {"O": {"sala": 2, "costo": 100}, "S": {"sala": 5, "costo": 100}}},
+        {"id": 5, "nombre": "Sala 5", "salidas": {"S": {"sala": 1, "costo": 100}, "N": {"sala": 4, "costo": 100}}},
+    ]
+    esc = armar(salas)
+    p = esc.partida
+
+    p.jugador.mover_a(p.mapa.sala(4))
+    cazador = Enemigo("Cazador", 10, 4, 1, 100, "cazador", "c-1", None, 10, [], 0, "ent_cazador", rango=300)
+    cazador.mover_a(p.mapa.sala(1))
+    p.mapa.enemigos.append(cazador)
+
+    agendar_turno(p, cazador, p.reloj.tiempo_actual)
+    evento = p.agenda.siguiente()
+    assert evento is not None
+    evento.ejecutar(evento.tiempo_siguiente)
+
+    # Ante empate de costo total (200), debe desempatar por menor ID: sala 2 < sala 5
+    assert cazador.sala.id == 2, f"Debió elegir sala 2 (menor id frente a 5), está en {cazador.sala.id}"
+    esc.cerrar()
+
+
+def test_FR007_cazador_omnisciencia_y_no_abre_puertas():
+    """FR-007: Conoce el esqueleto completo y puertas reales; no abre puertas cerradas
+    y la niebla o falta de descarga de contenido no condicionan su decisión."""
+    # 4 salas en anillo:
+    # 1 <-> 2: cerrada con llave (costo 50)
+    # 2 <-> 3: abierta (costo 50)
+    # 1 <-> 4: abierta (costo 100)
+    # 4 <-> 3: abierta (costo 100)
+    # Cazador en 3, Jugador en 1.
+    # Ruta directa 3 -> 2 -> 1 bloqueada por puerta cerrada en (1,2).
+    # Ruta abierta 3 -> 4 -> 1 disponible (costo 200).
+    salas = [
+        {"id": 1, "nombre": "Sala 1", "salidas": {
+            "N": {"sala": 2, "cerrada": True, "llave": "itm_llave_oro", "costo": 50},
+            "E": {"sala": 4, "costo": 100}
+        }},
+        {"id": 2, "nombre": "Sala 2", "salidas": {
+            "S": {"sala": 1, "cerrada": True, "llave": "itm_llave_oro", "costo": 50},
+            "N": {"sala": 3, "costo": 50}
+        }},
+        {"id": 3, "nombre": "Sala 3", "salidas": {
+            "S": {"sala": 2, "costo": 50},
+            "O": {"sala": 4, "costo": 100}
+        }},
+        {"id": 4, "nombre": "Sala 4", "salidas": {
+            "O": {"sala": 1, "costo": 100},
+            "E": {"sala": 3, "costo": 100}
+        }},
+    ]
+    esc = armar(salas)
+    p = esc.partida
+
+    # Simular que sala 4 no ha descargado contenido (incorporada == False)
+    p.mapa.sala(4).incorporada = False
+
+    p.jugador.mover_a(p.mapa.sala(1))
+    cazador = Enemigo("Cazador", 10, 4, 1, 100, "cazador", "c-1", None, 10, [], 0, "ent_cazador", rango=300)
+    cazador.mover_a(p.mapa.sala(3))
+    p.mapa.enemigos.append(cazador)
+
+    agendar_turno(p, cazador, p.reloj.tiempo_actual)
+    evento = p.agenda.siguiente()
+    assert evento is not None
+    evento.ejecutar(evento.tiempo_siguiente)
+
+    # El cazador debe avanzar hacia sala 4 (única ruta abierta) y NO hacia sala 2 (puerta cerrada)
+    assert cazador.sala.id == 4, f"Cazador no debe abrir puertas cerradas; debió ir a sala 4, está en {cazador.sala.id}"
+    puerta_cerrada = p.mapa.sala(1).salidas[DIRECCIONES.index("N")]
+    assert not puerta_cerrada.esta_abierta(), "La puerta cerrada debió permanecer cerrada"
+    esc.cerrar()
+
+
 if __name__ == "__main__":
     pruebas = [
         test_FR001_costo_predeterminado_y_simetria,
@@ -375,12 +634,19 @@ if __name__ == "__main__":
         test_FR002_acciones_sin_movimiento_conservan_costos_vigentes,
         test_FR002_movimiento_jugador_consume_costo_salida,
         test_FR002_movimiento_enemigos_consume_costo_salida,
+        test_FR002_movimiento_rastreador_consume_costo_salida,
         test_FR008_apertura_y_cierre_pasan_por_cambiar_estado_puerta,
         test_FR008_cada_cambio_efectivo_emite_unico_aviso,
         test_FR008_solicitar_mismo_estado_no_genera_cambio_ni_aviso,
         test_FR008_pergamino_restaura_puerta_y_cierre_existente,
         test_FR008_retroceso_comunica_invalidacion_de_rutas,
         test_FR008_restauracion_no_duplica_registros_ni_emite_avisos_durante_retroceso,
+        test_FR003_cazador_ataca_al_compartir_sala,
+        test_FR004_cazador_espera_sin_ruta_o_costo_mayor_a_rango,
+        test_FR004_cazador_avanza_en_limite_exacto_de_rango,
+        test_FR005_cazador_elige_ruta_menor_costo_con_mas_pasos,
+        test_FR006_cazador_desempate_por_menor_id_primera_vecina,
+        test_FR007_cazador_omnisciencia_y_no_abre_puertas,
     ]
     for p in pruebas:
         p()
