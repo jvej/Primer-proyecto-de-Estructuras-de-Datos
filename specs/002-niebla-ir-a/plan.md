@@ -1,5 +1,22 @@
 # Implementation Plan: Niebla de guerra, mapa conocido y viaje automático "ir a"
 
+## Estado verificado en la integracion 002 + 003 + 004
+
+Base revisada: `75cc63eae09b3c7c85d388f44457086ba443da8a`, rama
+`integracion-002-003` (2026-11-13). Implementacion funcional de conocimiento,
+antorcha, consola/Pygame, viaje compuesto, FR-010 de 004, codec v4 y T046.
+La auditoria ejecuto 39 modulos: 35 aprobados y cuatro fallidos, con 13 fallos
+conocidos ajenos al benchmark: nueve interfaces historicas, dos replay `hasta`,
+uno de eventos simultaneos y un falso positivo de busqueda textual GUI.
+No se declara completa 004 ni aprobada SC-001. La referencia oficial no esta
+identificada; T030 carece de linea base equivalente. Evidencia y mediciones:
+[DECISIONES.md](DECISIONES.md#trazabilidad-y-evidencia-de-la-integracion).
+
+Las menciones C1 de 002 (mutacion indexada) y C1 de 004 (captura historica)
+son contratos distintos que coexisten. FR-010 de 002 significa privacidad;
+FR-010 de 004 significa conservar observaciones permanentes al deshacer.
+
+
 **Branch**: `002-niebla-ir-a` | **Date**: 2026-11-08 | **Spec**: [specs/002-niebla-ir-a/spec.md](spec.md)  
 **Author**: Kim (Estructuras de Datos y Mapa Conocido)
 
@@ -100,7 +117,7 @@ bench/
 main.py                  # Integración del benchmark 'mapa_conocido' en BENCHES
 
 tests/
-└── test_niebla_ir_a.py  # Suite completa de aceptación vinculada a FR-001..FR-024
+└── test_niebla_ir_a.py  # Pruebas C3; aceptacion distribuida en suites de la matriz DECISIONES.md
 ```
 
 ---
@@ -112,11 +129,11 @@ tests/
 **Aclaración confirmada T003/T004**: constructor
 `ConocimientoMapa(n, salas_por_indice, mapa)`, conservando referencias. Consultas
 por Sala e índices O(1); por ID O(log N) usando Mapa. El módulo solo almacena y
-consulta; la integración posterior en Partida actualizará ambos extremos de una
+consulta; la integracion existente en Partida actualiza ambos extremos de una
 puerta observada mediante `partida.cambiar`, sin modificar el conocimiento de las
 salas conectadas. Véanse las decisiones y límites de visibilidad en `data-model.md`.
 Pruebas unitarias: `python -m tests.test_conocimiento`. La aceptación integral de
-T004 requiere pasos posteriores; sus casillas se mantienen pendientes.
+T004 esta cubierta por test_conocimiento y test_conocimiento_partida; ver tasks.md.
 
 1. **Entidad `ConocimientoMapa` (`modelo/juego/conocimiento.py`)**:
    - Arreglos contiguos preasignados: `self.estado_salas = [ESTADO_DESCONOCIDA] * N` y `self.memoria_puertas = [PUERTA_DESCONOCIDA] * (4 * N)`.
@@ -125,12 +142,12 @@ T004 requiere pasos posteriores; sus casillas se mantienen pendientes.
    - Mapeo directo $O(1)$: `pos_puerta = sala.indice * 4 + dir_idx`.
    - Métodos de consulta $O(1)$: `es_explorada(sala)`, `es_avistada(sala)`, `estado_sala(sala)`, `puerta_recordada(sala, dir_idx)`.
 2. **Soporte de Mutación Indexada en `Registro` y Principio C1 (`modelo/juego/registro.py`, `partida.py`)**:
-   - En `Registro.cambiar(objeto, campo, valor)`: si `isinstance(objeto, list)` y `isinstance(campo, int)`, guardar el valor anterior `objeto[campo]`, mutar `objeto[campo] = valor` y apilar en el grupo abierto el lambda inverso `lambda: objeto.__setitem__(campo, anterior)`.
+   - En `Registro.cambiar(objeto, campo, valor)`: si `isinstance(objeto, list)` y `isinstance(campo, int)`, guardar el valor anterior, capturar C1 historico antes de escribir y preparar el inverso; solo memoria_puertas usa inversos condicionados por generacion. Fuera de grupo incrementa su generacion, incluso sin cambio de valor, antes de escribir.
    - Toda mutación de conocimiento pasa por `partida.cambiar(...)` (C1):
      - `partida.cambiar(self.conocimiento.estado_salas, sala.indice, ESTADO_EXPLORADA)`.
      - `partida.cambiar(self.conocimiento, "num_exploradas", self.conocimiento.num_exploradas + 1)`.
    - **Regla estricta contra conteos duplicados**: Al explorar una sala $u$, sus vecinas directas solo incrementan `num_avistadas` si previamente se encontraban en `ESTADO_DESCONOCIDA`.
-   - Reversibilidad total con pergamino (`deshacer_ultimo()`).
+   - Reversion por grupo con pergamino; preservar observaciones permanentes posteriores mediante FR-010 de 004.
 3. **Inicialización y Visión en `Partida` (`modelo/juego/partida.py`)**:
    - En `iniciar()` (instante 0): marcar `sala_inicial` como Explorada (`num_exploradas = 1`). Por cada salida hacia vecina desconocida, marcarla como Avistada (`num_avistadas += 1`) y registrar en `memoria_puertas` el estado actual de la puerta observada.
    - En `_entrar(destino)`: actualizar la visión de la sala actual y sus vecinas.
@@ -185,8 +202,8 @@ T004 requiere pasos posteriores; sus casillas se mantienen pendientes.
    - No se escribe en el log como orden atómica ni se envía a `a_texto()`.
 3. **Ejecución Paso a Paso en `Controlador` (`controlador/controlador.py`)**:
    - Método `_ejecutar_ir_a(orden)` dentro de las órdenes compuestas:
-     - Validación preliminar ($O(1)$): destino explorado, distinto a la sala actual, ruta inicial factible.
-     - Registro de comentario en la bitácora mediante `Aplicacion.registrar_comentario(f"ir a {id_destino}")`.
+     - Validacion preliminar: ID por busqueda O(log N) y ruta por Dijkstra; no es O(1) para el proceso completo.
+     - Tras callbacks/cancelacion, emitir una marca por observacion exterior, justo antes de observar; no una unica marca al inicio.
      - Bucle paso a paso:
        - Recalcular distancias desde `destino` con conocimiento vigente.
        - Si llegó al destino $\to$ detener con mensaje de éxito (FR-019).
@@ -204,7 +221,7 @@ T004 requiere pasos posteriores; sus casillas se mantienen pendientes.
          if self._archivo is not None:
              self._escribir("# " + _limpio(texto))
      ```
-   - En `leer_log(ruta)`: omitir líneas que inician con `#` o vacías. Replay ejecuta deterministamente los movimientos individuales `mover <dir>`.
+   - leer_log ordinario omite comentarios; el lector de reconstruccion 004 conserva marcas IR_A y repite solo observaciones, junto con movimientos atomicos.
 5. **Pruebas de Aceptación vinculadas**:
    - `test_FR014_ir_a_destino_no_explorado_rechazado`
    - `test_FR015_ir_a_camino_costo_minimo`
@@ -255,7 +272,7 @@ T004 requiere pasos posteriores; sus casillas se mantienen pendientes.
    - Establecer `VERSION_FORMATO = 4`.
 2. **Serialización del Conocimiento**:
    - Añadir en el bloque general: $N$ bytes para `estado_salas` y las entradas activas de `memoria_puertas`.
-   - En deserialización: reconstruir fielmente `Partida.conocimiento` y sus contadores $O(1)$.
+   - Codec decodifica fotografia; T045/T046 reconstruye por replay y compara arreglos y contadores por recuento O(N) dentro del contexto, sin reemplazar listas ni inversos.
 3. **Coordinación C7 sobre `Enemigo.rango`**:
    - El atributo `rango` del cazador es estático de ficha de catálogo y **NO se almacena en el bloque binario de enemigos** de `SalaGuardada`.
    - Se mantiene intacta la estructura binaria de `_empaquetar_sala` y `_desempaquetar_sala`. Al cargar, `mapa.incorporar` asigna `rango = ficha.get("rango", 0)` desde el catálogo local.
@@ -272,7 +289,7 @@ T004 requiere pasos posteriores; sus casillas se mantienen pendientes.
 
 ### Bloque 7: Suite de Benchmarks y Repeticiones (SC-001..SC-004)
 1. **Nuevo Módulo de Benchmarking (`bench/bench_mapa_conocido.py`)**:
-   - **SC-001**: Medición del tiempo de recálculo de Dijkstra acotado sobre el grafo completo de 1000 salas. Meta: $< 5.0\text{ ms}$.
+   - **SC-001**: Medición del tiempo de recálculo de Dijkstra acotado sobre el grafo completo de 1000 salas. Meta oficial: $< 5.0\text{ ms}$ solo en la cripta de referencia, aun no identificada; la cuadricula de 1000 salas es sintetica.
    - **SC-002**: Medición de consultas $O(1)$ a `estado_salas`, `memoria_puertas` y contadores `resumen()` con $10^6$ operaciones sobre criptas de 10, 100 y 1000 salas.
    - **SC-003**: Medición del tiempo de exploración por entrada y por antorcha.
    - **SC-004**: Medición del tiempo de reversión con pergamino sobre cambios de conocimiento.
@@ -295,7 +312,7 @@ T004 requiere pasos posteriores; sus casillas se mantienen pendientes.
 | **Reversión con pergamino (C1)** | $O(1)$ por cambio | $O(1)$ | Ejecución directa del lambda inverso apilado en `Registro`. |
 | **MonticuloMin: insertar / extraer** | $O(\log K)$ | $O(K)$ | Operaciones sobre árbol binario contiguo sin reindexación. |
 | **Dijkstra acotado ("ir a" y cazador)** | $O((V + E) \log V)$ | $O(V)$ | Relajación de aristas transitables con eliminación perezosa y marcas $O(1)$. |
-| **Paso individual de "ir a"** | $O((V_E + E_E) \log V_E)$ | $O(V_E)$ | Acotado exclusivamente a las salas y aristas en estado `Explorada` ($V_E \le V$). |
+| **Paso individual de "ir a"** | $O((V_r + E_r) \log(V_r+1))$ | $O(N + E_r)$ | Planificador conserva distancias/marcas de N salas; Dijkstra usa monticulo temporal O(E_r+1) con entradas perezosas. V_r/E_r son el componente conocido alcanzable. La seleccion de vecino agrega espacio O(1); no se atribuye O(V_E) al espacio total. |
 | **Serialización / Deserialización v4** | $O(N + P)$ | $O(N + P)$ | Lectura y escritura contigua de $N$ bytes de estados y $P$ puertas recordadas. |
 
 ---
@@ -317,9 +334,9 @@ T004 requiere pasos posteriores; sus casillas se mantienen pendientes.
 | `modelo/datos/guardado_binario.py` | Modificado | Formato v4 con datos de niebla; rechazo explícito con `ErrorFormato` a v3; rango cazador desde catálogo (C7). |
 | `vista/vista_consola.py` | Modificado | Ocultar ID y nombre en salas avistadas; comando `mapa`. |
 | `vista/vista_pygame.py` | Modificado | Corrección en `_dibujar_puerta` para no dibujar `id_vecino` en salas avistadas. |
-| `bench/bench_mapa_conocido.py` | **NUEVO** | Benchmark oficial de niebla de guerra, consultas $O(1)$ y Dijkstra acotado. |
+| `bench/bench_mapa_conocido.py` | **NUEVO** | Adaptador del benchmark sintetico de conocimiento y rutas; no es una certificacion oficial y SC-001 sigue pendiente. |
 | `main.py` | Modificado | Registro de `mapa_conocido` en `BENCHES`. |
-| `tests/test_niebla_ir_a.py` | **NUEVO** | Pruebas de aceptación automatizadas vinculadas a FR-001..FR-024. |
+| `tests/test_niebla_ir_a.py` | **NUEVO** | Pruebas C3. Para FR-001..FR-024, consultar la matriz y suites distribuidas en DECISIONES.md. |
 
 ---
 
@@ -333,3 +350,16 @@ T004 requiere pasos posteriores; sus casillas se mantienen pendientes.
 | **Corrupción de partidas guardadas previas (v3)** | Medio | Baja | `guardado_binario.py` verifica estrictamente la versión del encabezado y lanza `ErrorFormato` descriptivo, impidiendo lecturas parciales o sobreescrituras accidentales. |
 | **Ciclo infinito en "ir a" por cambio de entorno** | Medio | Baja | El destino debe estar explorado, la ruta se recalcula antes de cada paso, cada paso consume tiempo en el reloj virtual y cualquier obstáculo detiene el viaje de inmediato. |
 | **Desincronización en reversión con pergamino** | Alto | Baja | Todo cambio en los arreglos de conocimiento y contadores pasa por `partida.cambiar`, registrando el inverso exacto en `Registro` para restaurarse limpiamente en marcha atrás. |
+
+## Ajustes de ensamblado comprobados
+
+Orden reside en modelo/juego/orden.py y controlador/orden.py lo reexporta.
+PlanificadorRutas posee arreglos y tokens de navegacion; Controlador lo recrea
+al cambiar la partida. La captura historica se integra mediante Registro y
+resumen_historico, no mediante un hipotetico notificar_conocimiento(resumen).
+Las marcas IR_A se emiten despues de callbacks/cancelacion e inmediatamente
+antes de cada observacion exterior. La politica vigente se detalla en C4.
+El adaptador bench/bench_mapa_conocido.py llama main([]) del benchmark existente;
+la entrada BENCHES esta integrada y probada. SC-001 y comparacion T030 pendientes.
+Los nombres de pruebas propuestos en este plan son historicos; la matriz de
+DECISIONES.md y tasks.md identifica los modulos realmente ejecutados.

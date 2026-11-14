@@ -44,8 +44,8 @@ Cualquier invocación en `partida.abrir(dir)` y en `efectos.programar_cierre(sal
 1. **Conocimiento del Mapa (`ConocimientoMapa` de Kim)**:
    - Si el jugador se encuentra físicamente en `salida.sala_a` o en `salida.sala_b`, actualiza la memoria recordada de la puerta al nuevo estado.
    - Si el jugador no se encuentra en ninguna de las dos salas conectadas, la memoria recordada **no se altera**.
-2. **Caché de Rutas de Cazadores (`CampoDistancias` de Mariano)**:
-   - Invalida la caché si la puerta está dentro del rango de acción del jugador.
+2. **Consumidor de rutas de cazador (`PlanificadorCazador`)**:
+   - En `modelo/juego/cazador.py`, posee arreglos y token propios, usa Dijkstra con filtro de puertas fisicas abiertas y recalcula el campo en `decidir_movimiento`. `invalidar_todo()` incrementa su token. No se afirma una clase CampoDistancias ni una invalidacion selectiva por rango suscrita a este callback sin evidencia. El despacho C2 conserva la posibilidad de registrar observadores; al retroceder se mantiene la invalidacion general de rutas.
 3. **Línea de Tiempo (Axel)**:
    - Registra el evento de cambio de estado de puerta si corresponde.
 
@@ -62,4 +62,14 @@ Cualquier invocación en `partida.abrir(dir)` y en `efectos.programar_cierre(sal
   - Para cada salida que posea una puerta, se sincroniza la memoria recordada de dicha puerta con el estado físico real (`PUERTA_ABIERTA` o `PUERTA_CERRADA`).
 - **Reversión con Pergamino**:
   - Toda actualización de la memoria de puertas se registra pasando por `partida.cambiar(self.conocimiento.memoria_puertas, pos, nuevo_estado)`.
-  - Al utilizar un pergamino de retroceso, el estado recordado previo de la puerta se restaura de manera inmediata y exacta.
+  - Al utilizar un pergamino de retroceso, el inverso restaura la memoria previa si no hubo una observacion permanente posterior de esa celda; en ese caso FR-010 de 004 exige conservar esa observacion mediante generaciones.
+
+## Integracion verificada con FR-010 de 004
+
+Partida vincula conocimiento.memoria_puertas a Registro. Solo ese arreglo
+recibe generaciones por posicion O(1). Captura historica C1 precede al inverso
+condicionado o al incremento permanente y a la escritura. Fuera de grupo,
+_recordar_puerta registra ambos extremos incluso si se observa el mismo valor.
+No se explora la sala vecina al recordar su puerta. Evidencia:
+`tests.test_fr010_generaciones_002` (12 pruebas) y
+`test_FR010_destino_compartido_inverso_y_persistente` de test_linea_tiempo.

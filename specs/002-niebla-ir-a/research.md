@@ -1,5 +1,27 @@
 # Research & Architectural Decisions: Niebla de guerra, mapa conocido y viaje automático "ir a"
 
+## Estado verificado en la integracion 002 + 003 + 004
+
+Base revisada: `75cc63eae09b3c7c85d388f44457086ba443da8a`, rama
+`integracion-002-003` (2026-11-13). Implementacion funcional de conocimiento,
+antorcha, consola/Pygame, viaje compuesto, FR-010 de 004, codec v4 y T046.
+La auditoria ejecuto 39 modulos: 35 aprobados y cuatro fallidos, con 13 fallos
+conocidos ajenos al benchmark: nueve interfaces historicas, dos replay `hasta`,
+uno de eventos simultaneos y un falso positivo de busqueda textual GUI.
+No se declara completa 004 ni aprobada SC-001. La referencia oficial no esta
+identificada; T030 carece de linea base equivalente. Evidencia y mediciones:
+[DECISIONES.md](DECISIONES.md#trazabilidad-y-evidencia-de-la-integracion).
+
+Las menciones C1 de 002 (mutacion indexada) y C1 de 004 (captura historica)
+son contratos distintos que coexisten. FR-010 de 002 significa privacidad;
+FR-010 de 004 significa conservar observaciones permanentes al deshacer.
+
+Este documento conserva alternativas de diseno; no convierte estimaciones de
+memoria ni la asociacion historica de 1000 salas con referencia oficial en
+mediciones verificadas. Para mecanismos implementados prevalecen los contratos
+actualizados y la matriz de evidencia, sin cambiar los requisitos de spec.md.
+
+
 **Feature**: `002-niebla-ir-a`  
 **Author**: Kim (Estructuras de Datos y Mapa Conocido)  
 **Date**: 2026-11-08  
@@ -60,10 +82,10 @@ En la primera parte del juego (P1), la visualización de la sala actual y sus sa
   - Al utilizar un pergamino de retroceso (`partida.usar_pergamino()`), `registro.deshacer_ultimo()` re-ejecuta `objeto.__setitem__(campo, anterior)` restaurando el estado previo de las salas y puertas en $O(1)$ por cambio sin reinicializaciones globales.
 - **Contadores de Conocimiento $O(1)$ para la Línea de Tiempo de Axel (C6)**:
   - Para evitar que la línea de tiempo de Axel (Capacidad 004) deba recorrer los $N$ elementos de `estado_salas` en cada turno para generar su resumen de estado, `ConocimientoMapa` mantiene dos contadores enteros:
-    - `num_exploradas: int` (inicia en 1 al instanciar la sala de inicio).
-    - `num_avistadas: int` (inicia en la cantidad de vecinas directas de la sala inicial).
+    - `num_exploradas: int`: constructor 0; Partida.iniciar explora la sala inicial y lo lleva a 1.
+    - `num_avistadas: int`: constructor 0; Partida.iniciar cuenta vecinas inicialmente desconocidas.
   - **Prevención estricta de conteo duplicado**:
-    - Al explorar una nueva sala $u$: si $u$ estaba previamente en `ESTADO_AVISTADA`, se decrementa `num_avistadas` en 1; en todos los casos se incrementa `num_exploradas` en 1.
+    - Al explorar una sala aun no explorada: decrementar avistadas si correspondia e incrementar exploradas; revisitas no vuelven a contar.
     - Por cada vecina directa $w$ de $u$: se consulta su estado actual. **Solo si $estado\_salas[w.indice] == ESTADO\_DESCONOCIDA$** se actualiza su estado a `ESTADO_AVISTADA` y se incrementa `num_avistadas` en 1. Si $w$ ya era vecina de otra sala explorada y ya figuraba como avistada o explorada, su contador **no se incrementa**.
   - Ambas mutaciones se ejecutan pasando por `partida.cambiar(self.conocimiento, "num_exploradas", nuevo_valor)`, permitiendo que el pergamino restaure el resumen en $O(1)$.
   - Método `resumen() -> tuple[int, int]`: retorna `(self.num_exploradas, self.num_avistadas)` en tiempo constante $O(1)$.
@@ -263,7 +285,7 @@ for dir_idx, salida in enumerate(sala_actual.salidas):
 
 ### 4.2 Soporte de comentarios en `bitacora_partida.py` y Replay
 - En `BitacoraPartida` (`modelo/datos/bitacora_partida.py`):
-  - Actualmente el archivo dispone de `anotar(self, orden)`, `cerrar(self)` y `_escribir(self, linea)`.
+  - API historica previa a 002: anotar, cerrar y _escribir; la implementacion actual incorpora anotar_comentario.
   - Se añade el método público específico:
     ```python
     def anotar_comentario(self, texto: str) -> None:
@@ -272,14 +294,14 @@ for dir_idx, salida in enumerate(sala_actual.salidas):
         self._escribir("# " + _limpio(texto))
     ```
 - En `leer_log(ruta)`: al parsear las órdenes del archivo de registro, cualquier línea que inicie con `#` o esté en blanco es descartada antes de procesar `Orden.desde_texto`.
-- **Resultado en repeticiones (`--replay`)**: La repetición reproduce fielmente los movimientos individuales `mover <dir>` registrados paso a paso, garantizando determinismo exacto sin tener que reejecutar la lógica de búsqueda de rutas durante el replay.
+- **Resultado actual en replay**: reproduce movimientos atomicos y observaciones IR_A por el lector 004; no reejecuta rutas. El lector ordinario leer_log no sirve para reconstruccion historica fiel por si solo.
 
 ---
 
 ## 5. Bloque 5: Separación de información y no filtración en la Vista
 
-### 5.1 Fuga de información en el código existente
-En el código actual:
+### 5.1 Fuga de informacion del codigo previo a 002
+El ejemplo siguiente es historico; las vistas actuales filtran destinos:
 - `vista/vista_consola.py`:
   ```python
   def _texto_salidas(self, partida):
@@ -292,7 +314,7 @@ En el código actual:
       ...
       texto = "%s: sala %s" % (direccion, id_vecino)
   ```
-Ambas vistas exponen directamente el `id_vecino` de todas las salidas, incluso si la sala de destino solo ha sido avistada y no explorada. Esto viola directamente el requisito `FR-004` y `FR-010`.
+Ambas vistas del codigo previo exponian directamente el `id_vecino` de todas las salidas, incluso si la sala de destino solo ha sido avistada y no explorada. Ese comportamiento previo violaba el requisito `FR-004` y `FR-010`.
 
 ### 5.2 Corrección arquitectónica
 - **Responsabilidad del Modelo**: `partida.salidas_visibles()` entrega la información ya tamizada según el conocimiento del jugador:
@@ -317,8 +339,8 @@ Ambas vistas exponen directamente el `id_vecino` de todas las salidas, incluso s
   - Se extiende `_empaquetar_general` y `_desempaquetar_general` para almacenar la información de niebla de guerra:
     1. Cantidad total de salas $N$ (`<H`).
     2. Arreglo de estados de salas: $N$ bytes (1 byte por sala, con valores 0, 1 o 2).
-    3. Cantidad de puertas observadas registradas $P$ (`<H`).
-    4. Por cada puerta observada: índice de sala (`<H`), dirección (`<B`), estado recordado (`<B>`).
+    3. Cantidad P de posiciones de memoria no desconocidas (`<H>`), no de puertas fisicas unicas; ambos extremos cuentan.
+    4. Por cada posicion de memoria observada: indice de sala (`<H>`), direccion (`<B>`) y estado recordado (`<B>`).
 - **Coordinación C7 con Mariano (Enemigo.rango)**:
   - El campo `rango: int` del cazador es un atributo estático propio de la ficha del catálogo (`ficha.get("rango", 0)`), no un estado mutable en partida.
   - **Acuerdo C7**: El campo `rango` **no se persiste en el bloque binario de enemigos** de `SalaGuardada`. La estructura de enemigos permanece idéntica (`[instancia, tipo, vida, tiempo]`). Al cargar la partida, `mapa.incorporar` recupera la ficha desde el catálogo local, asignando `enemigo.rango = ficha.get("rango", 0)` sin tocar la estructura binaria de salas.
@@ -337,20 +359,30 @@ Ambas vistas exponen directamente el `id_vecino` de todas las salidas, incluso s
 ## 7. Bloque 7: Plan de mediciones de rendimiento (`--bench`)
 
 ### 7.1 Nuevo benchmark: `bench/bench_mapa_conocido.py`
-Se integrará en `main.py` bajo el nombre `mapa_conocido` para verificar los criterios de éxito:
-1. **SC-001 (Tiempo de cálculo "ir a")**:
-   - Generación de criptas sintéticas con $N = 50, 200, 500, 1000$ salas.
-   - Medición del tiempo de ejecución de `dijkstra_acotado` con todas las salas exploradas.
-   - Meta medible: $< 5.0\text{ ms}$ en la cripta de referencia de 1000 salas.
-2. **SC-002 (Consulta $O(1)$ de sala y puerta recordada)**:
-   - Medición de $10^6$ consultas indexadas a `estado_salas` y `memoria_puertas` en criptas de distintos tamaños ($N=10, 100, 1000$).
-   - Demostración de tiempo medio constante e independiente de $N$.
-3. **SC-003 (Costo de exploración proporcional a salidas)**:
-   - Medición del tiempo de revelar una sala y actualizar sus vecinas (con y sin antorcha).
-   - Constancia frente al tamaño total acumulado del mapa conocido.
-4. **SC-004 (Costo de registrar y revertir conocimiento)**:
-   - Medición de 10,000 operaciones de `cambiar` y `deshacer_ultimo` sobre arreglos de conocimiento.
-   - Verificación de tiempo constante $O(1)$.
+Integrado en main.py como mapa_conocido mediante adaptador main([]).
+La instrumentacion real usa cuadriculas sinteticas de N=10,100,1000,
+semilla 20261110, 7 repeticiones y 20 ejecuciones (140 muestras por operacion).
+Preparacion, comprobaciones y calentamiento quedan fuera del tiempo medido.
+
+1. **SC-001**: Dijkstra acotado (cota 200), completo y planificacion IR_A.
+   Recalculo durante viaje usa lineas E=N-1, semilla 17, 7 viajes x 8 pasos
+   (56 muestras; excluye validacion preliminar). Son topologias distintas.
+   La meta de menos de 5 ms solo se certifica con la cripta oficial aun no
+   identificada. No equiparar automaticamente referencia oficial a 1000 salas.
+2. **SC-002**: 7 lotes de 10^6 consultas de estado, memoria y resumen por N.
+   Se reporta media/maximo de lote y promedio amortizado por operacion, no
+   maximo individual. La evidencia empirica no sustituye el analisis O(1).
+3. **SC-003**: Helpers reales de exploracion sin/con antorcha, observacion y
+   reversion, 140 muestras por escenario; indicar grado y cambios. No es tiempo
+   de accion completa ni una comparacion con igual grado en todos los N.
+4. **SC-004**: 140 muestras de registrar/invertir una celda protegida por N y
+   7 muestras de pergamino real despues de movimiento ordinario (semilla 17).
+   Se mide O(1) por cambio; el grupo completo cuesta O(cambios). Por-cambio
+   amortizado incluye sobrecosto del grupo, no latencia individual.
+
+La propuesta previa de N=50/200/500/1000 y 10.000 cambios era un plan historico,
+no describe las ejecuciones realizadas. Resultados reales en DECISIONES.md;
+SC-001 y comparacion de regresiones T030 siguen pendientes.
 
 ### 7.2 Repetición de benchmarks de regresión
 Para asegurar que los cambios en `guardado_binario.py`, `sala.py` y `partida.py` no degradan los subsistemas existentes:
@@ -359,3 +391,18 @@ Para asegurar que los cambios en `guardado_binario.py`, `sala.py` y `partida.py`
 - `python main.py --bench ordenamiento`
 - `python main.py --bench guardado`
 - `python main.py --bench mapa_conocido`
+
+## Resultado de la integracion, sin reinterpretar requisitos
+
+La inicializacion real de ConocimientoMapa empieza con contadores cero;
+Partida.iniciar establece el conocimiento inicial. Las consultas individuales y
+resumen son O(1); mapa_conocido completo recorre O(N). Planificar expande el
+componente conocido; no se ha implementado una optimizacion tras las mediciones.
+Leer_log ordinario omite comentarios, pero replay historico usa el lector 004:
+reproduce cada marca IR_A como observacion sin movimiento. No basta reconstruir
+solo movimientos para conservar observaciones permanentes. T045/T046 conserva
+lineas, valida candidata y hace rollback sin reemplazar arreglos.
+FR-010 de 004 utiliza generaciones exclusivamente en memoria_puertas, no en
+contadores, inventario ni estado_salas. La politica actual de marcas se detalla
+en contracts/contrato_ir_a.md. Resultados medidos en DECISIONES.md; no son una
+certificacion oficial ni una linea base comparativa de T030.

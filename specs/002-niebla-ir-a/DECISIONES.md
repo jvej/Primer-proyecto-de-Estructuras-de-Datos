@@ -1,272 +1,231 @@
-# Decisiones técnicas de 002: niebla del mapa e IR_A
+# Decisiones tecnicas y trazabilidad de 002
 
-Revisión documental: 2026-11-10. Base de código: commit `f3741c8`.
-Este documento pertenece exclusivamente a 002; no sustituye ni modifica el
-[registro global del equipo](../../DECISIONES.md).
+Revision: 2026-11-13. Base: `75cc63eae09b3c7c85d388f44457086ba443da8a`,
+rama integracion-002-003. Documento exclusivo de 002; no sustituye el registro
+global del equipo. Evidencia reutilizada de las ejecuciones reales de la sesion;
+no se volvieron a ejecutar pruebas ni benchmarks para esta edicion documental.
 
-Se distingue implementación existente de diseño previsto. «Implementada» se
-refiere al alcance de cada decisión, no a la finalización de toda la capacidad.
-Las pruebas citadas son evidencia automatizada disponible en el repositorio;
-no se han vuelto a ejecutar para esta modificación exclusivamente documental.
-Las alternativas indicadas proceden de `research.md`; no implican comparaciones
-experimentales. Donde no consta una evaluación, se indica expresamente.
+Se conserva la distincion entre diseno, implementacion y aceptacion oficial.
+Fuentes: spec.md, plan.md, research.md, data-model.md y contratos de contracts/.
+El extracto oficial aportado no equivale a un PDF completo versionado aqui.
+Alternativas documentadas en research.md: atributos en Sala/arbol/listas para
+conocimiento; decrease_key frente a eliminacion perezosa; busqueda desde jugador
+frente a inversa desde destino; benchmark independiente frente a --bench. Son
+alternativas de diseno documentadas, no experimentos comparativos. No consta
+una evaluacion adicional para las demas decisiones; no se inventan alternativas.
 
-Fuentes de diseño: [spec](spec.md), [plan](plan.md), [modelo de datos](data-model.md),
-[tareas](tasks.md), [investigación](research.md) y
-[constitución](../../.specify/memory/constitution.md).
-El extracto oficial aportado en la sesión contiene §3.3, §3.4, §5.3, §6 y
-Apéndice B; no equivale a disponer del PDF íntegro versionado en este documento.
+## D01. Conocimiento indexado por sala
 
-## D01. Conocimiento en arreglos indexados por sala
+- **Problema:** Consultar sin indices hash ni recorridos globales.
+- **Decision:** ConocimientoMapa(n, salas_por_indice, mapa) conserva referencias y almacena N estados y 4N memorias por Sala.indice; contadores mantenidos.
+- **Justificacion:** Consultas por indice y resumen O(1), por ID O(log N) con busqueda binaria; espacio O(N).
+- **Archivos:** modelo/juego/conocimiento.py; modelo/juego/mapa.py
+- **Estado:** Implementada
+- **Pruebas/evidencia:** test_conocimiento; test_conocimiento_partida
 
-- **Problema:** consultar frecuentemente el conocimiento sin índices hash ni
-  recorridos de todas las salas.
-- **Alternativas documentadas:** atributos en `Sala`, árbol binario propio y
-  listas enlazadas (`research.md`, §1.2).
-- **Decisión:** `ConocimientoMapa(n, salas_por_indice, mapa)` conserva las
-  referencias recibidas; almacena `N` estados y `4N` memorias de puertas en
-  arreglos contiguos. La posición de puerta es `sala.indice * 4 + direccion`.
-- **Justificación:** consultas por índice O(1); por ID, búsqueda binaria del
-  mapa O(log N). `resumen()` devuelve contadores mantenidos, en O(1).
-  Espacio O(N), sin atribuir un número de bytes no medido a objetos Python.
-- **Archivos:** [conocimiento.py](../../modelo/juego/conocimiento.py),
-  [mapa.py](../../modelo/juego/mapa.py), `data-model.md` (C6).
-- **Estado:** implementada.
-- **Evidencia:** [test_conocimiento.py](../../tests/test_conocimiento.py),
-  pruebas de referencias, índices inválidos, consulta por ID y resumen sin
-  recorrer los arreglos (FR-001, SC-002).
+## D02. Estados y memoria de puertas
 
-## D02. Tres estados y memoria independiente de puertas
+- **Problema:** Separar existencia, exploracion y observacion de informacion precargada.
+- **Decision:** Salas 0/1/2: desconocida/avistada/explorada. Puertas 0/1/2: desconocida/abierta/cerrada. Observar sincroniza ambos extremos sin explorar la vecina; cambios remotos no actualizan memoria.
+- **Justificacion:** Identificar una puerta no revela IDs, nombres ni contenido de salas no exploradas.
+- **Archivos:** modelo/juego/conocimiento.py; modelo/juego/partida.py; contracts/contrato_c2_puertas.md
+- **Estado:** Implementada
+- **Pruebas/evidencia:** test_conocimiento; test_conocimiento_partida; test_mapa_consola
 
-- **Problema:** diferenciar existencia, exploración y última observación sin
-  revelar información que el jugador todavía desconoce.
-- **Alternativas:** no consta una evaluación adicional; los estados vienen
-  fijados por FR-001..FR-006 y el [contrato C2](contracts/contrato_c2_puertas.md).
-- **Decisión:** salas desconocidas=0, avistadas=1, exploradas=2; puertas
-  desconocidas=0, recordadas abiertas=1, recordadas cerradas=2. Observar una
-  puerta sincroniza las posiciones de ambos extremos, sin explorar la vecina.
-  La consulta de apertura recordada exige ambos extremos recordados abiertos;
-  una discrepancia o memoria desconocida no habilita el paso.
-- **Justificación:** la puerta es compartida, pero conocerla no identifica su
-  sala vecina. Un cambio remoto físico no actualiza la memoria del jugador.
-- **Archivos:** `modelo/juego/conocimiento.py`,
-  [partida.py](../../modelo/juego/partida.py), contrato C2.
-- **Estado:** implementada.
-- **Evidencia:** pruebas FR-004/FR-005 en `test_conocimiento.py` y FR-006 en
-  [test_conocimiento_partida.py](../../tests/test_conocimiento_partida.py),
-  incluyendo cambios remotos y actualización al regresar.
+## D03. Reversion y permanentes FR-010 de 004
 
-## D03. Cambios reversibles y contadores coherentes
+- **Problema:** Evitar que un inverso antiguo borre observaciones permanentes posteriores.
+- **Decision:** Partida.cambiar registra estados y contadores; solo memoria_puertas usa generaciones por celda. El inverso captura generacion y restaura si sigue vigente. Un permanente incrementa generacion incluso con el mismo valor. Captura C1 historica antes de escribir, luego inverso/barrera y escritura.
+- **Justificacion:** O(1) por celda y O(cambios) por grupo; conserva identidad, limite de cinco grupos y notificaciones. No protege estado_salas, inventario ni contadores. FR-010 de 002 es privacidad, un requisito distinto.
+- **Archivos:** modelo/juego/registro.py; modelo/juego/partida.py
+- **Estado:** Implementada e integrada con captura/recorte 004; no declara completa 004
+- **Pruebas/evidencia:** test_fr010_generaciones_002 (12); test_linea_tiempo.test_FR010_destino_compartido_inverso_y_persistente
 
-- **Problema:** restaurar estados, puertas y resumen al usar un pergamino,
-  sin recalcular todo el conocimiento.
-- **Alternativas:** no consta comparación adicional; C1 exige el punto único
-  de cambios y C6 exige un resumen barato.
-- **Decisión:** extender `Registro.cambiar` para posiciones de arreglos además
-  de atributos; las actualizaciones de conocimiento y contadores pasan por
-  `Partida.cambiar`. Cada acción ordinaria conserva su propio grupo de inversos.
-- **Justificación:** restauración O(1) por cambio, O(cambios) por grupo; no se
-  duplican contadores por revisitas o por vecinos compartidos.
-  Solo se registran inversos cuando hay un grupo abierto: la inicialización
-  en t=0 no constituye una acción reversible. La observación local previa al
-  recálculo de IR_A tampoco crea por sí misma un nuevo grupo de acción.
-- **Archivos:** [registro.py](../../modelo/juego/registro.py), `partida.py`,
-  `conocimiento.py`, `data-model.md` (C1/C6).
-- **Estado:** implementada para los grupos de acciones; esto no declara
-  implementada la línea de tiempo ni su reconstrucción histórica (FR-013).
-- **Evidencia:** FR-012 en `test_conocimiento.py` y
-  `test_conocimiento_partida.py`: reversión de memoria, estados y contadores,
-  apertura/autocierre y exploración con/sin antorcha.
+## D04. Antorcha y mundo real
 
-## D04. Antorcha y separación entre percepción y mundo real
+- **Problema:** Revelar topologia sin activar contenido remoto.
+- **Decision:** Partida.iniciar establece conocimiento inicial; _entrar con antorcha explora vecinas incluso por salida cerrada, sin propagacion recursiva ni observacion de puertas remotas.
+- **Justificacion:** Los helpers actualizan solo salas reveladas y salidas, mantienen contadores y reversibilidad.
+- **Archivos:** modelo/juego/partida.py; modelo/juego/conocimiento.py
+- **Estado:** Implementada
+- **Pruebas/evidencia:** test_conocimiento_partida (9)
 
-- **Problema:** revelar topología por iluminación sin activar contenido remoto
-  ni adquirir observaciones de puertas que no se han presenciado.
-- **Alternativas:** no consta evaluación adicional; FR-007/FR-008 fijan la regla.
-- **Decisión:** `Partida` inicializa el conocimiento y aplica exploración y
-  observaciones; `ConocimientoMapa` almacena y consulta. Al entrar con antorcha
-  se exploran las vecinas directas, incluso tras salidas cerradas; no se propaga
-  recursivamente la antorcha ni se activan contenidos de esas vecinas.
-  Las puertas se observan físicamente desde la sala actual, no desde todas las
-  salas reveladas por la antorcha.
-- **Justificación:** precarga del esqueleto y exploración son conceptos
-  distintos. Las actualizaciones recorren salidas de las salas afectadas,
-  con grado máximo cuatro, y mantienen contadores mediante cambios reversibles.
-- **Archivos:** `partida.py` (`iniciar`, `_entrar`, `_explorar_sala`,
-  `_observar_puertas`, `_observar_cambio_puerta`), `conocimiento.py`.
-- **Estado:** implementada.
-- **Evidencia:** pruebas FR-002, FR-007/FR-008 y FR-012 de
-  `test_conocimiento_partida.py`: inicio, vecinos tras puerta cerrada,
-  ausencia de activación remota y restauración por pergamino.
+## D05. Dijkstra y monticulo propios
 
-## D05. Dijkstra genérico con montículo propio
+- **Problema:** Calcular distancias ponderadas deterministas respetando restricciones.
+- **Decision:** Monticulo binario contiguo, eliminacion perezosa, dijkstra_acotado stateless con filtro, cota inclusiva y arreglos/tokens de cada llamador. Dijkstra usa tuplas distancia/ID/indice.
+- **Justificacion:** Sin heapq, bisect, collections, networkx ni indices hash. Marcas evitan limpiar arreglos entre busquedas; no evita recorrer el componente alcanzable.
+- **Archivos:** modelo/estructuras/monticulo_min.py; modelo/estructuras/dijkstra.py; contracts/contrato_c3_dijkstra.md
+- **Estado:** Implementada como proveedor e integrada en los casos de cazador probados
+- **Pruebas/evidencia:** test_niebla_ir_a; test_terreno_cazador
 
-- **Problema:** calcular distancias ponderadas deterministas sin estructuras
-  prohibidas y ofrecer un núcleo común a distintos consumidores.
-- **Alternativas documentadas:** `decrease_key` frente a entradas duplicadas
-  descartadas al extraer; implementación compartida frente a separada
-  (`research.md`, §2.2 y §3.2).
-- **Decisión:** montículo binario sobre arreglo, eliminación perezosa y
-  `dijkstra_acotado` sin estado global, con filtro, cota inclusiva opcional,
-  arreglos de distancias/marcas y token propiedad del llamador.
-  El heap usado por Dijkstra lleva `(distancia, id, indice)`; el índice permite
-  acceso directo y conserva el desempate por distancia e ID de C3.
-- **Justificación:** no usa `dict`/`set` como índices, `heapq`, `bisect`,
-  `collections` ni bibliotecas de rutas. Reutilizar marcas evita limpiar O(N)
-  posiciones entre búsquedas. Tiempo O((V_r+E_r) log(E_r+1)) con entradas
-  perezosas; en este grafo de grado acotado, O(V_r log V_r).
-- **Archivos:** [monticulo_min.py](../../modelo/estructuras/monticulo_min.py),
-  [dijkstra.py](../../modelo/estructuras/dijkstra.py),
-  [contrato C3](contracts/contrato_c3_dijkstra.md).
-- **Estado:** implementada como proveedor C3; no acredita por sí sola la
-  integración del consumidor cazador en otra capacidad.
-- **Evidencia:** [test_niebla_ir_a.py](../../tests/test_niebla_ir_a.py):
-  montículo, costos mínimos, cota, filtro, determinismo y arreglos independientes.
+## D06. Planificacion conocida de IR_A
 
-## D06. IR_A planifica exclusivamente sobre conocimiento
+- **Problema:** Elegir pasos minimos sin consultar puertas fisicas ni salas desconocidas.
+- **Decision:** Dijkstra inverso desde destino, solo extremos explorados y memoria abierta; seleccion por (costo + distancia vecina, ID vecina). No ejecuta acciones.
+- **Justificacion:** Costo depende del componente alcanzable, no solo de longitud de ruta. No se ha optimizado tras medir.
+- **Archivos:** controlador/planificador_rutas.py; modelo/juego/conocimiento.py
+- **Estado:** Implementada; rendimiento oficial pendiente
+- **Pruebas/evidencia:** test_planificador_rutas (9)
 
-- **Problema:** hallar el siguiente paso mínimo sin consultar puertas físicas
-  ni atravesar salas que el jugador no haya explorado.
-- **Alternativas documentadas:** Dijkstra desde el jugador con etiquetas de
-  primer vecino frente a búsqueda inversa desde el destino (`research.md`, §3.1).
-- **Decisión:** `PlanificadorRutas` valida destino explorado; ejecuta Dijkstra
-  inverso con `cota_rango=None`, filtro de ambos extremos explorados y puerta
-  recordada abierta. Selecciona la vecina por costo total y después menor ID.
-  No ejecuta acciones. Tiene sus propios arreglos y token.
-- **Justificación:** sobre salidas no dirigidas y costos simétricos,
-  `costo(salida)+dist[vecina]` permite resolver el primer paso y su desempate.
-  El costo depende del componente conocido alcanzable, no solo de la longitud
-  final de la ruta: actualmente se expande completo, sin parada en el origen.
-- **Archivos:** [planificador_rutas.py](../../controlador/planificador_rutas.py),
-  `conocimiento.py`, `dijkstra.py`, [contrato IR_A/C4](contracts/contrato_ir_a.md).
-- **Estado:** implementada; no se ha optimizado tras los benchmarks.
-- **Evidencia:** [test_planificador_rutas.py](../../tests/test_planificador_rutas.py):
-  ruta ponderada, empate, destinos inválidos, intermedias desconocidas,
-  discrepancia entre memoria y puerta física, independencia y consulta sin tiempo.
+## D07. Viaje compuesto y marcas intercaladas
 
-## D07. Viaje compuesto de movimientos ordinarios
+- **Problema:** Conservar tiempo, eventos, log y retroceso individual.
+- **Decision:** IR_A fuera de ORDENES_DE_PARTIDA. Pasos MOVER ordinarios con recalculo y parada por llegada, enemigos, dano incluso curado, fin o bloqueo; nunca abre puertas. Tras callbacks/cancelacion, una marca # ir a X inmediatamente antes de cada observacion exterior efectiva, aunque no haya movimiento.
+- **Justificacion:** No inventa acciones ni deduplica observaciones; sustituir Partida recrea planificador. Aplicacion conecta log activo y conserva cadenas. Leer_log ordinario omite comentarios; lector 004 repite marcas como observacion, sin viajar.
+- **Archivos:** controlador/controlador.py; modelo/juego/orden.py; controlador/orden.py; modelo/datos/bitacora_partida.py; controlador/aplicacion.py; main.py
+- **Estado:** Implementada, incluido registro real y T045/T046
+- **Pruebas/evidencia:** test_ir_a_compuesto (27); test_comentarios_ir_a_002 (7); test_integracion_comentarios_002 (5)
 
-- **Problema:** conservar tiempo, eventos, replay y retroceso por cada paso
-  sin convertir todo el viaje en una sola acción del motor.
-- **Alternativas:** no consta comparación adicional; §3.4 y C4 exigen pasos ordinarios.
-- **Decisión:** `IR_A` queda fuera de `ORDENES_DE_PARTIDA`; el controlador
-  observa localmente y recalcula antes de cada movimiento `MOVER` ordinario.
-  Se detiene por llegada, enemigos vivos, daño, fin de partida o falta de ruta;
-  nunca abre puertas automáticamente. Cambiar la partida recrea el planificador.
-  Para detectar daño seguido de curación, un adaptador temporal de `cambiar`
-  delega al método original y se retira incluso ante excepciones.
-- **Justificación:** cada paso mantiene su grupo reversible y notificación de
-  orden aceptada. El pergamino revierte el último paso y no reanuda el viaje.
-  La intención se emite a observadores de comentarios; `leer_log` ignora `#`.
-- **Archivos:** [controlador.py](../../controlador/controlador.py),
-  [orden.py](../../controlador/orden.py),
-  [bitacora_partida.py](../../modelo/datos/bitacora_partida.py), contrato C4.
-- **Estado:** parcial: viaje y soporte de comentarios implementados; falta
-  conectar los comentarios al log activo desde Aplicacion/main.
-- **Evidencia:** [test_ir_a_compuesto.py](../../tests/test_ir_a_compuesto.py):
-  FR-017..FR-023, costos, eventos, daño incluso curado, puertas, desvíos,
-  pergamino, sustitución y replay con comentarios conectados por la prueba.
-  Esa conexión de prueba no demuestra la conexión de producción pendiente.
+## D08. Cancelacion por observador opcional
 
-## D08. Cancelación mediante observador opcional
+- **Problema:** Atender eventos sin hilos ni pasos extra.
+- **Decision:** agregar_observador_viaje recibe funcion(Partida)->bool antes de observar/recalcular/mover; comprueba token e identidad. False cancela; excepciones se propagan y finalizan viaje. Callback no ejecuta acciones.
+- **Justificacion:** Cancelacion sin tiempo extra; pasos anteriores permanecen reversibles.
+- **Archivos:** controlador/controlador.py; vista/vista_pygame.py; main.py
+- **Estado:** Implementada y conectada a Pygame
+- **Pruebas/evidencia:** test_ir_a_compuesto; test_ir_a_grafico_002 (13)
 
-- **Problema:** ofrecer un punto seguro para atender eventos entre pasos,
-  sin hilos ni movimientos adicionales tras cancelar.
-- **Alternativas:** no consta evaluación comparativa; se adoptó el callback
-  opcional autorizado para no imponer cambios a las vistas compartidas.
-- **Decisión:** `agregar_observador_viaje(funcion)` registra callbacks
-  `funcion(partida_actual) -> bool`. Tras la validación inicial y antes de
-  observar puertas, recalcular y mover en cada iteración: `False` cancela,
-  `True` continúa; se exige `bool` y se comprueban token e identidad después
-  de cada callback. Excepciones se propagan y finalizan el viaje.
-- **Justificación:** cancelación sin tiempo extra ni deshacer pasos anteriores;
-  sin observadores se conserva el viaje existente. El callback debe limitarse
-  a eventos/presentación y no ejecutar acciones de juego.
-- **Archivos:** `controlador.py`, `test_ir_a_compuesto.py`.
-- **Estado:** implementada en controlador; conexión gráfica pendiente.
-- **Evidencia:** pruebas C4 de cancelación inicial y tras varios pasos, reloj,
-  log individual, retroceso, cambio de partida, token, ausencia de observadores,
-  retorno estricto y propagación de excepciones.
+## D09. Mapa privado en consola y Pygame
 
-## D09. Datos filtrados para consola y Pygame
+- **Problema:** Evitar que la vista exponga mapa precargado o apertura remota.
+- **Decision:** mapa_conocido filtra salas y salidas; salidas_visibles conserva cinco campos, con ID None para no exploradas. MAPA sin tiempo. M muestra mapa; V devuelve IR_A; Escape cancela; R deja un pergamino pendiente ligado a Partida fuera del callback; QUIT prevalece y lo descarta.
+- **Justificacion:** Modelo filtra; vistas no planifican. No imprimen sala None. Consulta completa O(N), consultas individuales O(1).
+- **Archivos:** modelo/juego/partida.py; vista/vista_base.py; vista/vista_consola.py; vista/vista_pygame.py; vista/controles_gui.py
+- **Estado:** Implementada; interfaces HISTORIA de 004 pendientes
+- **Pruebas/evidencia:** test_mapa_consola (7); test_ir_a_grafico_002 (13)
 
-- **Problema:** impedir que la interfaz confunda la precarga real con el mapa
-  conocido o presente identificadores de salas solamente avistadas.
-- **Alternativas:** no consta comparación adicional; el filtrado en el modelo
-  está documentado en `research.md`, §5.2, y en T012–T014.
-- **Decisión:** `mapa_conocido()` entrega únicamente salas exploradas y salidas
-  filtradas. `salidas_visibles()` entrega cinco campos: dirección, estado
-  recordado, ID vecino o `None`, llave permitida y costo. Usa conocimiento para
-  visibilidad/memoria y referencias estáticas para nombres, topología y costos;
-  no lee el estado físico de puertas para presentar la memoria.
-  Las vistas muestran destinos anónimos sin imprimir «sala None».
-- **Justificación:** el modelo controla privacidad; consola y Pygame consumen
-  los mismos datos filtrados. MAPA no es acción ordinaria, no muta ni avanza
-  tiempo. Construir la consulta completa sí recorre las salas O(N), a diferencia
-  de las consultas individuales y `resumen()` O(1).
-- **Archivos:** `partida.py`, `orden.py`, `controlador.py`,
-  [vista_base.py](../../vista/vista_base.py),
-  [vista_consola.py](../../vista/vista_consola.py),
-  [vista_pygame.py](../../vista/vista_pygame.py),
-  [controles_gui.py](../../vista/controles_gui.py).
-- **Estado:** parcial: MAPA funciona en ambas vistas y consola acepta IR_A;
-  Pygame tiene mapa con M, cierre/desplazamiento y diálogo privado preparado,
-  pero el diálogo no inicia viajes ni está conectado a una tecla de ejecución.
-  Falta atender eventos y cancelar durante el recorrido gráfico.
-- **Evidencia:** [test_mapa_consola.py](../../tests/test_mapa_consola.py) y
-  [test_gui.py](../../tests/test_gui.py): privacidad, memoria frente a estado
-  real, costos, consulta sin tiempo, `ir a 4`, `ir n`, controles y diálogo sin viaje.
+## D10. Benchmarks reproducibles integrados
 
-## D10. Benchmarks independientes y reproducibles
+- **Problema:** Medir operaciones reales sin red, vista ni certificaciones inventadas.
+- **Decision:** perf_counter_ns; semillas fijas 20261110/17, datos sinteticos 10/100/1000, preparacion/calentamiento excluidos. Adaptador main([]) y registro BENCHES. Exploracion sin/con antorcha, celda protegida, pergamino real, Dijkstra, planificacion y recalculo.
+- **Justificacion:** Maximos individuales salvo consultas por lote; por-cambio amortizado no es maximo individual. Conserva GC normal y sobrecosto Python.
+- **Archivos:** tests/bench_niebla_ir_a.py; bench/bench_mapa_conocido.py; main.py
+- **Estado:** Instrumentacion implementada y medida; SC-001 oficial y comparacion T030 pendientes
+- **Pruebas/evidencia:** test_bench_mapa_conocido_002 (4); ejecucion CLI real
 
-- **Problema:** medir operaciones reales sin modificar módulos compartidos,
-  abrir Pygame, depender de red ni confundir medidas locales con certificación.
-- **Alternativas:** `research.md`, §7, propone integración mediante `main.py
-  --bench`; el alcance autorizado adoptó primero un módulo independiente.
-- **Decisión:** [bench_niebla_ir_a.py](../../tests/bench_niebla_ir_a.py), ejecutable
-  con `venv/Scripts/python.exe -B -m tests.bench_niebla_ir_a`, usa
-  `perf_counter_ns()`, cuadrículas de 10/100/1000 salas, semilla 20261110 y viajes
-  sobre líneas con semilla 17. Preparación, calentamiento y comprobaciones se
-  excluyen de las muestras. No escribe resultados ni archivos del proyecto.
-- **Justificación:** mide consultas, resumen, actualización/reversión mediante
-  helpers reales, Dijkstra acotado/completo, planificación y recálculo dentro
-  de viajes ordinarios. Reporta tamaños, ejecuciones, media y máximo; para
-  consultas el máximo es de lote y el valor por operación es amortizado.
-  El recálculo cronometrado excluye movimiento, eventos y validación preliminar;
-  no representa la latencia completa de un paso ni de la interfaz.
-- **Estado:** parcial: módulo independiente implementado; integración `--bench`,
-  referencia oficial y medición del ciclo con cazadores pendientes.
-- **Evidencia de código:** comprobaciones de huella determinista, distancias,
-  restauración de arreglos, reloj y cantidad de pasos en el propio benchmark.
-- **Medición histórica comunicada en la sesión:** planificación de 1000 salas,
-  cuadrícula de 1936 aristas, semilla 20261110, 7 × 20 = 140 muestras:
-  **media aproximada 8,548 ms** (8,547739 ms), máximo 12,153700 ms.
-  Entorno reportado: Python 3.13.18, Windows. Es un resultado previo de consola,
-  no una ejecución nueva de esta revisión ni un informe de resultados versionado.
-  El extracto §6.1 establece 5 ms en la cripta de referencia; no identifica esa
-  referencia como esta cuadrícula de 1000 salas. Esta medición no acredita
-  cumplimiento oficial. Tampoco se ha medido aquí el ciclo de 20 ms con cazadores.
+## Persistencia v4 y T045/T046
 
-## Inconsistencias documentales y coordinación pendiente
+Estado: implementada y probada. Codec VERSION_FORMATO=4, CRPT, encabezado
+<4sHIQI>. General: N uint16, N estados, P uint16, P entradas <HBB>; P cuenta
+posiciones de memoria, no puertas unicas. Ceros omitidos y restaurados como
+cero. Enemigos conservan instancia/tipo/vida/tiempo_siguiente; rango viene de
+catalogo. Se validan valores, duplicados, indices, offsets, truncamientos y
+consumo exacto. No hay CRC implementado ni exigencia encontrada de CRC en C7.
 
-- `spec.md` mantiene estado Draft y `tasks.md` conserva casillas sin actualizar;
-  las casillas no constituyen evidencia de implementación ni se modifican aquí.
-- `research.md`, §1.3, describe contadores iniciales ya explorados; el constructor
-  real empieza con cero y `Partida.iniciar()` aplica FR-002 en t=0, conforme a
-  la aclaración de `data-model.md`.
-- Las cifras de memoria en KB de `research.md` son estimaciones de diseño sin
-  medición del tamaño real de los objetos Python; no se certifican aquí.
-- `research.md`, §7, asocia 1000 salas a una referencia de rendimiento; el
-  benchmark distingue expresamente ese escenario interno de la referencia oficial.
-- Guardado v4 sigue siendo un contrato previsto:
-  [contrato_guardado_v4.md](contracts/contrato_guardado_v4.md).
-  `modelo/datos/guardado_binario.py` conserva `VERSION_FORMATO = 3`.
-  No se declara implementada serialización explícita de niebla ni historia.
-- Coordinar con Axel la conexión gráfica del observador, el log de comentarios
-  activo y la compatibilidad futura del adaptador temporal C1 con historia;
-  con Jeferson, los puntos compartidos de Aplicacion/main y sustitución de partida;
-  con Mariano, consumo C3 y evolución de puertas/costos. Esto identifica puntos
-  de contacto, sin atribuir trabajo pendiente como ya realizado por otra persona.
-- Próximo orden sugerido: coordinar conexiones gráficas y de comentarios;
-  verificar integración con pruebas; acordar persistencia/historia; obtener
-  referencia de rendimiento y evaluar optimizaciones con mediciones comparables.
+foto_de copia estados/memoria y admite cadenas u Orden para compatibilidad.
+Guardar usa app.lineas_para_reconstruir() sin perder orden o marcas repetidas.
+El codec decodifica una fotografia, no reconstruye objetos vivos. Cargar usa
+app.preparar_reconstruccion y el callback del controlador candidato; dentro del
+contexto aplica lineas y valida N, indices, estados, salidas, simetria, sala
+actual, contadores por recuento O(N) y coincidencia exacta con replay.
+No reemplaza ConocimientoMapa, arreglos ni Registro. Solo salida normal publica;
+un fallo conserva sesion, log y capacidad de seguir jugando. No activa
+resolubilidad. Condicion conservada:
+`if partida_nueva and ordenes_previas is None and exigir_versiones is None:`.
+Callback T045: True incluye comentarios ignorados; False significa orden
+rechazada. No confundir con el ayudante de bajo nivel del reproductor.
+Pruebas: test_guardado_v4_002 (15), test_carga_v4_002 (11) y casos FR014 de
+test_historia_persistencia (incluido import Orden del modelo, K distinta y rollback).
+
+## Trazabilidad y evidencia de la integracion
+
+Las pruebas citadas son modulos dentro de tests/, ejecutados con el Python del
+venv como -m tests.<modulo>. Implementado/probado no significa enumeracion
+exhaustiva de todos los estados posibles ni cierre global de T031.
+
+| Requisito 002 | Implementacion | Prueba aprobada | Estado | Evidencia pendiente |
+|---|---|---|---|---|
+| FR-001 | ConocimientoMapa y _explorar_sala | test_conocimiento; test_conocimiento_partida | Funcional verificado | Cierre global T031, sin incidencia especifica nueva |
+| FR-002 | Partida.iniciar | test_conocimiento_partida, test_FR002_inicio_solo_sala_inicial_y_puertas_locales | Funcional verificado | Cierre global T031, sin incidencia especifica nueva |
+| FR-003 | mapa_conocido/salidas_visibles | test_mapa_consola, test_FR003_FR006_mapa_usa_memoria_no_estado_fisico | Funcional verificado | Cierre global T031, sin incidencia especifica nueva |
+| FR-004 | Filtrado IDs/nombres/contenido | test_mapa_consola, test_FR004_FR005_mapa_no_filtra_ids_nombres_ni_contenido | Funcional verificado | Cierre global T031, sin incidencia especifica nueva |
+| FR-005 | Filtro de rutas y mapa | test_planificador_rutas, test_FR015_no_usa_intermedias_avistadas_o_desconocidas | Funcional verificado | Cierre global T031, sin incidencia especifica nueva |
+| FR-006 | Observaciones locales y C2 | test_conocimiento_partida; test_terreno_cazador | Funcional verificado | Coordinacion motor de simultaneos T025 de 004 |
+| FR-007 | Antorcha en _entrar | test_conocimiento_partida, test_FR007_FR008_antorcha_revela_sin_observar_puertas_remotas | Funcional verificado | Cierre global T031, sin incidencia especifica nueva |
+| FR-008 | Revelacion sin activacion remota | test_conocimiento_partida, mismo caso FR007/FR008 | Funcional verificado | Cierre global T031, sin incidencia especifica nueva |
+| FR-009 | MAPA fuera de acciones | test_mapa_consola, test_FR009_mapa_es_consulta_sin_tiempo_historial_ni_log | Funcional verificado | Cierre global T031, sin incidencia especifica nueva |
+| FR-010 | Privacidad de modelo y vistas | test_mapa_consola; test_ir_a_grafico_002 | Funcional verificado | No confundir con FR-010 de 004 |
+| FR-011 | Fotografia y carga v4 | test_guardado_v4_002; test_carga_v4_002 | Funcional verificado | Cierre global T031, sin incidencia especifica nueva |
+| FR-012 | Registro y generaciones de memoria | test_conocimiento; test_conocimiento_partida; test_fr010_generaciones_002 | Funcional verificado | Cierre global T031, sin incidencia especifica nueva |
+| FR-013 | Captura C1 historica previa | test_linea_tiempo, test_FR010_destino_compartido_inverso_y_persistente; test_historia_persistencia, test_FR010_comentario_ir_a_observa_sin_accion | Captura integrada | Frontera de simultaneos FR002 de 004 pendiente |
+| FR-014 | Parser y destino explorado | test_ir_a_compuesto; test_planificador_rutas | Funcional verificado | Cierre global T031, sin incidencia especifica nueva |
+| FR-015 | Dijkstra inverso sobre memoria | test_planificador_rutas, test_FR015_prefiere_mas_pasos_con_menor_costo | Funcional verificado | Cierre global T031, sin incidencia especifica nueva |
+| FR-016 | Seleccion costo/ID primer vecino | test_planificador_rutas, test_FR016_empate_elige_menor_id_del_primer_vecino | Funcional verificado | Cierre global T031, sin incidencia especifica nueva |
+| FR-017 | MOVER ordinario por paso | test_ir_a_compuesto, test_FR017_FR018_pasos_ordinarios_costos_y_recalculo | Funcional verificado | Coordinacion motor de simultaneos T025 de 004 |
+| FR-018 | Recalculo previo al paso | test_ir_a_compuesto, test_FR018_evento_cierra_puerta_y_se_recalcula | Funcional verificado | Cierre global T031, sin incidencia especifica nueva |
+| FR-019 | Paradas por dano/enemigos/bloqueo | test_ir_a_compuesto; test_ir_a_grafico_002 | Funcional verificado | Cierre global T031, sin incidencia especifica nueva |
+| FR-020 | Avisos de detencion | test_ir_a_compuesto, casos de destino y paradas | Funcional verificado | Cierre global T031, sin incidencia especifica nueva |
+| FR-021 | Nunca abrir automaticamente | test_ir_a_compuesto, test_FR021_nunca_abre_puertas_ni_usa_llaves | Funcional verificado | Cierre global T031, sin incidencia especifica nueva |
+| FR-022 | Marcas y movimientos intercalados | test_comentarios_ir_a_002; test_integracion_comentarios_002; test_carga_v4_002 | Funcional verificado | Cierre global T031, sin incidencia especifica nueva |
+| FR-023 | Pergamino individual y cancelacion | test_ir_a_compuesto; test_ir_a_grafico_002; test_carga_v4_002 | Funcional verificado | Cierre global T031, sin incidencia especifica nueva |
+| FR-024 | Rechazo v3 y rollback | test_guardado_v4_002, test_FR024_version_3_rechazada_explicita; test_carga_v4_002 | Funcional verificado | Cierre global T031, sin incidencia especifica nueva |
+| SC-001 | Planificar/recalcular por Dijkstra | Benchmark sintetico | Pendiente oficial | Falta cripta oficial; 1000 sinteticas superan 5 ms |
+| SC-002 | Consultas indexadas y resumen O(1) | test_conocimiento, test_SC002_resumen_no_recorre_arreglos; 10^6 consultas/lote | Instrumentado y medido | Medicion no prueba por si sola complejidad |
+| SC-003 | Helpers sin/con antorcha | test_bench_mapa_conocido_002; benchmark | Instrumentado y medido | Comparar grado/salas reveladas; helpers no son accion completa |
+| SC-004 | Celda protegida y pergamino real | test_bench_mapa_conocido_002; benchmark | Instrumentado y medido | Promedio amortizado por cambio no es maximo individual |
+| SC-005 | Costo minimo y desempate | test_niebla_ir_a; test_planificador_rutas | Aprobado en casos automatizados | No equivale a enumerar todos los grafos |
+
+## Mediciones reales de la sesion
+
+Python 3.13.18, Windows 11. Datos de consola ya obtenidos, no una ejecucion nueva
+de esta revision. mapa_conocido: semilla 20261110; 7 x 20 = 140 muestras por
+operacion; consultas 7 lotes de 10^6; viaje semilla 17, 7 x 8 = 56 muestras.
+Preparacion y calentamiento fuera del tiempo; duracion CLI 17,9 s.
+
+| N / E cuadricula | Planificar media / max ms | Dijkstra completo media / max ms | Recalculo en linea media / max ms |
+|---|---|---|---|
+| 10 / 13 | 0,074946 / 0,478600 | 0,074772 / 0,445500 | 0,072150 / 0,304300 |
+| 100 / 180 | 0,972790 / 1,944900 | 0,951705 / 2,030800 | 0,494302 / 1,063700 |
+| 1000 / 1936 | 11,755245 / 15,624900 | 11,273351 / 14,268700 | 4,934320 / 6,149000 |
+
+El recalculo en viaje usa linea E=N-1, no cuadricula. No se identifica esa
+cuadricula como la cripta oficial. Medicion historica anterior comunicada:
+planificacion 1000 salas, media aproximada 8,548 ms (8,547739), max 12,153700 ms.
+No se usa esa cifra como certificacion ni como linea base equivalente controlada;
+su diferencia con la media actual no demuestra una regresion.
+
+| N | Consulta estado / puerta / resumen, ns/op medios | Explorar normal media / max ms | Antorcha media / max ms | Pergamino real media / max ms |
+|---|---|---|---|---|
+| 10 | 240,77 / 299,82 / 70,84 | 0,011506 / 0,020200 | 0,027586 / 0,153100 | 0,026214 / 0,036900 |
+| 100 | 236,11 / 323,62 / 72,42 | 0,014630 / 0,050300 | 0,026729 / 0,049000 | 0,024857 / 0,036000 |
+| 1000 | 216,63 / 320,87 / 72,63 | 0,018046 / 0,066800 | 0,040142 / 0,153800 | 0,041257 / 0,056200 |
+
+| N | Registrar celda media / max ms | Invertir celda media / max ms |
+|---|---|---|
+| 10 | 0,000599 / 0,001200 | 0,000847 / 0,001100 |
+| 100 | 0,000575 / 0,000900 | 0,000766 / 0,001000 |
+| 1000 | 0,000722 / 0,004200 | 0,001333 / 0,037900 |
+
+Consultas: maximos de lote, no maximo individual. Grados explorados 3/3/4.
+Pergamino revierte 17 cambios totales de movimiento; por-cambio es promedio
+amortizado, no latencia individual. Ciclo de 20 ms con cazadores no evaluado.
+
+### T030: cuatro benchmarks ejecutados; comparacion pendiente
+
+Ejecutados mediante CLI en temporal externo; codigo final 0 y ningun archivo
+restante. Cache/lista/ordenamiento trabajan en memoria; guardado crea/elimina
+BIN/JSON relativos al temporal. No se modificaron esos benchmarks.
+Estadisticos propios de cada script, no todos media/maximo. Ordenamiento incluye
+referencia sorted() solo comparativa, no usada en estructuras evaluadas.
+
+| Benchmark | Duracion | Resultado representativo real |
+|---|---|---|
+| cache | 23,7 s | tope 25: acierto 1,109 us; fallo 0,773 us; desalojo 5,316 us; tope 10000: desalojo 1016,718 us |
+| lista_ordenada | 9,9 s | N=10000: busqueda 1,868 us vs lineal 191,228 us; insercion individual 2914,076 ms vs masiva 41,140 ms |
+| ordenamiento | 23,0 s | N=5000 aleatorio, medianas: insercion 959,994 ms; merge 17,039 ms; automatico 17,137 ms |
+| guardado | 1,0 s | N=5000: binario 404,2 KB vs JSON 563,0 KB; medianas carga 33,294 ms vs 12,734 ms; una sala binaria 0,0853 ms |
+
+No hay linea base equivalente localizada; no certificar ausencia de regresiones.
+
+## Pendientes y coordinacion
+
+- SC-001: identificar y medir la cripta oficial, sin redefinirla.
+- T030: comparacion con linea base equivalente; ejecucion y reporte ya realizados.
+- T031: cierre global de cobertura y regresiones. Ultima suite: 35/39 modulos.
+- Axel/004: nueve fallos de interfaces HISTORIA y dos de replay hasta; T045/T046 si esta integrado.
+- Mariano/T025 de 004: un fallo de simultaneos vida 28 vs 27, reproducido tambien en 004 puro.
+- Pruebas compartidas: test_gui escanea import pygame e incluye test_historia_interfaces; falso positivo MVC.
+- No se atribuyen esos pendientes como implementados por otros integrantes.
+- research.md conserva estimaciones de memoria no medidas en objetos Python.
+- spec.md conserva requisitos y estado Draft. Checklist previo evalua especificacion, no entrega.

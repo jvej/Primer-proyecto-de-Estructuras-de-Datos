@@ -1,91 +1,70 @@
-# Quickstart: Niebla de guerra, mapa conocido y viaje automático "ir a"
+# Quickstart de 002: uso y validacion actual
 
-**Feature**: `002-niebla-ir-a`  
-**Date**: 2026-11-08  
-**Constitution Authority**: `.specify/memory/constitution.md` (Version 1.0.0)
+Base: `75cc63eae09b3c7c85d388f44457086ba443da8a` (2026-11-13).
+Usar Python 3.13 del venv. Si este worktree no tiene venv, usar el ejecutable
+absoluto del entorno del proyecto original con directorio actual del worktree.
 
----
-
-## 1. Requisitos Previos
-
-- Entorno Python 3.13 con las dependencias básicas instaladas (`requests`, `pygame`).
-- Ejecución desde la raíz del repositorio:
-  ```powershell
-  python --version
-  # Debe indicar Python 3.13.x
-  ```
-
----
-
-## 2. Escenarios de Validación Rápida
-
-### Escenario 1: Pruebas automatizadas de aceptación
-Ejecución de la suite completa de pruebas de niebla de guerra, mapa conocido y "ir a", donde cada prueba cita su requisito funcional (`FR-###`):
+## Pruebas
 
 ```powershell
-python -m tests.test_niebla_ir_a
+.\venv\Scripts\python.exe -B -m tests.test_conocimiento
+.\venv\Scripts\python.exe -B -m tests.test_conocimiento_partida
+.\venv\Scripts\python.exe -B -m tests.test_niebla_ir_a
+.\venv\Scripts\python.exe -B -m tests.test_planificador_rutas
+.\venv\Scripts\python.exe -B -m tests.test_ir_a_compuesto
+.\venv\Scripts\python.exe -B -m tests.test_comentarios_ir_a_002
+.\venv\Scripts\python.exe -B -m tests.test_ir_a_grafico_002
+.\venv\Scripts\python.exe -B -m tests.test_fr010_generaciones_002
+.\venv\Scripts\python.exe -B -m tests.test_guardado_v4_002
+.\venv\Scripts\python.exe -B -m tests.test_carga_v4_002
+.\venv\Scripts\python.exe -B -m tests.test_bench_mapa_conocido_002
 ```
 
-**Resultado esperado**:
-- Todas las pruebas pasan (`OK`).
-- Se validan:
-  - `test_FR001_clasificacion_estados_conocimiento`
-  - `test_FR002_estado_inicial_instante_cero`
-  - `test_FR004_sala_avistada_no_revela_id_ni_nombre`
-  - `test_FR006_actualizacion_memoria_puertas_en_acciones`
-  - `test_FR007_antorcha_enciende_vecinas_sin_activar_contenido`
-  - `test_FR012_reversion_conocimiento_con_pergamino`
-  - `test_FR014_ir_a_destino_no_explorado_rechazado`
-  - `test_FR015_ir_a_camino_costo_minimo`
-  - `test_FR016_desempate_menor_id_en_vecina`
-  - `test_FR019_interrupcion_por_dano_o_enemigo`
-  - `test_FR022_log_asienta_pasos_y_comentario`
-  - `test_FR024_guardado_v3_reporta_incompatibilidad_explicta`
+Completar con test_mapa_consola, test_integracion_comentarios_002, motor,
+Partida, terreno/cazador, resolubilidad y replay/puntajes. No basta C3 para toda
+002. Ejecutar cada tests.test_* como modulo: unittest discover por si solo no
+ejecuta las pruebas del proyecto basadas en funciones.
+Ultima suite: 35/39 modulos; 13 fallos conocidos (9 interfaces historicas,
+2 replay hasta, 1 simultaneos, 1 falso positivo GUI). No alterar expectativas.
+Matriz y resultados reales en DECISIONES.md.
 
----
+## Interfaz
 
-### Escenario 2: Verificación de no regresión del sistema
-Ejecutar las pruebas unitarias y de integración de la base existente:
+Consola: mapa, ir a <id>, ir n. Pygame: M mapa; V dialogo IR_A; Escape cancela
+viaje sin SALIR; R cancela y deja un unico pergamino para pedir_orden, fuera del
+callback. Otra Partida o QUIT descarta pendientes. MAPA no consume tiempo.
+Destinos no explorados anonimos; puertas presentan memoria, no estado remoto.
+
+## Benchmark sintetico
 
 ```powershell
-python -m tests.test_motor_base
-python -m tests.test_guardado_binario
+.\venv\Scripts\python.exe -B main.py --bench mapa_conocido
+.\venv\Scripts\python.exe -B -m tests.bench_niebla_ir_a --tamanos 10 100 1000
 ```
 
-**Resultado esperado**:
-- Las suites existentes de motor, agenda y guardado ejecutan limpiamente.
+Adaptador main([]) aisla argumentos externos. Salida: entorno, semilla, N/E,
+muestras, media/maximo. Consultas por lotes: maximo de lote y media amortizada.
+Preparacion/calentamiento excluidos. Helpers sin/con antorcha no equivalen a
+accion completa; pergamino real se mide tambien. SC-004 es O(1) por cambio,
+O(cambios) por grupo. SC-001 de menos de 5 ms sigue pendiente de cripta oficial;
+1000 salas sinteticas no certifican cumplimiento. Ciclo con cazadores no medido.
 
----
+## T030
 
-### Escenario 3: Ejecución de Benchmarks Oficiales
+Cache/lista_ordenada/ordenamiento no escriben archivos. Guardado crea y elimina
+bench_partida.bin/json relativos al directorio actual. Ejecutar desde temporal
+externo, con raiz del proyecto en sys.path, como en la auditoria; no usar una
+carpeta que contenga archivos que deban conservarse con esos nombres.
+Los cuatro benchmarks terminaron codigo 0; no hay linea base equivalente para
+certificar ausencia de regresiones. Resultados en DECISIONES.md.
 
-#### 3.1 Benchmark de Mapa Conocido y "ir a" (SC-001..SC-004)
-```powershell
-python main.py --bench mapa_conocido
-```
+## Replay y v4
 
-**Criterios de Éxito**:
-- `SC-001`: Tiempo de recálculo de Dijkstra acotado sobre el mapa completo $< 5.0\text{ ms}$.
-- `SC-002`: Consulta de estado de sala y puerta recordada en tiempo constante $O(1)$.
-- `SC-003`: Exploración de sala proporcional a sus salidas directas e independiente de $N$.
-- `SC-004`: Reversión de conocimiento mediante pergamino en tiempo constante $O(1)$.
-
-#### 3.2 Repetición de Benchmarks de Regresión
-```powershell
-python main.py --bench cache lista_ordenada ordenamiento guardado
-```
-
-**Resultado esperado**:
-- Todas las mediciones históricas confirman estabilidad y ausencia de degradación de rendimiento.
-
----
-
-### Escenario 4: Verificación de Replay sin divergencia
-
-```powershell
-python main.py --replay datos_cripta/partidas/ejemplo_ir_a.log --detalle
-```
-
-**Resultado esperado**:
-- Las órdenes ordinarias `mover <dir>` registradas a partir de viajes automáticos se reproducen deterministamente sin divergencias.
-- Las líneas de comentario `# ir a <destino>` son ignoradas de forma transparente por el reproductor.
+Usar un log real, no una ruta de ejemplo inexistente:
+`<python-del-venv> main.py --replay <ruta-real.log> --detalle`.
+Movimientos atomicos y marcas IR_A se reconstruyen sin planificar otro viaje:
+las marcas solo observan, otros comentarios se ignoran. Guardar conserva orden
+y repeticiones; T045/T046 valida candidata antes de publicarla, sin reemplazar
+arreglos. Error conserva sesion; v3 se rechaza explicitamente. No hay CRC:
+validaciones estructurales y comparacion con replay. --verificar requiere ID
+y no sustituye las pruebas de carga ni activa resolubilidad al reconstruir.

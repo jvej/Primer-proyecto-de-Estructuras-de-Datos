@@ -4,6 +4,22 @@
 
 **Prerequisites**: `plan.md` ✓ | `spec.md` ✓ | `research.md` ✓ | `data-model.md` ✓ | `contracts/` ✓ | `quickstart.md` ✓ | `constitution.md` ✓
 
+## Estado verificado en la integracion 002 + 003 + 004
+
+Base revisada: `75cc63eae09b3c7c85d388f44457086ba443da8a`, rama
+`integracion-002-003` (2026-11-13). Implementacion funcional de conocimiento,
+antorcha, consola/Pygame, viaje compuesto, FR-010 de 004, codec v4 y T046.
+La auditoria ejecuto 39 modulos: 35 aprobados y cuatro fallidos, con 13 fallos
+conocidos ajenos al benchmark: nueve interfaces historicas, dos replay `hasta`,
+uno de eventos simultaneos y un falso positivo de busqueda textual GUI.
+No se declara completa 004 ni aprobada SC-001. La referencia oficial no esta
+identificada; T030 carece de linea base equivalente. Evidencia y mediciones:
+[DECISIONES.md](DECISIONES.md#trazabilidad-y-evidencia-de-la-integracion).
+
+Las menciones C1 de 002 (mutacion indexada) y C1 de 004 (captura historica)
+son contratos distintos que coexisten. FR-010 de 002 significa privacidad;
+FR-010 de 004 significa conservar observaciones permanentes al deshacer.
+
 **Tests**: Se incluyen tareas de prueba test-first para cada componente, alineadas con FR-001..FR-024 y SC-001..SC-005 conforme al plan y a la spec.
 
 **Organización**: Las tareas se agrupan por historia de usuario para habilitar implementación y prueba independiente de cada historia. Las dependencias de fase son estrictas.
@@ -22,8 +38,8 @@
 
 > **⚠️ CRÍTICO**: Ninguna historia de usuario puede comenzar hasta que esta fase esté completa.
 
-- [ ] T001 Extender `Registro.cambiar(objeto, campo, valor)` en `modelo/juego/registro.py` para soportar mutación indexada de listas: añadir al inicio del método la rama `if isinstance(objeto, list) and isinstance(campo, int):` que guarda `anterior = objeto[campo]`, aplica `objeto[campo] = valor` y, **si `self._abierto is not None`**, apila la operación inversa `lambda: objeto.__setitem__(campo, anterior)`; si `self._abierto is None`, simplemente muta sin registrar inversión (igual que el comportamiento actual para atributos fuera de grupo abierto); actualizar la anotación del parámetro de `campo: str` a `campo: str | int` en la firma del método (C1, FR-012, SC-004). -> `python -m tests.test_niebla_ir_a`
-- [ ] T002 Crear el archivo de pruebas de aceptación `tests/test_niebla_ir_a.py` con la estructura de módulo y los imports necesarios; sin pruebas aún (andamiaje para el enfoque test-first). -> `python -m tests.test_niebla_ir_a`
+- [x] T001 Soporte indexado en Registro.cambiar, con captura historica previa y generaciones solo para memoria_puertas. -> Evidencia: `test_niebla_ir_a, test_fr010_generaciones_002`.
+- [x] T002 Modulo de pruebas C3 existente; la aceptacion funcional se distribuye en modulos especificos, no solo en test_niebla_ir_a. -> Evidencia: `test_niebla_ir_a`.
 
 **Checkpoint — Phase 1**: `Registro.cambiar` soporta listas y el módulo de pruebas existe. Se puede continuar con Phase 2.
 
@@ -42,17 +58,17 @@
 O(log N); las consultas por Sala/índice y resumen son O(1). Las decisiones sobre
 memoria simétrica y límites de visibilidad están en `data-model.md`. Las pruebas
 unitarias se ejecutan con `python -m tests.test_conocimiento`; los escenarios de
-aceptación con Partida/vistas permanecen pendientes. Esta nota prevalece sobre
+aceptacion con Partida/vistas esta implementada y probada; ver T004/T008.
 el ejemplo incompleto del constructor en T003.
 
-- [ ] T003 [P] Implementar `ConocimientoMapa` en `modelo/juego/conocimiento.py` con: arreglos contiguos preasignados `self.estado_salas = [ESTADO_DESCONOCIDA] * N` y `self.memoria_puertas = [PUERTA_DESCONOCIDA] * (4 * N)` (donde `ESTADO_DESCONOCIDA = 0`, `ESTADO_AVISTADA = 1`, `ESTADO_EXPLORADA = 2`, `PUERTA_DESCONOCIDA = 0`, `PUERTA_ABIERTA = 1`, `PUERTA_CERRADA = 2`); contadores reversibles `self.num_exploradas: int = 0` y `self.num_avistadas: int = 0`; `self.salas_por_indice: list[Sala]` asignado como **referencia directa a `mapa.salas`** (no copia — cero memoria adicional), pasado en el constructor como `ConocimientoMapa(n, salas_por_indice=mapa.salas)`; mapeo de puertas `pos = sala.indice * 4 + dir_idx`; métodos de consulta O(1) `es_explorada(sala)`, `es_avistada(sala)`, `estado_sala(sala)`, `puerta_recordada(sala, dir_idx)` (todos reciben instancia de `Sala`, no ID); método `estado_por_id(id_sala)` que resuelve la sala via `mapa.sala(id_sala)` usando el `Mapa` recibido en el constructor (sin dict ni O(N) — `mapa.sala` usa `esqueleto.posicion` internamente), retornando `estado_salas[sala.indice]` o `ESTADO_DESCONOCIDA` si la sala no existe; y método `resumen() -> tuple[int, int]` que retorna `(self.num_exploradas, self.num_avistadas)` (C6, FR-001..FR-005, SC-002, SC-003). -> `python -m tests.test_niebla_ir_a`
-- [ ] T004 Escribir pruebas test-first en `tests/test_niebla_ir_a.py` para `ConocimientoMapa`: `test_FR001_clasificacion_tres_estados`, `test_FR002_estado_inicial_instante_cero`, `test_FR003_sala_explorada_revela_nombre_y_conexiones`, `test_FR004_sala_avistada_no_revela_id_ni_nombre`, `test_FR005_sala_desconocida_oculta_sin_ruteo`; verificar que `num_avistadas` NO se duplica cuando una sala tiene múltiples accesos; verificar `resumen()` O(1) (C6, SC-002, SC-004). -> `python -m tests.test_niebla_ir_a`
+- [x] T003 ConocimientoMapa(n, salas_por_indice, mapa), referencias sin copia, estados, memoria y contadores O(1); consulta por ID O(log N). -> Evidencia: `test_conocimiento`.
+- [x] T004 Pruebas de estados, privacidad, inicio y contadores en test_conocimiento y test_conocimiento_partida; no se afirma una cronologia test-first no demostrada. -> Evidencia: `test_conocimiento, test_conocimiento_partida`.
 
 ### MonticuloMin y dijkstra_acotado — Contrato C3 (bloquea US2)
 
-- [ ] T005 [P] Implementar `MonticuloMin` en `modelo/estructuras/monticulo_min.py` sobre lista contigua (`_datos: list[tuple[int, int]]`, `_tamano: int`) con métodos `insertar(elemento: tuple[int, int]) -> None` O(log K), `extraer_min() -> tuple[int, int]` O(log K) con lanzamiento de `IndexError` si vacío, `es_vacio() -> bool` y `__len__() -> int`; invariante de eliminación perezosa (no se implementa `decrease_key`; los llamadores descartan tuplas obsoletas con `dist > arreglo_dist[sala.indice]`); desempate determinista natural por menor `id_sala` mediante el comparador lexicográfico de tuplas `(distancia, id_sala)` sin `heapq`, `bisect` ni tablas hash (Constitución Principio I y II, Contrato C3). -> `python -m tests.test_niebla_ir_a`
-- [ ] T006 [P] Implementar función `dijkstra_acotado` en `modelo/estructuras/dijkstra.py` con la firma exacta unificada con Capacidad 001: `dijkstra_acotado(origen: Sala, mapa: Mapa, filtro_salida: Callable[[Salida], bool], cota_rango: Optional[int] = None, token_busqueda: int = 1, arreglo_dist: Optional[List[int]] = None, arreglo_marca: Optional[List[int]] = None) -> tuple[List[int], List[int]]`; `filtro_salida` recibe **únicamente** la instancia `salida`; función completamente stateless; marcas de búsqueda enteras para reinicio O(1) sin reinicializar arreglos; retorna la tupla `(arreglo_dist, arreglo_marca)` (Contrato C3, SC-001, SC-005). -> `python -m tests.test_niebla_ir_a`
-- [ ] T007 Escribir pruebas test-first en `tests/test_niebla_ir_a.py` para C3: `test_C3_monticulo_min_insertar_extraer_orden_correcto`, `test_C3_monticulo_min_desempate_por_menor_id`, `test_C3_dijkstra_acotado_camino_minimo_correcto`, `test_C3_dijkstra_acotado_cota_rango`, `test_C3_dijkstra_acotado_determinismo_empates`, `test_C3_arreglos_llamadores_independientes_sin_interferencia` (Contrato C3, SC-001, SC-005). -> `python -m tests.test_niebla_ir_a`
+- [x] T005 MonticuloMin propio sobre lista contigua; orden lexicografico, extraccion minima y error al estar vacio. -> Evidencia: `test_niebla_ir_a`.
+- [x] T006 dijkstra_acotado stateless con firma C3, filtro de una salida, cota inclusiva y arreglos/tokens del llamador. -> Evidencia: `test_niebla_ir_a`.
+- [x] T007 Pruebas C3 de monticulo, costos, cota, filtro, desempate y arreglos independientes. -> Evidencia: `test_niebla_ir_a`.
 
 **Checkpoint — Phase 2**: `ConocimientoMapa`, `MonticuloMin` y `dijkstra_acotado` operativos. Todas las pruebas T004 y T007 deben pasar. Se puede continuar con las historias de usuario.
 
@@ -66,18 +82,18 @@ el ejemplo incompleto del constructor en T003.
 
 ### Pruebas de Aceptación — US1
 
-- [ ] T008 [US1] Escribir pruebas test-first en `tests/test_niebla_ir_a.py`: `test_FR006_actualizacion_memoria_puertas_en_acciones`, `test_FR006_memoria_puerta_persiste_sin_jugador_adyacente`, `test_FR012_reversion_conocimiento_con_pergamino`, `test_FR013_registro_eventos_conocimiento`, `test_FR009_comando_mapa_muestra_solo_exploradas`, `test_FR010_vistas_no_revelan_id_ni_nombre_de_avistadas` (FR-006, FR-009, FR-010, FR-012, FR-013, SC-002, SC-003). -> `python -m tests.test_niebla_ir_a`
+- [x] T008 Aceptacion US1 distribuida: puertas locales/remotas, retroceso, mapa filtrado y ausencia de identificadores de salas no exploradas. -> Evidencia: `test_conocimiento_partida, test_mapa_consola`.
 
 ### Implementación — US1
 
-- [ ] T009 [US1] Integrar `ConocimientoMapa` en `modelo/juego/partida.py`: añadir atributo `self.conocimiento`; en `iniciar()` marcar sala de inicio como `ESTADO_EXPLORADA` vía `partida.cambiar(conocimiento.estado_salas, inicio.indice, ESTADO_EXPLORADA)` y `partida.cambiar(conocimiento, "num_exploradas", 1)`; por cada vecina desconocida $v$ marcar `ESTADO_AVISTADA` vía `partida.cambiar` sin duplicar conteo si $v$ ya fue avistada; registrar `memoria_puertas` del estado actual de puertas de las salidas de la sala inicial (C1, FR-001, FR-002, FR-003, FR-004, FR-005). -> `python -m tests.test_niebla_ir_a`
-- [ ] T010 [US1] Implementar actualización de visión en `_entrar(destino)` en `modelo/juego/partida.py`: si destino estaba `ESTADO_AVISTADA`, decrement `num_avistadas` y cambiar a `ESTADO_EXPLORADA` incrementando `num_exploradas` vía `partida.cambiar`; para cada vecina $w$ de destino: solo si `estado_salas[w.indice] == ESTADO_DESCONOCIDA`, cambiar a `ESTADO_AVISTADA` e incrementar `num_avistadas` vía `partida.cambiar`; actualizar `memoria_puertas` de todas las salidas de destino (C1, FR-001..FR-006, SC-003). -> `python -m tests.test_niebla_ir_a`
-- [ ] T011 [US1] Implementar sincronización de `memoria_puertas` en `_accion` en `modelo/juego/partida.py`: en cada acción voluntaria del jugador, iterar sobre las salidas de la sala actual y actualizar `memoria_puertas` con el estado físico real vía `partida.cambiar(conocimiento.memoria_puertas, pos, estado_real)`; suscribir observador de `ConocimientoMapa` en `_observadores_puertas` para actualizar la memoria cuando se cambie el estado de una puerta cuya salida conecte la sala actual del jugador (Contrato C2, FR-006). -> `python -m tests.test_niebla_ir_a`
-- [ ] T012 [US1] Modificar `salidas_visibles()` en `modelo/juego/partida.py` para enmascarar información según el conocimiento: si la sala vecina está en `ESTADO_AVISTADA` o `ESTADO_DESCONOCIDA`, retornar `id_vecino = None` y `nombre_vecino = None`; retornar el estado de puerta recordado en lugar del estado real (`puerta_recordada` del `conocimiento`) (FR-004, FR-010). -> `python -m tests.test_niebla_ir_a`
-- [ ] T013 [P] [US1] Actualizar `vista/vista_consola.py`: en `_texto_salidas`, si `id_vecino is None`, formatear como `f"{direccion} -> desconocida (costo {costo})"` sin revelar ID ni nombre; implementar comando `mapa` que muestre solo salas exploradas con sus salidas y puertas recordadas, formateando salas avistadas como destino desconocido (FR-004, FR-009, FR-010). -> `python -m tests.test_niebla_ir_a`
-- [ ] T014 [P] [US1] Corregir `_dibujar_puerta` en `vista/vista_pygame.py`: comprobar si `id_vecino is None` (sala avistada o desconocida); si es así, renderizar etiqueta genérica `f"{direccion}: desconocida (costo {costo})"` sin dibujar el ID numérico ni el nombre de la sala vecina (FR-004, FR-010). -> `python -m tests.test_niebla_ir_a`
+- [x] T009 Inicializacion de conocimiento en Partida.iniciar: inicio explorado, vecinas avistadas y puertas locales observadas. -> Evidencia: `test_conocimiento_partida`.
+- [x] T010 Exploracion al entrar, contadores sin duplicados y cambios mediante Partida.cambiar. -> Evidencia: `test_conocimiento_partida`.
+- [x] T011 Observacion antes/despues de acciones y suscripcion al despachador C2; los cambios remotos no revelan informacion. -> Evidencia: `test_conocimiento_partida, test_terreno_cazador`.
+- [x] T012 salidas_visibles devuelve cinco campos: direccion, memoria, ID o None, llave permitida y costo; no lee apertura fisica para presentar memoria. -> Evidencia: `test_mapa_consola`.
+- [x] T013 Consola: mapa, salidas anonimas con costos e ir a <id> antes de ir <direccion>. -> Evidencia: `test_mapa_consola`.
+- [x] T014 Pygame: etiquetas privadas, costos, mapa M, viaje V y cancelacion Escape/R con orden pendiente fuera del callback. -> Evidencia: `test_ir_a_grafico_002, test_bench_mapa_conocido_002; test_gui tiene un falso positivo ajeno a estos casos`.
 
-**Checkpoint — US1**: Visibilidad de niebla de guerra completamente funcional. Ejecutar `python -m tests.test_niebla_ir_a` — todas las pruebas T004, T008 y el subconjunto US1 de T009..T014 deben pasar.
+**Checkpoint US1**: Conocimiento, puertas y privacidad: ejecutar con el Python del venv los modulos tests.test_conocimiento, tests.test_conocimiento_partida, tests.test_mapa_consola y tests.test_terreno_cazador. La evidencia se distribuye entre esas suites, no solo en C3.
 
 ---
 
@@ -89,17 +105,17 @@ el ejemplo incompleto del constructor en T003.
 
 ### Pruebas de Aceptación — US2
 
-- [ ] T015 [US2] Escribir pruebas test-first en `tests/test_niebla_ir_a.py`: `test_FR014_ir_a_destino_no_explorado_rechazado`, `test_FR014_ir_a_destino_inexistente_rechazado`, `test_FR014_ir_a_destino_es_sala_actual`, `test_FR015_ir_a_camino_costo_minimo`, `test_FR016_desempate_menor_id_en_vecina`, `test_FR017_pasos_individuales_avanzan_reloj`, `test_FR018_recalculo_ruta_en_cada_paso`, `test_FR019_interrupcion_por_enemigos_vivos`, `test_FR019_interrupcion_por_dano`, `test_FR019_interrupcion_ruta_bloqueada`, `test_FR020_mensajes_descriptivos_detencion`, `test_FR021_ir_a_nunca_abre_puertas_automaticamente`, `test_FR022_log_asienta_pasos_y_comentario`, `test_FR023_reversion_pergamino_deshace_solo_ultimo_paso` (FR-014..FR-023, SC-005). -> `python -m tests.test_niebla_ir_a`
+- [x] T015 Aceptacion del planificador y viaje: validacion, ponderacion, empate, recalculo, interrupciones, log y pergamino. -> Evidencia: `test_planificador_rutas, test_ir_a_compuesto`.
 
 ### Implementación — US2
 
-- [ ] T016 [P] [US2] Extender `controlador/orden.py`: definir constante `IR_A = "ir_a"`; verificar que `IR_A` NO se añade a `ORDENES_DE_PARTIDA`; implementar `Orden(IR_A, destino).es_de_partida() == False`; añadir parseo de `"ir a <id>"` e `"ir <id>"` en `interpretar_orden` retornando `Orden(IR_A, id_destino)` (Contrato C4, FR-014). -> `python -m tests.test_niebla_ir_a`
-- [ ] T017 [P] [US2] Implementar `anotar_comentario(self, texto: str) -> None` en `modelo/datos/bitacora_partida.py` escribiendo `"# " + _limpio(texto)` al archivo si `self._archivo is not None`; actualizar `leer_log(ruta)` reemplazando la condición `if linea != "":` por `if linea and not linea.startswith("#"):` en el bucle de órdenes (**esta modificación va ANTES del `try/except`**, de modo que las líneas de comentario `# ir a <destino>` se descartan sin intentar parsearlas como órdenes, evitando que replay lance `ErrorLog`) (Contrato C4, FR-022). -> `python -m tests.test_niebla_ir_a`
-- [ ] T018 [P] [US2] Añadir método `registrar_comentario(self, texto: str) -> None` en `controlador/aplicacion.py` que invoca `self.log.anotar_comentario(texto)` si `self.log is not None` (Contrato C4, FR-022). -> `python -m tests.test_niebla_ir_a`
-- [ ] T019 [US2] Implementar `_ejecutar_ir_a(orden)` en `controlador/controlador.py` siguiendo el protocolo C4: (1) Validación previa sin costo de tiempo: rechazar si `id_destino` no existe, si `estado_por_id(id_destino) != ESTADO_EXPLORADA` o si no existe ruta conocida inicial; avisar si ya está en la sala destino. (2) Registrar comentario `# ir a <id_destino>` vía `registrar_comentario`. (3) Bucle paso a paso: incrementar `self._token_navegacion`, ejecutar `dijkstra_acotado(origen=sala_destino, mapa=..., filtro_salida=filtro_jugador, cota_rango=None, token_busqueda=self._token_navegacion, arreglo_dist=self._dist_navegacion, arreglo_marca=self._marca_navegacion)` donde `filtro_jugador = lambda salida: conocimiento.es_explorada(salida.sala_a) and conocimiento.es_explorada(salida.sala_b) and conocimiento.puerta_recordada_abierta(salida)`; si ya está en destino: terminar con `"Has llegado a tu destino."`; seleccionar vecina con menor `salida.costo + dist[v.indice]` desempatando por menor `v.id` (FR-016); registrar `vida_antes`; despachar `self._ejecutar_de_partida(Orden(MOVER, dir_paso))`; evaluar paradas reactivas (FR-019, FR-020); notificar motivo con `self._avisar` (Contrato C3, Contrato C4, FR-014..FR-021, SC-005). -> `python -m tests.test_niebla_ir_a`
-- [ ] T020 [US2] Integrar los arreglos propietarios de navegación en el controlador (`self._dist_navegacion`, `self._marca_navegacion`, `self._token_navegacion = 0`) de tamaño $N$ con `self._token_navegacion` gestionado de forma que nunca colisione con los arreglos del cazador de Mariano (`self._dist_cazador`, `self._marca_cazador`) (Contrato C3, §4.2). -> `python -m tests.test_niebla_ir_a`
+- [x] T016 IR_A e interpretar_ir_a en modelo/juego/orden.py, reexportados por controlador/orden.py; fuera de ORDENES_DE_PARTIDA. Sintaxis ir a <id>, sin alias ir <id>. -> Evidencia: `test_ir_a_compuesto, test_mapa_consola`.
+- [x] T017 BitacoraPartida.anotar_comentario; leer_log ordinario omite comentarios. El lector de reconstruccion 004 conserva y aplica marcas IR_A sin ejecutarlas como movimientos. -> Evidencia: `test_ir_a_compuesto, test_comentarios_ir_a_002, test_historia_persistencia (casos FR014 y FR010)`.
+- [x] T018 Aplicacion registra comentarios en el log activo y en lineas intercaladas; main conecta una suscripcion. -> Evidencia: `test_integracion_comentarios_002`.
+- [x] T019 Controlador ejecuta pasos ordinarios y recalcula mediante PlanificadorRutas; despues de callbacks/cancelacion emite una marca por cada observacion exterior efectiva, aun sin movimiento. -> Evidencia: `test_ir_a_compuesto, test_comentarios_ir_a_002`.
+- [x] T020 PlanificadorRutas posee distancias, marcas y token propios; se recrea al sustituir la partida, sin compartirlos con cazador. -> Evidencia: `test_planificador_rutas, test_ir_a_compuesto`.
 
-**Checkpoint — US2**: Viaje automático completamente funcional. Ejecutar `python -m tests.test_niebla_ir_a` — pruebas T007 y T015 deben pasar. Verificar con `python main.py --replay partida.log`.
+**Checkpoint US2**: Planificacion y viaje compuesto: ejecutar con el Python del venv tests.test_planificador_rutas, tests.test_ir_a_compuesto, tests.test_comentarios_ir_a_002, tests.test_integracion_comentarios_002 y tests.test_ir_a_grafico_002. Para replay usar un log real generado por la partida; no asumir que partida.log existe.
 
 ---
 
@@ -111,13 +127,13 @@ el ejemplo incompleto del constructor en T003.
 
 ### Pruebas de Aceptación — US3
 
-- [ ] T021 [US3] Escribir pruebas test-first en `tests/test_niebla_ir_a.py`: `test_FR007_antorcha_revela_vecinas_como_exploradas`, `test_FR007_antorcha_revela_salidas_y_costos_de_vecinas`, `test_FR008_antorcha_no_activa_enemigos_en_vecinas`, `test_FR008_antorcha_no_activa_trampas_en_vecinas`, `test_FR012_reversion_antorcha_restaura_estados_previos` (FR-007, FR-008, FR-012). -> `python -m tests.test_niebla_ir_a`
+- [x] T021 Pruebas de antorcha: vecinas incluso por salida cerrada, ausencia de activacion remota y reversion. -> Evidencia: `test_conocimiento_partida`.
 
 ### Implementación — US3
 
-- [ ] T022 [US3] Modificar `_entrar(destino)` en `modelo/juego/partida.py` y/o `modelo/juego/efectos.py`: si `jugador.antorcha_encendida == True`, iterar sobre todas las salidas de `destino` (abiertas **y** cerradas); para cada sala vecina $w$: si `estado_salas[w.indice] != ESTADO_EXPLORADA`, cambiar a `ESTADO_EXPLORADA` vía `partida.cambiar` actualizando los contadores reversibles `num_exploradas` y `num_avistadas`; **no** cargar actores ni contenido de $w$, **no** activar enemigos ni trampas de $w$ (FR-007, FR-008). -> `python -m tests.test_niebla_ir_a`
+- [x] T022 Partida._entrar revela vecinas con antorcha usando _explorar_sala; no observa puertas remotas ni carga contenido por iluminarlas. -> Evidencia: `test_conocimiento_partida`.
 
-**Checkpoint — US3**: Iluminación por antorcha funcional y reversible. Ejecutar `python -m tests.test_niebla_ir_a` — pruebas T021 deben pasar.
+**Checkpoint US3**: Antorcha y reversion: ejecutar con el Python del venv tests.test_conocimiento_partida; cubre revelado de vecinas sin observar puertas remotas, ausencia de activacion de contenido y restauracion de estados/contadores.
 
 ---
 
@@ -129,16 +145,23 @@ el ejemplo incompleto del constructor en T003.
 
 ### Pruebas de Aceptación — US4
 
-- [ ] T023 [US4] Escribir pruebas test-first en `tests/test_niebla_ir_a.py`: `test_FR011_guardado_incluye_estado_conocimiento`, `test_FR024_guardado_v3_reporta_incompatibilidad_explicita`, `test_FR024_guardado_v4_serializa_y_restaura_conocimiento`, `test_FR024_carga_v3_no_corrompe_partida_en_curso`, `test_FR023_reversion_pergamino_tras_viaje_deshace_solo_ultimo`, `test_FR013_cada_mutacion_conocimiento_queda_en_registro` (FR-011, FR-012, FR-013, FR-023, FR-024, SC-004). -> `python -m tests.test_niebla_ir_a`
+- [x] T023 Aceptacion v4 y retroceso: fotografia independiente, rechazo v3, rollback, comentarios, pergaminos y referencias de inversos. -> Evidencia: `test_guardado_v4_002, test_carga_v4_002, test_fr010_generaciones_002`.
 
 ### Implementación — US4
 
-- [ ] T024 [US4] Actualizar `modelo/datos/guardado_binario.py`: establecer `VERSION_FORMATO = 4`; en `_leer_encabezado`: lanzar `ErrorFormato("versión de formato 3 incompatible (se esperaba 4): formato previo sin soporte de niebla de guerra")` cuando `version == 3`, y el mensaje estándar de versión incompatible para cualquier otra versión distinta de 4 (Contrato C7, FR-024). -> `python -m tests.test_niebla_ir_a`
-- [ ] T025 [US4] Implementar serialización del conocimiento en `modelo/datos/guardado_binario.py`: ampliar `_empaquetar_general` añadiendo `n_salas: uint16`, `estados_salas: N bytes` (un byte por sala en orden de índice, `0`=Desconocida, `1`=Avistada, `2`=Explorada), `n_puertas_recordadas: uint16` y por cada puerta recordada con estado no-cero: `indice_sala: uint16`, `direccion: uint8` (0–3), `estado_recordado: uint8`; mantener intacto el bloque binario de enemigos `[instancia, tipo, vida, tiempo_siguiente]` sin incluir `rango` (Contrato C7). -> `python -m tests.test_niebla_ir_a`
-- [ ] T026 [US4] Implementar deserialización del conocimiento en `modelo/datos/guardado_binario.py`: en `_desempaquetar_general`, leer el bloque de niebla de guerra y reconstruir `partida.conocimiento.estado_salas` y `memoria_puertas`; recalcular en $O(N)$ los contadores `num_exploradas` y `num_avistadas` al reconstruir (no usar `partida.cambiar` para este recalcular inicial, solo para mutaciones posteriores); `rango` del cazador se reconstruye desde catálogo en `mapa.incorporar` (Contrato C7, FR-011). -> `python -m tests.test_niebla_ir_a`
-- [ ] T027 [US4] Actualizar `modelo/datos/persistencia_partida.py`: capturar `ErrorFormato` y convertirlo en `ErrorCarga`; reportar el mensaje descriptivo al controlador sin alterar la partida en curso ni corromper datos; garantizar que la sesión activa permanece intacta si la carga falla (FR-024). -> `python -m tests.test_niebla_ir_a`
+- [x] T024 VERSION_FORMATO=4 y rechazo explicito de v3 mediante ErrorFormato convertido a ErrorCarga. -> Evidencia: `test_guardado_v4_002, test_carga_v4_002`.
+- [x] T025 Codec escribe N uint16, N estados, P uint16 y P entradas <HBB>; omite cero y cuenta posiciones de memoria, no puertas unicas. Bloque de enemigos intacto. -> Evidencia: `test_guardado_v4_002`.
+- [x] T026 Codec deserializa fotografia; persistencia reconstruye mediante T045 y compara arreglos/contadores dentro del contexto. No sustituye ConocimientoMapa, sus arreglos ni Registro. Contadores mantenidos por el replay y comprobados con recuento O(N). -> Evidencia: `test_carga_v4_002, test_historia_persistencia (casos FR014)`.
+- [x] T027 ErrorCarga y rechazo transaccional: conserva partida, log y recursos anteriores; no verifica resolubilidad al cargar. -> Evidencia: `test_carga_v4_002, test_resolubilidad_integracion`.
 
-**Checkpoint — US4**: Persistencia v4 completa y rechazo v3 funcional. Ejecutar `python -m tests.test_niebla_ir_a` — pruebas T023 deben pasar. Verificar con `python main.py --verificar`.
+**Checkpoint US4**: Persistencia v4 y rechazo v3 verificados mediante las pruebas reales de T023. Ejecutar con el entorno virtual:
+
+```powershell
+.\venv\Scripts\python.exe -B -m tests.test_guardado_v4_002
+.\venv\Scripts\python.exe -B -m tests.test_carga_v4_002
+```
+
+Ambas suites deben aprobar; comprueban codec, conocimiento, rechazo v3, reconstruccion y rollback. Si el worktree no tiene venv propio, usar el ejecutable absoluto del entorno del proyecto original manteniendo el directorio actual del worktree.
 
 ---
 
@@ -146,10 +169,10 @@ el ejemplo incompleto del constructor en T003.
 
 **Propósito**: Instrumentar y verificar cuantitativamente SC-001..SC-004, integrar el nuevo benchmark en `main.py`, repetir suites de regresión y validar la guía de inicio rápido de `quickstart.md`.
 
-- [ ] T028 [P] [BENCH] Crear `bench/bench_mapa_conocido.py` instrumentando las cuatro métricas de rendimiento: **SC-001** (recálculo completo de Dijkstra acotado sobre cripta de 1000 salas, meta `< 5.0 ms`); **SC-002** ($10^6$ consultas O(1) a `estado_salas`, `memoria_puertas` y `resumen()` sobre grafos de 10, 100 y 1000 salas); **SC-003** (exploración de sala sin y con antorcha, costo proporcional únicamente al número de salidas); **SC-004** (registro y reversión con pergamino en $O(1)$ por cambio) (SC-001, SC-002, SC-003, SC-004). -> `python main.py --bench mapa_conocido`
-- [ ] T029 [P] [BENCH] Registrar `("mapa_conocido", "bench_mapa_conocido.py")` en la lista `BENCHES` dentro de `main.py` para habilitar `python main.py --bench mapa_conocido` (SC-001..SC-004). -> `python main.py --bench mapa_conocido`
-- [ ] T030 [BENCH] Ejecutar y documentar las mediciones de regresión de los benchmarks existentes: `python main.py --bench cache`, `python main.py --bench lista_ordenada`, `python main.py --bench ordenamiento`, `python main.py --bench guardado`; verificar ausencia de regresiones de rendimiento introducidas por los cambios de esta capacidad (Constitución Principio VI). -> `python main.py --bench <subsistema>`
-- [ ] T031 Ejecutar la suite completa de pruebas de aceptación `python -m tests.test_niebla_ir_a` y suites de regresión `python -m tests.test_motor_base`, `python -m tests.test_partida`; verificar cobertura del 100% de FR-001..FR-024 y SC-001..SC-005 conforme a los escenarios de `quickstart.md`. -> `python -m tests.test_niebla_ir_a`
+- [x] T028 Instrumentacion sintetica SC001-SC004 en tests/bench_niebla_ir_a.py y adaptador bench/bench_mapa_conocido.py: consultas, exploracion sin/con antorcha, registro/inversion por celda y pergamino real. Instrumentacion ejecutada; SC-001 oficial sigue pendiente. -> Evidencia: `test_bench_mapa_conocido_002; main.py --bench mapa_conocido`.
+- [x] T029 Registro mapa_conocido en main.py:BENCHES; adaptador main([]) aisla argumentos externos, sin cambiar otros benchmarks. -> Evidencia: `test_bench_mapa_conocido_002`.
+- [ ] T030 Ejecutados cache, lista_ordenada, ordenamiento y guardado en temporal externo, codigo 0. Pendiente comparacion de regresiones: no hay linea base equivalente; no afirmar ausencia de degradacion. -> Evidencia: `mediciones en DECISIONES.md`.
+- [ ] T031 Regresiones ejecutadas: 35/39 modulos aprobados. Pendiente cierre integral de cobertura FR/SC, SC-001 oficial, comparacion T030 y correcciones compartidas; no declarar cobertura del 100%. -> Evidencia: `matriz en DECISIONES.md`.
 
 ---
 
@@ -226,3 +249,12 @@ Task T012: "Enmascarar salidas_visibles()"
 - Toda mutación de conocimiento pasa por `partida.cambiar(...)` para reversibilidad C1.
 - `IR_A` es orden compuesta del controlador y **NO pertenece a `ORDENES_DE_PARTIDA`**.
 - Los arreglos de búsqueda `_dist_navegacion` y `_marca_navegacion` pertenecen exclusivamente al controlador de Kim; los de Mariano son independientes — cero interferencia entre búsquedas del mismo ciclo.
+
+## Interpretacion del cierre de tareas
+
+T001-T029 tienen implementacion y evidencia; las rutas/nombres de pruebas del
+plan inicial se sustituyen por los modulos reales citados arriba. Las tareas de
+pruebas completadas acreditan escenarios ejecutados, no que se haya verificado
+retrospectivamente el orden test-first. T028 completa instrumentacion, no la
+certificacion de SC-001. T030 y T031 permanecen abiertas. Los checkpoints y
+comandos del plan inicial son guias, no certificaciones de suite completa.

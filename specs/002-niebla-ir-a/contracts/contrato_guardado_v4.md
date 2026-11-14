@@ -3,7 +3,7 @@
 **Identificador**: `CONTRATO-GUARDADO-V4` (C7)  
 **Participantes**: Kim (Persistencia y Formato Binario) y Mariano (Compatibilidad de Motor y Cazador)  
 **Módulos acordados**: `modelo/datos/guardado_binario.py`, `modelo/datos/persistencia_partida.py`, `modelo/juego/actor.py`  
-**Estado**: Especificado para implementación conforme a FR-024 y Bloque 3 de la Capacidad 001
+**Estado**: Codec v4 y carga T045/T046 implementados y probados; base 75cc63e.
 
 ---
 
@@ -43,7 +43,7 @@ En respuesta a la coordinación solicitada en `specs/001-terreno-cazador/plan.md
 - La estructura binaria de serialización de enemigos en `SalaGuardada` se mantiene estrictamente intacta en formato v4:
   `[instancia: str, tipo: str, vida: int, tiempo_siguiente: int]`.
 - Al cargar una partida guardada en v4:
-  - `partida = app.crear_partida(...)` reconstruye el estado.
+  - `app.preparar_reconstruccion(...)` entrega una candidata y aplicar_linea para reconstruir el estado antes de publicarlo.
   - Al incorporar cada sala, `mapa.incorporar(sala, contenido, resolutor)` recupera la ficha desde el catálogo local (`AlmacenFichas`), asignando `enemigo.rango = ficha.get("rango", 0)`.
 - **Ventajas**:
   - Cero modificaciones a la estructura binaria de salas y actores.
@@ -71,7 +71,23 @@ El bloque de datos generales (`_empaquetar_general` y `_desempaquetar_general`) 
 
 ### 4.1 Invariante de Reconstrucción
 Al cargar una partida guardada en v4:
-- Se inicializa `partida.conocimiento` con los estados de salas y la memoria de puertas deserializados.
-- Se reconstruyen en $O(N)$ los contadores `num_exploradas` y `num_avistadas`.
+- El codec decodifica estados y memoria en PartidaGuardada; no escribe en una Partida viva.
+- Guardar obtiene app.lineas_para_reconstruir(), conserva orden y duplicados en el campo de ordenes existente y copia los arreglos de conocimiento.
+- Cargar aplica cada linea mediante el callback de T045 y valida dentro del contexto. Los contadores se mantienen por replay; un recuento O(N) comprueba su coherencia.
+- Se comparan exactamente los arreglos guardados y reconstruidos, sin reemplazar ConocimientoMapa, listas ni Registro. Discrepancias lanzan ErrorCarga y conservan la sesion anterior.
+- N coincide con el mapa; estados y direcciones son validos; memoria no desconocida exige salida existente y coherencia de extremos; sala actual explorada.
+- La carga mantiene partida_nueva=False, ordenes previas de reconstruccion y versiones exigidas mediante T045; no activa resolubilidad 003.
 - La sala actual del jugador queda validada contra `sala_actual`.
 - No se filtran datos no explorados al restaurar la sesión.
+
+## Validacion binaria y limites
+
+N y P son uint16; P cuenta posiciones de memoria, no puertas fisicas unicas.
+Las entradas con valor 0 se omiten y se reconstruyen a cero. Se rechazan valores
+invalidos, duplicados, indices fuera de N, truncamientos, longitudes/offsets
+invalidos y datos sobrantes. El encabezado sigue `<4sHIQI>` con marca CRPT.
+No hay CRC implementado ni se encontro exigencia contractual de CRC: la
+integridad se comprueba estructuralmente y comparando la fotografia con replay.
+El bloque de enemigos conserva instancia, tipo, vida y tiempo_siguiente.
+Evidencia: tests.test_guardado_v4_002 (15), tests.test_carga_v4_002 (11),
+tests.test_guardado_binario y casos FR014 de tests.test_historia_persistencia.
