@@ -6,8 +6,9 @@ from modelo.juego.resumen_historico import (
     ProyeccionHistorica, aplicar_delta, copiar_valor)
 
 
-# Candidato inicial; T063 debe respaldarlo o sustituirlo con mediciones.
-K_DEFECTO = 50
+# K=10: máximos de 0.0617 ms (5000 acciones) y 45.1258 ms (D=1000).
+# Único candidato <50 ms: K=50/200 alcanzaron 343.3691/242.3210 ms con D=1000.
+K_DEFECTO = 10
 OPERACIONES = ("ASIGNAR", "INSERTAR", "QUITAR", "MOVER", "ALTA")
 
 

@@ -84,6 +84,51 @@ class PruebasBenchLineaTiempo(unittest.TestCase):
             self.assertGreater(fila.deltas, 0)
             self.assertAlmostEqual(fila.extra_us, fila.con_c1_us - fila.sin_c1_us)
 
+    def test_SC005_peor_caso_D_real_y_equivalente(self):
+        for d in (100, 1000):
+            carga = self.bench.crear_carga_peor_deltas(d)
+            self.assertEqual(carga.aceptadas, 600)
+            self.assertEqual(len(carga.deltas), 600 * d)
+            self.assertEqual(len(carga.inicial.actores), d - 2)
+            self.assertTrue(all(a.activo for a in carga.inicial.actores))
+            self.assertEqual(len(carga.esperados), len(carga.objetivos))
+            for grupo in carga.grupos:
+                self.assertEqual(grupo.cursor_fin - grupo.cursor_inicio, d)
+            for k in self.bench.VALORES_K:
+                variante = self.bench.preparar_variante(carga, k)
+                self.assertGreaterEqual(len(variante.linea.checkpoints), 3)
+                self.assertEqual(self.bench._validar(carga, variante), len(carga.objetivos))
+                # Medición real de ambas APIs en el extremo del último bloque.
+                b = 600 - 1
+                esperado = carga.esperados[carga.objetivos.index(b)]
+                for por_t in (False, True):
+                    muestra = self.bench.medir_consulta(variante, b, esperado, por_t)
+                    self.assertEqual(muestra.grupos, k - 1)
+                    self.assertEqual(muestra.deltas, (k - 1) * d)
+                    self.assertEqual(muestra.externos, 0)
+                    self.assertGreater(muestra.total_ms, 0)
+
+    def test_SC003_peor_caso_reutiliza_medicion_y_reporte(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+        # Menor longitud para verificar el informe/memoria, sin umbral temporal.
+        filas = self.bench.medir_peor_caso(acciones=3, repeticiones=1)
+        self.assertEqual([(d, r.k) for d, r in filas],
+                         [(d, k) for d in (100, 1000) for k in (10, 50, 200)])
+        for d, r in filas:
+            self.assertTrue(r.equivalente)
+            self.assertEqual(r.max_deltas, 3 * d)
+            self.assertGreater(r.retenida, 0)
+            self.assertGreaterEqual(r.pico, r.retenida)
+            self.assertTrue(any(m.selector == 't' for m in r.muestras))
+            self.assertTrue(any(m.selector == '#k' for m in r.muestras))
+        salida = StringIO()
+        with redirect_stdout(salida):
+            self.bench.imprimir_peor_caso(filas, acciones=3)
+            self.bench.imprimir_resumen_k(self.resultados, filas)
+        self.assertIn('max grupos/deltas', salida.getvalue())
+        self.assertIn('Resumen por K', salida.getvalue())
+
     def test_FR011_despacho_bench_headless(self):
         import main
         self.assertIn(("linea_tiempo", "bench_linea_tiempo.py"), main.BENCHES)

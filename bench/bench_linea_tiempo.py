@@ -62,9 +62,10 @@ class CatalogoSintetico:
         raise ValueError("Ficha ausente del catálogo generado")
 
 
-def crear_partida(salas=16, capacidad=None):
+def crear_partida(salas=16, capacidad=None, cantidad_cazadores=0):
     datos = generar_cripta(numero_salas=salas, semilla=SEMILLA,
-                           cadena_llaves=1, rango_costos=(80, 120))
+                           cadena_llaves=1, rango_costos=(80, 120),
+                           cantidad_cazadores=cantidad_cazadores)
     esqueleto = Esqueleto()
     for pagina in datos["paginas"]:
         esqueleto.agregar_pagina(pagina)
@@ -152,6 +153,51 @@ def crear_carga(acciones=5000, salas=16, caso="mixto"):
     return Carga(SEMILLA, p.acciones, salas, caso, inicial,
                  tuple(linea.deltas), tuple(linea.grupos),
                  tuple(linea.fronteras), objetivos, tuple(esperados))
+
+
+def crear_carga_peor_deltas(deltas_por_accion, acciones=600):
+    """Enemigos reales: en dos salas el generador los ubica en la inicial.
+
+    Cada espera captura dos deltas propios (rastro y contador) y uno de vida
+    por ataque enemigo. La vida inicial se dimensiona antes del checkpoint 0
+    para sostener toda la carga, sin curaciones ni relleno durante las acciones.
+    Se verifica D exacto en C1; nunca se fabrican deltas ni consultas.
+    """
+    if type(deltas_por_accion) is not int or deltas_por_accion < 3 or acciones < 1:
+        raise ValueError("D y acciones deben ser positivos; D >= 3")
+    p = crear_partida(salas=2, cantidad_cazadores=deltas_por_accion - 2)
+    enemigos = p.enemigos_en_sala()
+    if len(enemigos) != deltas_por_accion - 2 or not all(e.activo for e in enemigos):
+        raise AssertionError("El peor caso requiere todos los enemigos activos")
+    vida = 1 + acciones * sum(e.ataque + 4 for e in enemigos)
+    p.cambiar(p.jugador, "vida_max", vida)
+    p.cambiar(p.jugador, "vida", vida)
+    inicializar_historia(p, acciones + 1)
+    linea = p.linea_tiempo
+    linea.exigir_disponible()
+    inicial = linea.proyeccion.copiar()
+    # Incluir el último estado de CADA bloque: K-1 grupos aplicados.
+    # Ambas APIs se miden en todos los objetivos, no solo en alternancia.
+    objetivos_base = objetivos_consulta(acciones)
+    objetivos = tuple(ordenar(list(objetivos_base) + [
+        b for b in range(acciones + 1)
+        if any(b % k == k - 1 for k in VALORES_K)
+        and b not in objetivos_base]))
+    esperados = [linea.proyeccion.resumir()]
+    for numero in range(acciones):
+        inicio = linea.cursor
+        if not p.esperar() or p.acciones != numero + 1 or p.estado != "jugando":
+            raise AssertionError("El peor caso debe sostener todas las acciones aceptadas")
+        linea.exigir_disponible()
+        grupo = linea.grupos[numero]
+        if (linea.cursor - inicio != deltas_por_accion
+                or grupo.cursor_fin - grupo.cursor_inicio != deltas_por_accion):
+            raise AssertionError("La carga real no produjo D deltas por acción")
+        if numero + 1 in objetivos:
+            esperados.append(linea.proyeccion.resumir())
+    return Carga(SEMILLA, p.acciones, 2, f"peor D={deltas_por_accion}", inicial,
+                 tuple(linea.deltas), tuple(linea.grupos), tuple(linea.fronteras),
+                 objetivos, tuple(esperados))
 
 
 @dataclass
@@ -450,6 +496,7 @@ class Muestra:
     grupos: int
     externos: int
     selector: str
+    deltas: int
 
 
 @dataclass
@@ -484,6 +531,10 @@ class Resultado:
     @property
     def max_externos(self):
         return estadisticas([m.externos for m in self.muestras])[0]
+
+    @property
+    def max_deltas(self):
+        return estadisticas([m.deltas for m in self.muestras])[0]
 
 
 def _seleccionar(variante, b, por_t):
@@ -560,16 +611,18 @@ def medir_consulta(variante, b, esperado, por_t):
         raise AssertionError("Las fases instrumentadas no equivalen a la API pública")
     return Muestra(total, ((seleccion - inicio) / 1e6, (copiado - seleccion) / 1e6,
                            (aplicado - copiado) / 1e6, (final - aplicado) / 1e6),
-                   grupos, externos, "t" if por_t else "#k")
+                   grupos, externos, "t" if por_t else "#k", fin_delta - inicio_delta)
 
 
-def ejecutar_matriz(carga, repeticiones=REPETICIONES):
+def ejecutar_matriz(carga, repeticiones=REPETICIONES, solo_k=False):
     if repeticiones < 1:
         raise ValueError("Se necesita al menos una repetición")
     variantes = []
     preparaciones = []
-    for k, modo in ((10, "adelante"), (50, "adelante"), (200, "adelante"),
-                    (None, "adelante"), (None, "atras"), (None, "fotos")):
+    configuraciones = tuple((k, "adelante") for k in VALORES_K)
+    if not solo_k:
+        configuraciones += ((None, "adelante"), (None, "atras"), (None, "fotos"))
+    for k, modo in configuraciones:
         inicio = time.perf_counter_ns()
         variantes.append(preparar_variante(carga, k, modo))
         preparaciones.append((time.perf_counter_ns() - inicio) / 1e6)
@@ -581,7 +634,9 @@ def ejecutar_matriz(carga, repeticiones=REPETICIONES):
                    else range(len(variantes) - 1, -1, -1))
         for i in indices:
             for j, (b, esperado) in enumerate(zip(carga.objetivos, carga.esperados)):
-                muestras[i].append(medir_consulta(variantes[i], b, esperado, j % 2 == 0))
+                selectores = (False, True) if solo_k else (j % 2 == 0,)
+                for por_t in selectores:
+                    muestras[i].append(medir_consulta(variantes[i], b, esperado, por_t))
     resultados = []
     for i, variante in enumerate(variantes):
         modo = ("atras" if variante.nombre == "desde actual" else
@@ -813,6 +868,40 @@ def imprimir_resultados(carga, resultados):
             f"{c.nombre}={c.retenida / 1024:.1f}/{c.pico / 1024:.1f}" for c in r.memoria))
 
 
+def medir_peor_caso(densidades=(100, 1000), acciones=600, repeticiones=REPETICIONES):
+    filas = []
+    for d in densidades:
+        carga = crear_carga_peor_deltas(d, acciones)
+        for resultado in ejecutar_matriz(carga, repeticiones, solo_k=True):
+            filas.append((d, resultado))
+    return filas
+
+
+def imprimir_peor_caso(filas, acciones=600):
+    print(f"Peor caso de deltas por accion: N={acciones}; D=100,1000; K=10,50,200.")
+    print("Camino real: generar_cripta de 2 salas; D-2 cazadores activos en la inicial;")
+    print("vida ampliada antes del checkpoint 0; esperar() -> Registro/C1 -> LineaTiempo.")
+    print(f"D exacto verificado en las {acciones} acciones; resumen equivalente para los tres K antes de medir.")
+    print("Ambas consultas publicas (#k y t) en cada objetivo; incluye fin de cada bloque (K-1 grupos).")
+    print("D | K | max/med ms | retenida/pico KiB | max grupos/deltas | checkpoints | muestras")
+    for d, r in filas:
+        print(f"{d} | {r.k} | {r.maximo_ms:.4f}/{r.mediana_ms:.4f} | "
+              f"{r.retenida / 1024:.1f}/{r.pico / 1024:.1f} | "
+              f"{r.max_grupos}/{r.max_deltas} | {r.checkpoints} | {len(r.muestras)}")
+
+
+def imprimir_resumen_k(resultados, peor_caso):
+    print("Resumen por K (maximos medidos; umbral estricto <50 ms en ambas cargas):")
+    print("K | max 5000 ms | max D=1000 ms | retenida 5000/D=1000 KiB | cumple ambas")
+    for r in resultados:
+        if r.k is not None:
+            peor = next(fila for d, fila in peor_caso if d == 1000 and fila.k == r.k)
+            cumple = r.maximo_ms < 50 and peor.maximo_ms < 50
+            print(f"{r.k} | {r.maximo_ms:.4f} | {peor.maximo_ms:.4f} | "
+                  f"{r.retenida / 1024:.1f}/{peor.retenida / 1024:.1f} | "
+                  + ("SI" if cumple else "NO"))
+
+
 def main():
     print("Linea de tiempo: semilla=20261113; sin HTTP ni vista.")
     print(f"Equipo: {platform.processor()}; {platform.platform()}; Python {platform.python_version()}.")
@@ -857,7 +946,10 @@ def main():
               f"{estadisticas(fila.con_muestras_us)[0]:.3f} | {fila.deltas} | "
               f"[{_texto_muestras(fila.sin_muestras_us)}];[{_texto_muestras(fila.con_muestras_us)}]")
     print("C1: resultados vivos e inventario historico equivalentes. No atribuir este costo a los benches directos.")
-    print("Maximos observados sobre las muestras indicadas; K por defecto no modificado.")
+    peor_caso = medir_peor_caso()
+    imprimir_peor_caso(peor_caso)
+    imprimir_resumen_k(resultados, peor_caso)
+    print("Maximos observados sobre las muestras indicadas; no son una cota temporal universal.")
 
 
 if __name__ == "__main__":
