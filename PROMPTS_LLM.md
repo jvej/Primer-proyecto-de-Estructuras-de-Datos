@@ -25,6 +25,7 @@ Este documento reúne los registros de uso de modelos de lenguaje (LLM) de cada 
 4. [Inventario, retroceso, replay, controlador y vista — Axel](#4-inventario-retroceso-replay-controlador-y-vista--axel)
 5. [Recursos visuales, sonido y repeticiones — Jeferson](#5-recursos-visuales-sonido-y-repeticiones--jeferson)
 6. [Parte II — Línea de tiempo (004) — Axel](#parte-ii--línea-de-tiempo-004--axel)
+7. [Parte II — Resolubilidad, datos y preparación de spec-kit (003) — Jeferson](#parte-ii--resolubilidad-datos-y-preparación-de-spec-kit-003--jeferson)
 
 ---
 
@@ -2021,3 +2022,485 @@ Al final dame: una tabla por módulo, el resultado de cada comprobación del pun
 **Resultado / qué se corrigió a mano:** La sesión registró 14 módulos y 168 comprobaciones aprobadas sobre `617f666`, con las entregas reales integradas. Se cerraron las cinco tareas y solo la tabla/párrafo de §16.6; publicación de ese cierre en `6e52674`.
 
 <!-- Fuente: rollout-2026-11-14T21-43-02-01a1dd4d-222d-7571-b6e4-15aa85424646.jsonl; turno 2026-11-14 21:43:32 UTC-06:00. -->
+
+---
+
+## Parte II — Resolubilidad, datos y preparación de spec-kit (003) — Jeferson
+
+Los prompts los redacté con ayuda de Claude (Anthropic, en la app de Claude; modelo configurado `claude-opus-5-5`) y los revisé yo antes de enviarlos. Claude también revisó cada resultado del agente (spec, plan, tareas, código, pruebas, diffs) antes de que yo hiciera cada commit. Todas las aprobaciones de comandos fueron manuales: en Antigravity con «Request Review» y en Codex con «Ask for approval» («Allow once»), nunca en modo automático, Turbo ni «Full access». Los commits los hice yo desde la terminal.
+
+**Agentes y modelos usados:**
+
+| Periodo | Herramienta | Modelo | Motivo del cambio |
+|---|---|---|---|
+| 2026-11-06 a 2026-11-08 00:45 | Google Antigravity 2.29.0 | Gemini 3.8 Flash (High) | — |
+| 2026-11-08 00:47 a 00:53 | Google Antigravity 2.29.0 | GPT-OSS 120B | Se agotó el cupo de Gemini (renovación el 14/11) |
+| 2026-11-08 00:53 a 00:56 | Google Antigravity 2.29.0 | Claude Opus 4.6 | Mayor precisión para corregir el análisis |
+| Desde 2026-11-08 19:40 | OpenAI Codex (extensión de VS Code) | GPT-6.1 Sol (Light para las pruebas T001–T010; Medium/High para código) | Cupo de Antigravity agotado hasta el 14/11 |
+
+**Fuente y transcripción:** texto de cada prompt tal como lo envié al agente, tomado de la conversación con Claude donde se redactó. En Antigravity los comandos de spec-kit se invocan con `/speckit-…` y en Codex con `$speckit-…`; en los bloques se indica el comando elegido en la primera línea. Fechas y horas en Costa Rica (UTC−06:00).
+
+### 2026-11-06 · Jeferson · Claude (app de Claude, claude-opus-5-5)
+
+**Prompt:**
+
+```text
+Te voy a pasar estos 3 doc que me habías dado anteriormente, y voy a ocupar que me expliques todo paso a paso, además te pasé el enunciado del proyecto y el proyecto para que vayas al día
+```
+
+**Para qué:** Entender el enunciado de la Parte II, el reparto y el flujo de spec-kit, y preparar el repositorio paso a paso.
+
+**Resultado / qué se corrigió a mano:** Se detectó que la rama `Coso` no tenía el arreglo del pergamino de `main` (fallaba `probar_retroceso`) y se adelantó. Al revisar la documentación oficial se vio que la guía de instalación del grupo estaba desactualizada: spec-kit v1.0.10 usa `--integration agy` (no `--ai`), carpetas `.agents/` y comandos con guion. Se verificó que la extensión git de spec-kit tiene el auto-commit apagado. Se creó la regla `.agents/rules/cripta.md` con el encabezado `trigger: always_on`, que Antigravity exige. Commits `d370e48` (spec-kit, regla, `.python-version`, `.gitignore`, `DECISIONES.md`) y `d82ccba` (README).
+
+### 2026-11-06 · Jeferson · Antigravity 2.29.0 (modelo Gemini 3.8 Flash High)
+
+**Prompt:**
+
+```text
+¿Qué reglas del workspace tienes cargadas? Lista solo su nombre y las 3 primeras viñetas. No ejecutes comandos ni modifiques archivos.
+```
+
+**Para qué:** Verificar que Antigravity carga `.agents/rules/cripta.md`.
+
+**Resultado / qué se corrigió a mano:** Respondió en español con «Reglas del proyecto CRIPTA (cripta.md)» y sus tres primeras viñetas. Sin correcciones.
+
+### 2026-11-06 · Jeferson · Antigravity 2.29.0 (modelo Gemini 3.8 Flash High)
+
+**Prompt:**
+
+```text
+/speckit-constitution
+Proyecto CRIPTA, segunda parte (Estructuras de Datos II, UNA, II Ciclo 2026). Es un juego de mazmorra dirigido por eventos en Python 3.13, con arquitectura MVC (modelo/, controlador/, vista/). Lo que se evalúa son las estructuras de datos que elegimos y cómo las defendemos con mediciones propias.
+
+Redacta la constitución en español, corta y verificable. Cada principio debe tener: qué dice, por qué lo tenemos y cómo se comprueba.
+
+1. Estructuras propias. En los problemas evaluados programamos las estructuras a mano. No usamos dict ni set como índice o caché, ni heapq, bisect, collections (deque, OrderedDict, defaultdict, Counter), networkx u otra biblioteca de grafos o rutas, ni sorted() o list.sort() en los ordenamientos evaluados. list solo como almacenamiento contiguo. Los dict que devuelve respuesta.json() solo se leen. Se comprueba revisando cada plan.md antes de generar tareas y buscando esos nombres en el código.
+
+2. Determinismo. La misma cripta, la misma semilla y las mismas acciones dan siempre la misma partida. El azar sale solo del random.Random(semilla) propio de la partida. Los empates se resuelven por menor id o por número de secuencia. Se comprueba con pruebas que corren la misma partida dos veces y comparan el resultado.
+
+3. Separación MVC. El Modelo no sabe de HTTP, archivos, consola ni Pygame, y no importa controlador ni vista. --replay, --bench y --verificar no crean la vista.
+
+4. Nada de datos de una cripta concreta en el código: ni ids de salas, ni llaves, ni presupuestos, ni nombres.
+
+5. Respeto de presupuesto_solicitudes. Toda solicitud HTTP cuenta, incluidos los reintentos tras 429, las verificaciones de versión y la consulta /llaves.
+
+6. Rendimiento medido. Toda afirmación de rendimiento se respalda con python main.py --bench, usando criptas sintéticas deterministas por semilla y comparando contra la alternativa que descartamos.
+
+7. Especificación antes que código. En Git, el spec.md de cada capacidad se confirma antes que el código que la implementa. Si una especificación estaba mal, primero se corrige la especificación y después el código, en commits separados.
+
+Agrega también como reglas del proyecto:
+- Todo cambio de estado del juego pasa por puntos únicos de Partida, para que el pergamino lo pueda revertir y la línea de tiempo lo pueda registrar.
+- Cada requisito tiene un id estable (FR-### para funcionales, SC-### para rendimiento) y cada escenario de aceptación tiene una prueba automatizada que cita ese id en su nombre.
+- No se agregan dependencias fuera de requests y pygame.
+- El agente de programación es Google Antigravity con spec-kit v1.0.10. El agente no hace commits ni push; los hacemos nosotros.
+- DECISIONES.md enlaza el spec.md y el plan.md de cada decisión.
+
+Al final indica la versión de la constitución (1.0.0) y la fecha de ratificación.
+```
+
+**Para qué:** Constitución del proyecto (§2.3) con los siete principios obligatorios.
+
+**Resultado / qué se corrigió a mano:** Se generó `.specify/memory/constitution.md` v1.0.0. Rechacé el gancho `/speckit-git-commit` y el mensaje de commit en inglés que propuso. Al revisar, el texto tenía adjetivos que no usamos ni podríamos defender («Absoluto», «Inquebrantable», «bit a bit», «Agnosticismo de Instancia»); se corrigió con el prompt siguiente.
+
+### 2026-11-06 · Jeferson · Antigravity 2.29.0 (modelo Gemini 3.8 Flash High)
+
+**Prompt:**
+
+```text
+Revisa .specify/memory/constitution.md y simplifica la redacción para que esté en palabras sencillas del grupo, como estudiantes que la tienen que explicar en una defensa. Quita adjetivos exagerados como "Absoluto", "Inquebrantable", "bit a bit" o "Agnosticismo de Instancia", y usa títulos simples (por ejemplo "Determinismo", "Respeto del presupuesto de solicitudes", "Ningún dato de una cripta concreta en el código"). No agregues reglas que no estén en mi mensaje original ni quites ninguna. Mantén la versión 1.0.0 y la fecha. Modifica solo ese archivo. No hagas commits.
+```
+
+**Para qué:** Dejar la constitución en palabras del grupo, sin cambiar su contenido.
+
+**Resultado / qué se corrigió a mano:** Títulos simples, mismas reglas, versión 1.0.0. Commit `3ef3066`.
+
+### 2026-11-07 · Jeferson · Antigravity 2.29.0 (modelo Gemini 3.8 Flash High)
+
+**Prompt:**
+
+```text
+/speckit-specify
+IMPORTANTE: usa el número de feature 003 y el nombre corto "resolubilidad" (pasa -Number 3 -ShortName resolubilidad al script que crea la rama y la carpeta). La rama debe quedar 003-resolubilidad y la carpeta specs/003-resolubilidad/.
+
+Cambios al servicio web y verificación de resolubilidad de CRIPTA. Describe solo el comportamiento, sin nombres de estructuras de datos, clases ni módulos.
+
+Datos nuevos: cada salida del esqueleto puede traer costo (si no lo trae, vale 100); las fichas del catálogo pueden traer comportamiento "cazador" y rango; hay una consulta nueva GET /criptas/<id>/llaves que devuelve, por cada llave, su id y la sala donde está, o además el campo enemigo, en cuyo caso la llave está en el campo suelta de esa instancia y sala es la sala donde el enemigo inicia. La consulta de llaves cuenta en presupuesto_solicitudes, es válida mientras coincida la versión de la cripta y se puede guardar con los demás datos de la cripta. Lo guardado de la primera parte se invalida con la validación de versión, no borrando archivos a mano. El modo --offline ofrece los mismos datos.
+
+Verificación: antes de iniciar una partida se determina si la cripta puede ganarse usando el esqueleto y la ubicación de las llaves. Supuestos: se puede atravesar cualquier salida abierta y cualquier salida cerrada cuya llave ya se obtuvo; las llaves no se consumen; todo enemigo puede ser derrotado; una llave que suelta un enemigo se obtiene en la sala donde ese enemigo inicia; las trampas y los cierres automáticos no bloquean. Una cripta es resoluble si desde la sala inicial se puede obtener llave_salida y llegar a sala_salida a través de una puerta que la requiere. Si es resoluble, el reporte da un orden de obtención de llaves en el que cada llave aparece después de las necesarias para alcanzarla; si hay varios órdenes válidos, siempre el mismo. Si no lo es, el reporte da: las llaves que no pueden obtenerse; las puertas de la frontera bloqueada (cerradas y adyacentes a la región alcanzable) con la llave que pide cada una; dónde está cada una de esas llaves; y, si una llave está detrás de puertas que solo ella abre (directamente o mediante una cadena de llaves), el ciclo concreto. Si no es resoluble, la partida no inicia salvo con --forzar. --verificar <cripta> solo ejecuta la verificación, sin interfaz.
+
+Rendimiento: la verificación tarda menos de 200 ms en la cripta publicada más grande; el costo total crece aproximadamente lineal con salas, salidas y llaves (no se repite el recorrido completo por cada llave); el reporte de una cripta no resoluble sale del mismo recorrido; la detección de ciclos es determinista. --bench compara el recorrido incremental con el recorrido repetido por llave en criptas sintéticas de muchas llaves encadenadas.
+
+Escenarios de aceptación obligatorios: (1) llave_salida está detrás de la única puerta que ella misma abre: no resoluble y el reporte señala el ciclo; (2) una llave está en el campo suelta de un errante: la verificación la ubica en la sala inicial del enemigo; (3) existen varios órdenes válidos: dos ejecuciones producen el mismo orden; (4) cripta no resoluble sin --forzar: la partida no inicia y se muestra el reporte.
+
+Numera los requisitos funcionales como FR-001… y los de rendimiento como SC-001…
+```
+
+**Para qué:** Especificación de 003 (resolubilidad y cambios al servicio web), con el número forzado a 003 para no chocar con 001, 002 y 004.
+
+**Resultado / qué se corrigió a mano:** Se creó la rama `003-resolubilidad` (aprobé el script solo tras confirmar `-Number 3`) y el `spec.md` con FR-001..FR-017, SC-001..SC-005 y los cuatro escenarios. En la revisión encontramos cuatro cosas inventadas o erróneas: ids de llave «numéricos», el reporte «solo por consola» (contradice §7.3), una regla inventada para el presupuesto agotado y una regla sin consultar para puertas cerradas sin llave. Se resolvieron con `/speckit-clarify`.
+
+### 2026-11-07 · Jeferson · Antigravity 2.29.0 (modelo Gemini 3.8 Flash High)
+
+**Prompt:**
+
+```text
+/speckit-clarify
+Enfócate en estos puntos de specs/003-resolubilidad/spec.md:
+1. Orden de llaves (FR-013 e Historia 2): los ids de llave son texto, no números. El desempate por menor id solo aplica entre llaves que se vuelven obtenibles al mismo tiempo; no se ordena toda la lista por id.
+2. Dónde se muestra el reporte (FR-015, FR-016, Historia 1): el enunciado §7.3 pide verlo en la interfaz al iniciar la partida (consola y Pygame), no solo por consola. --verificar no crea ninguna vista.
+3. Qué hacer si GET /llaves falla o se agota presupuesto_solicitudes antes de verificar (el caso límite actual lo inventó el agente; en la primera parte el programa no se cae sin presupuesto).
+4. Salidas cerradas que no indican llave: ¿son infranqueables en la verificación?
+5. Qué se reporta si llave_salida existe pero ninguna puerta que la pide da a sala_salida.
+6. Cómo se reporta un ciclo de más de dos llaves.
+7. Si la sala inicial puede contener llaves.
+8. Qué hace --verificar con una cripta que no existe.
+9. Formato exacto del reporte en texto.
+Hazme las preguntas una por una y espera mi respuesta. No hagas commits.
+```
+
+**Respuestas enviadas a las nueve preguntas (en orden):**
+
+```text
+A
+```
+
+```text
+A, con esta precisión: al iniciar una partida normal (con o sin --forzar), el reporte se muestra en la interfaz que esté activa: como texto en el modo consola y como pantalla en Pygame en el modo --gui. Si la cripta no es resoluble y no hay --forzar, se muestra el reporte y la partida no inicia (en Pygame se vuelve a la selección de cripta). Con --verificar el reporte se imprime en la salida estándar y no se crea ninguna vista, ni de consola ni de Pygame.
+```
+
+```text
+Ninguna exactamente; combina A y C así: (1) si hay datos de llaves guardados localmente y su versión coincide con la de la cripta, se usan para verificar sin hacer la consulta; (2) si no los hay y la consulta falla o no queda presupuesto_solicitudes, el programa no se cae: muestra en la interfaz activa un mensaje claro de que la verificación no pudo completarse y por qué (red o presupuesto), y la partida no inicia, igual que una cripta no resoluble, salvo que se use --forzar; (3) con --verificar se imprime ese mensaje en la salida estándar y el programa termina con un código de salida distinto de cero. En modo --offline siempre se usan los datos guardados.
+```
+
+```text
+C: se consideran infranqueables durante toda la verificación (igual que en el juego, donde una puerta cerrada sin llave no se puede abrir) y, si son adyacentes a la región alcanzable, se incluyen en la frontera bloqueada del reporte indicando que no tienen llave asociada.
+```
+
+```text
+A: se clasifica como no resoluble y el reporte indica explícitamente que no existe ninguna puerta hacia sala_salida que requiera llave_salida, junto con lo demás que pide el reporte (llaves no obtenibles y frontera bloqueada, si las hay).
+```
+
+```text
+A, con estas precisiones: la flecha X -> Y significa "la llave X está detrás de una puerta que pide la llave Y" (X necesita a Y). El ciclo empieza y termina en la llave del ciclo con menor id de texto, por ejemplo: itm_a -> itm_c -> itm_b -> itm_a. Junto a cada flecha se indica la puerta que bloquea (sala y dirección). Si hay varios ciclos, se reporta al menos uno, elegido siempre de la misma forma, para que dos ejecuciones den el mismo resultado.
+```
+
+```text
+A, con esta corrección: sí puede contener llaves (en el suelo o en la suelta de enemigos que inician en ella) y se consideran obtenibles desde el principio. Pertenecen a la etapa 0, que es toda la región alcanzable sin usar llaves, y se ordenan por id de texto junto con las demás llaves de esa etapa; no necesariamente encabezan la secuencia.
+```
+
+```text
+A. Además, para --verificar se fijan estos códigos de salida: 0 si la cripta es resoluble, 1 si no es resoluble, y 2 si no se pudo verificar (cripta inexistente, falla de red o falta de presupuesto_solicitudes). En ningún caso se crea una vista.
+```
+
+```text
+A, con esta plantilla exacta (las secciones vacías se omiten, salvo ESTADO):
+
+ESTADO: RESOLUBLE | NO RESOLUBLE | NO VERIFICADA
+ORDEN DE LLAVES:
+  etapa 0: itm_a, itm_b
+  etapa 1: itm_c
+LLAVES NO OBTENIBLES: itm_x, itm_y
+FRONTERA BLOQUEADA:
+  - sala 4 (E) -> sala 7: pide itm_x
+  - sala 5 (N) -> sala 9: sin llave asociada
+UBICACIÓN DE LLAVES:
+  - itm_x: sala 12
+  - itm_y: sala 9 (suelta del enemigo e-1203)
+CICLOS DETECTADOS:
+  - itm_a -> itm_b [sala 3 (S)] -> itm_a [sala 8 (O)]
+MOTIVO: <texto, por ejemplo "no existe puerta hacia sala_salida que pida llave_salida" o "no se pudo consultar /llaves: sin presupuesto">
+
+Reglas de orden para que sea determinista: la frontera se lista por id de sala y luego por dirección en el orden N, S, E, O; las ubicaciones, por id de llave; las llaves dentro de cada etapa, por id de texto. Las direcciones se escriben N, S, E, O. La consola muestra este texto tal cual y Pygame muestra las mismas secciones.
+```
+
+**Para qué:** Resolver ambigüedades y lo que el agente inventó en la spec, dejando registradas las decisiones (§2.2).
+
+**Resultado / qué se corrigió a mano:** Nueve clarificaciones integradas y el requisito nuevo FR-018 (plantilla del reporte). Antes de responder la pregunta 4 revisé `Partida.abrir()` (una puerta cerrada sin llave nunca se abre), y antes de la 5 la condición de victoria de `partida.py`. Rechacé de nuevo `/speckit-git-commit` y su mensaje propuesto. Commit `ff0ace9`.
+
+### 2026-11-08 · Jeferson · Antigravity 2.29.0 (modelo Gemini 3.8 Flash High)
+
+**Prompt:**
+
+```text
+/speckit-plan
+Implementación sobre el código existente: modelo/datos/cliente_http.py, fuente_datos.py, cliente_offline.py, fuente_almacen.py, almacen_cripta.py, esqueleto.py, controlador/aplicacion.py, main.py, tests/crear_paquete_prueba.py y tests/cripta_de_prueba.py. Nuevo modelo/juego/resolubilidad.py sin HTTP ni archivos: recibe el esqueleto, la ubicación de llaves, la sala inicial, la sala de salida y la llave de salida, y devuelve el reporte. Respeta la constitución: sin dict, set, heapq, bisect, collections, sorted() ni list.sort().
+
+Propuesta a evaluar y comparar con alternativas:
+- Recorrido por etapas (definido en la spec): en cada etapa, recorrido en anchura con la ColaFIFO existente (modelo/estructuras/cola_fifo.py), salidas en orden N, S, E, O. Cada puerta cerrada cuya llave no se tiene va a una lista de espera de esa llave. Al terminar la etapa, las llaves obtenidas en ella se ordenan por id con el ordenamiento propio (modelo/estructuras/ordenamiento.py, función ordenar) y se liberan solo las puertas de sus listas de espera, que siembran la siguiente etapa. Objetivo O(S + E + L) más el costo de ordenar dentro de cada etapa.
+- Índices: traducir una sola vez los vecinos del esqueleto a posiciones (hoy Esqueleto busca con ListaOrdenada en O(log S) por consulta) para que el recorrido use arreglos indexados. Para llave → lista de espera, comparar arreglo indexado por número de llave (con id → número resuelto una vez) frente a una tabla hash propia.
+- Coincidencia de llaves: igual que en el juego (Partida._tiene_llave), una llave abre una puerta si su id o su campo "abre" de la ficha coincide con lo que pide la puerta. Indica de dónde sale "abre" sin gastar solicitudes extra, o justifica si basta con el id.
+- Reporte no resoluble del mismo recorrido: las listas de espera que quedan forman la frontera bloqueada; las puertas cerradas sin llave adyacentes a la región alcanzable también. Para los ciclos: continuar el recorrido desde la frontera (sin reiniciarlo) etiquetando cada sala no alcanzada con la llave de la puerta por la que se llegaría, armar el grafo de dependencias entre llaves faltantes (X -> Y si X está detrás de una puerta que pide Y) y detectar el ciclo con DFS con colores, determinista por menor id. Demuestra que todo sigue siendo lineal.
+- Alternativa a medir: repetir el recorrido completo cada vez que se obtiene una llave.
+- Datos: método llaves(id_cripta) en cliente_http (GET /criptas/<id>/llaves), FuenteDatos, cliente_offline y fuente_almacen; persistencia en almacen_cripta con la versión de la cripta; costo de cada salida en el esqueleto (100 si falta); campos "cazador" y "rango" del catálogo que llegan intactos al modelo. Contingencia de red y presupuesto según la spec (códigos de salida 0/1/2 de --verificar).
+- bench/generador_criptas.py: generador de criptas sintéticas deterministas por semilla para todo el grupo (tamaño, costos, cazadores con rango, cadenas de llaves, puertas inestables).
+- Paquete offline de prueba: costos, al menos un cazador, llaves.json, una cripta no resoluble con ciclo y una cripta de referencia con decenas de cazadores. Subir las versiones de catálogo y cripta.
+- Banderas --verificar y --forzar en main.py; la aplicación verifica antes de crear la partida.
+
+Incluye: complejidad de cada operación, módulos afectados, conteo de solicitudes HTTP (cuántas suma /llaves), riesgos, y el plan de mediciones en bench/bench_resolubilidad.py (incremental frente a repetido, con muchas llaves encadenadas) más la repetición de bench_red de la primera parte (§5.6). No escribas código de producción. No hagas commits.
+```
+
+**Para qué:** Plan técnico (`plan.md`, `research.md`, `data-model.md`, contratos y `quickstart.md`).
+
+**Resultado / qué se corrigió a mano:** En la revisión encontramos un error de diseño: durante una etapa el plan dejaba cruzar puertas con llaves encontradas en esa misma etapa, lo que hacía depender el orden de etapas del recorrido. También había datos mal descritos (`rango` en «salas», `costo >= 0`, `enemigo` como dict). Se corrigió con el prompt siguiente.
+
+### 2026-11-08 · Jeferson · Antigravity 2.29.0 (modelo Gemini 3.8 Flash High)
+
+**Prompt:**
+
+```text
+Corrige specs/003-resolubilidad/plan.md y data-model.md (y research.md si hace falta) con estos puntos. No toques spec.md ni código. No hagas commits.
+
+1. Etapas: durante una etapa solo se pueden cruzar puertas abiertas o puertas cuya llave se obtuvo en una etapa ANTERIOR. Las llaves encontradas en la etapa actual quedan pendientes; toda puerta cerrada cuya llave no esté disponible va a la lista de espera, aunque su llave aparezca más tarde en la misma etapa. Al cerrar la etapa, las llaves pendientes pasan a disponibles, se ordenan por id con ordenar() y se liberan sus listas de espera, que siembran la etapa siguiente. Así la etapa 0 es exactamente la región alcanzable sin usar llaves, como dice la spec, y el resultado no depende del orden del recorrido.
+2. Coincidencia por "abre": las listas de espera se indexan por el identificador que pide la puerta. Al activar una llave se liberan las listas de su id y, si su ficha está disponible localmente, también la de su "abre". Si la ficha no está en el catálogo local, se usa solo el id (sin gastar solicitudes) y se documenta como límite conocido.
+3. Ciclos: al continuar el recorrido más allá de la frontera bloqueada, cuando se cruza otra puerta cerrada, las salas de detrás toman como etiqueta la llave de ESA puerta (la más cercana), no la de la frontera. Las etiquetas se asignan en orden determinista (frontera ordenada por id de sala y dirección N, S, E, O). Explica por qué sigue siendo lineal.
+4. La frontera bloqueada excluye puertas cuyas dos salas ya son alcanzables.
+5. La DFS de 3 colores debe ser iterativa (con pila propia), no recursiva.
+6. data-model.md: "rango" se mide en unidades de costo (no en número de salas); "costo" es un entero >= 1 (100 si falta); "enemigo" en la ubicación de llaves es el id de texto de la instancia (por ejemplo "e-1203"), no un dict.
+```
+
+**Para qué:** Corregir el diseño del plan antes de generar tareas.
+
+**Resultado / qué se corrigió a mano:** Los seis puntos quedaron corregidos. Commit `8ddfd70`.
+
+### 2026-11-08 · Jeferson · Antigravity 2.29.0 (modelo Gemini 3.8 Flash High)
+
+**Prompt:**
+
+```text
+/speckit-tasks
+Divide el plan en tareas pequeñas y verificables. Cada tarea cita los FR o SC que atiende y los archivos que toca.
+
+Orden:
+1. Primero las pruebas de aceptación en tests/test_resolubilidad.py, una función por escenario obligatorio cuyo nombre empiece con test_FR###_ (llave de salida detrás de su propia puerta con ciclo; llave en la suelta de un errante ubicada en la sala inicial del enemigo; varios órdenes válidos dan el mismo orden; cripta no resoluble sin --forzar no inicia). Agrega también una prueba de que /llaves cuenta en presupuesto_solicitudes, una de los códigos de salida 0/1/2 de --verificar y una de la plantilla exacta del reporte. Estas pruebas deben fallar al principio.
+2. Después: llaves() en fuente_datos, cliente_http, cliente_offline y fuente_almacen; persistencia en almacen_cripta con la versión; costo en el esqueleto; generador de criptas sintéticas (bench/generador_criptas.py); algoritmo por etapas en modelo/juego/resolubilidad.py; frontera, ubicaciones y ciclos; plantilla del reporte; flujo en controlador/aplicacion.py con contingencia; --verificar y --forzar en main.py; paquete de prueba offline (tests/crear_paquete_prueba.py y tests/cripta_de_prueba.py); bench/bench_resolubilidad.py; repetición de bench_red.
+3. Al final: correr todas las pruebas (python -m tests.<modulo>) y python main.py --bench resolubilidad red.
+
+Las pruebas se ejecutan con python -m tests.<modulo>, no con pytest. Marca qué tareas se pueden hacer en paralelo. No escribas código. No hagas commits.
+```
+
+**Para qué:** Tareas T001–T034 con trazabilidad a FR/SC.
+
+**Resultado / qué se corrigió a mano:** 34 tareas en 7 fases, pruebas primero. Al terminar este turno se agotó el cupo de Gemini.
+
+### 2026-11-08 · Jeferson · Antigravity 2.29.0 (modelo GPT-OSS 120B)
+
+**Prompt:**
+
+```text
+/speckit-analyze
+Revisa la consistencia entre spec.md, plan.md y tasks.md de 003-resolubilidad y contra la constitución. Señala: requisitos FR o SC sin tarea, tareas sin requisito, escenarios de aceptación sin prueba, dependencias prohibidas (dict o set como índice, heapq, bisect, collections, sorted, list.sort, bibliotecas de grafos), nombres de estructuras, clases o módulos que se hayan colado en spec.md, y cualquier paso del reporte que requiera un recorrido adicional por cada llave. Verifica también que la regla de etapas del plan (solo llaves de etapas anteriores) coincida con la spec y con las tareas. No modifiques archivos. No hagas commits.
+```
+
+**Para qué:** Análisis de consistencia previo a implementar.
+
+**Resultado / qué se corrigió a mano:** Confirmó que la regla de etapas coincide en spec, plan y tareas. Revisé sus hallazgos: los dos «CRITICAL» eran exagerados, propuso un pre-commit hook que no existe, y afirmó que FR-009 no estaba en la spec, lo cual era falso. Se aplicaron solo los ajustes válidos con el prompt siguiente.
+
+### 2026-11-08 · Jeferson · Antigravity 2.29.0 (modelo Claude Opus 4.6)
+
+**Prompt:**
+
+```text
+Aplica solo estos cambios a specs/003-resolubilidad/plan.md y tasks.md. No toques spec.md ni código. No hagas commits.
+1. plan.md: deja explícito que el índice de llaves y cerraduras (id de texto -> número) es una lista contigua ordenada con ordenar() y una búsqueda binaria propia, sin dict ni set.
+2. tasks.md: agrega una tarea antes de las pruebas finales que busque en los archivos nuevos y modificados las palabras dict(, set(, {} usados como índice, heapq, bisect, collections, sorted( y .sort( e informe si aparecen. Cita el Principio I de la constitución.
+3. tasks.md: FR-009 sí existe en la spec (verificar antes de iniciar la partida). Haz que las tareas de controlador/aplicacion.py lo citen.
+4. tasks.md: T001 cita SC-002; T032 a T034 citan SC-001 y SC-005 según corresponda.
+```
+
+**Para qué:** Aplicar las correcciones válidas del análisis.
+
+**Resultado / qué se corrigió a mano:** 35 tareas; T033 nueva (búsqueda de palabras prohibidas). Commit `9dab2b6`.
+
+### 2026-11-08 · Jeferson · Codex en VS Code (modelo GPT-6.1 Sol)
+
+**Prompts de configuración y comprobación:**
+
+```text
+¿Qué reglas del proyecto tienes cargadas desde AGENTS.md? Lista solo las 3 primeras. No ejecutes comandos ni modifiques archivos.
+```
+
+```text
+Ejecuta git status y muéstrame la salida. No modifiques archivos.
+```
+
+**Para qué:** Comprobar que Codex lee `AGENTS.md` y ejecuta comandos tras cambiar a Codex por falta de cupo en Antigravity.
+
+**Resultado / qué se corrigió a mano:** El primer intento falló porque la conversación se abrió antes de crear `AGENTS.md` (Codex lo lee al iniciar); en una conversación nueva citó las reglas. Los comandos quedaban colgados porque el sandbox de Windows estaba en «elevated» sin permiso de administrador; se cambió a `sandbox = "unelevated"` en `~/.codex/config.toml` (corregí a mano un bloque `[windows]` duplicado). Commits `a129ced` (AGENTS.md y README) y `8da2960` (regla para usar `venv\Scripts\python.exe`, porque Codex había corrido Python 3.12).
+
+### 2026-11-08 · Jeferson · Codex en VS Code (modelo GPT-6.1 Sol, intensidad light)
+
+**Prompt:**
+
+```text
+$speckit-implement
+Implementa SOLO las tareas T001 a T010 de specs/003-resolubilidad/tasks.md: preparación y pruebas de aceptación en tests/test_resolubilidad.py. No implementes nada más (ni datos, ni algoritmo, ni main.py).
+
+Reglas para las pruebas:
+- Cada función de prueba se llama test_FR###_... citando su requisito.
+- Se ejecutan con: python -m tests.test_resolubilidad (sin pytest; sigue el estilo de los otros archivos de tests/, por ejemplo tests/test_partida.py).
+- Las criptas de prueba se arman en memoria dentro de la prueba, sin red.
+- Como el código todavía no existe, las pruebas deben FALLAR al ejecutarse (por ejemplo, por ImportError del módulo modelo/juego/resolubilidad.py), y eso es lo esperado.
+
+Al terminar, ejecuta python -m tests.test_resolubilidad y muéstrame la salida. Marca T001 a T010 como hechas en tasks.md. No hagas commits.
+```
+
+**Respuesta a su pregunta sobre T002:** «No, solo pruebas; dejar T002 pendiente».
+
+**Para qué:** Pruebas de aceptación primero (fallan hasta implementar).
+
+**Resultado / qué se corrigió a mano:** Siete pruebas que fallan con `ModuleNotFoundError`, como se esperaba. En la revisión comprobé las firmas que suponen contra el código real; `test_FR015` exigía que `aplicacion.py` imprimiera con `print`, lo que rompe MVC. Se corrigió con:
+
+```text
+Corrige solo test_FR015 en tests/test_resolubilidad.py: la aplicación (controlador) no debe imprimir con print; debe guardar el reporte en app.reporte_resolubilidad (un ResultadoResolubilidad) y la vista activa lo muestra. La prueba debe comprobar app.reporte_resolubilidad.estado == "NO RESOLUBLE" en lugar de leer la salida estándar. No cambies nada más. Ejecuta python -m tests.test_resolubilidad (debe seguir fallando por ModuleNotFoundError). No hagas commits.
+```
+
+Commit `809a7b6`.
+
+### 2026-11-08 · Jeferson · Codex en VS Code (modelo GPT-6.1 Sol)
+
+**Prompt:**
+
+```text
+$speckit-implement
+Implementa SOLO las tareas T002 y T011 a T017 de specs/003-resolubilidad/tasks.md (contrato C5: datos de llaves, costo de salidas, cazador y rango, y generador de criptas sintéticas). No implementes el algoritmo de resolubilidad, ni aplicacion.py, ni main.py.
+
+Restricciones:
+- Respeta AGENTS.md y la constitución: sin dict ni set como índice o caché, sin heapq, bisect, collections, sorted() ni list.sort().
+- NO modifiques archivos de otros integrantes: modelo/juego/sala.py, modelo/juego/mapa.py, modelo/juego/partida.py, modelo/juego/actor.py ni la vista. Si una tarea requiere cambiarlos, no lo hagas: avísame qué haría falta.
+- llaves(id_cripta) en fuente_datos.py, cliente_http.py (GET /criptas/<id>/llaves, cuenta en presupuesto_solicitudes), cliente_offline.py (criptas/<id>/llaves.json) y fuente_almacen.py; persistencia en almacen_cripta.py ligada a la versión de la cripta.
+- esqueleto.py: guardar el costo de cada salida (100 si falta) sin romper lo que ya usa el esqueleto.
+- bench/generador_criptas.py: generador determinista por semilla (misma semilla = mismas criptas) que produzca datos con el mismo formato que la API (general, páginas de salas, contenido, fichas del catálogo y llaves). Parámetros: número de salas, rango de costos, cantidad de cazadores y su rango, cadenas de llaves encadenadas y puertas que cambian de estado (cierre_automatico). Debe servir para el bench de todos. Documenta su uso en un docstring con un ejemplo mínimo.
+
+Al terminar ejecuta con venv\Scripts\python.exe: tests.test_red, tests.test_almacen_cripta, tests.test_partida y tests.test_resolubilidad (esta última puede seguir fallando porque falta el algoritmo). Muéstrame la salida y la lista de archivos modificados. Marca las tareas hechas en tasks.md. No hagas commits.
+```
+
+**Para qué:** Contrato C5 que necesitaban Mariano y Kim.
+
+**Resultado / qué se corrigió a mano:** Aprobé dos validaciones fuera del aislamiento tras leer los scripts (solo usaban carpetas temporales) y rechacé la aprobación automática. En la revisión: el generador solo hacía una línea (inútil para Dijkstra y el cazador), todos los cazadores tenían el mismo rango y el esqueleto corregía en silencio los costos inválidos. Se ajustó con:
+
+```text
+Ajusta lo siguiente. Solo puedes modificar bench/generador_criptas.py, modelo/datos/esqueleto.py y archivos dentro de tests/. No hagas commits.
+
+1. bench/generador_criptas.py: agrega el parámetro topologia="linea" | "cuadricula" (por defecto "linea", para no romper lo actual). En "cuadricula" las salas forman una cuadrícula de ancho fijo calculado del número de salas, conectadas con N/S/E/O bidireccionales, con costos sorteados por salida dentro de rango_costos, de modo que existan caminos alternativos con distinto costo total. La cadena de llaves debe seguir siendo resoluble y determinista en ambas topologías. Actualiza el docstring con un ejemplo de cuadrícula.
+2. bench/generador_criptas.py: rango_cazadores acepta un entero (todos iguales) o una tupla (mínimo, máximo) inclusiva; cada cazador recibe su rango sorteado con la semilla. Valida que sean enteros >= 0.
+3. modelo/datos/esqueleto.py: si una salida no trae costo, usa 100; si trae un costo que no es un entero >= 1, no lo corrijas en silencio: lanza ErrorRed indicando la sala, la dirección y el valor recibido, igual que se tratan otras respuestas mal formadas.
+
+Agrega o actualiza las pruebas correspondientes en tests/ (con nombres test_FR007_... y test_FR008_...) para que estas comprobaciones queden guardadas y no solo en un script temporal. Ejecuta con venv\Scripts\python.exe: tests.test_red, tests.test_almacen_cripta, tests.test_partida y las pruebas nuevas. Muéstrame la salida y los archivos modificados.
+```
+
+Commit `2a0432e`.
+
+### 2026-11-08 · Jeferson · Codex en VS Code (modelo GPT-6.1 Sol)
+
+**Prompt:**
+
+```text
+$speckit-implement
+Implementa SOLO las tareas T018 a T025 de specs/003-resolubilidad/tasks.md: el módulo nuevo modelo/juego/resolubilidad.py (verificar_resolubilidad y ResultadoResolubilidad con formatear_reporte). No toques aplicacion.py, main.py ni archivos de otros integrantes. Solo puedes crear o modificar modelo/juego/resolubilidad.py, archivos dentro de tests/ y specs/003-resolubilidad/tasks.md.
+
+Sigue exactamente plan.md y data-model.md:
+- Módulo puro: sin HTTP, sin archivos, sin importar controlador/ ni vista/.
+- Recorrido por etapas con la ColaFIFO de modelo/estructuras/cola_fifo.py y salidas en orden N, S, E, O. Durante una etapa solo se cruzan puertas abiertas o puertas cuya llave se obtuvo en una etapa ANTERIOR; las llaves encontradas en la etapa actual quedan pendientes hasta cerrarla. Al cerrar la etapa se ordenan por id de texto con ordenar() de modelo/estructuras/ordenamiento.py y se liberan solo sus listas de espera.
+- Índices: vecinos traducidos una sola vez a posiciones; listas de espera indexadas por lo que pide la puerta, con id de texto -> número resuelto por una lista ordenada y búsqueda binaria propia. Sin dict ni set como índice, sin heapq, bisect, collections, sorted() ni list.sort().
+- Una llave abre una puerta si su id o su "abre" coincide con lo que pide la puerta (abre puede venir en la ubicación de la llave; si no viene, solo el id).
+- Resoluble: llave_salida obtenida y sala_salida alcanzable por una puerta que la pide. Si no existe ninguna puerta hacia sala_salida que pida llave_salida: NO RESOLUBLE con MOTIVO.
+- Reporte no resoluble del mismo recorrido: llaves no obtenibles, frontera bloqueada (puertas cerradas con sala de origen alcanzable y destino no alcanzable, incluidas las que no piden llave), ubicaciones y ciclos. Ciclos: continuar desde la frontera etiquetando cada sala no alcanzada con la llave de la puerta cerrada más cercana, grafo X -> Y y DFS de 3 colores ITERATIVA, empezando y terminando en el menor id, con [sala N (D)] tras cada flecha.
+- Plantilla exacta de FR-018.
+Todo debe ser lineal O(S + E + L) más el costo de ordenar dentro de cada etapa.
+
+Agrega pruebas unitarias en tests/ para: un ciclo de 3 llaves, la coincidencia por "abre", el MOTIVO de puerta inexistente hacia sala_salida y que la etapa 0 no use llaves encontradas en la misma etapa.
+
+Ejecuta con venv\Scripts\python.exe: tests.test_resolubilidad, las pruebas nuevas, tests.test_esqueleto y tests.test_partida. En test_resolubilidad deben pasar FR014, FR002, FR013 y FR018; FR015, FR003 y FR017 pueden seguir fallando porque dependen de aplicacion.py y main.py (tareas posteriores): indícalo. Muéstrame la salida y los archivos modificados. Marca las tareas hechas. No hagas commits.
+```
+
+**Para qué:** Algoritmo de resolubilidad (§5.4).
+
+**Resultado / qué se corrigió a mano:** 11 pruebas unitarias nuevas; pasan FR014, FR002, FR013 y FR018. Revisé con `git diff` que la modificación de `tests/test_resolubilidad.py` solo cambiaba el ejecutor y un comentario, no ninguna comprobación. Revisé el código línea por línea (estructuras, regla de etapas, linealidad y el caso del ciclo a mano). Commit `b3a2a01`.
+
+### 2026-11-08 · Jeferson · Codex en VS Code (modelo GPT-6.1 Sol)
+
+**Prompt:**
+
+```text
+$speckit-implement
+Implementa SOLO las tareas T026 a T029 de specs/003-resolubilidad/tasks.md. Solo puedes modificar controlador/aplicacion.py, main.py, archivos dentro de tests/ y specs/003-resolubilidad/tasks.md. No toques controlador/controlador.py, la vista, ni archivos de modelo/juego salvo leer resolubilidad.py. No registres todavía el bench (eso es T030+).
+
+controlador/aplicacion.py:
+- En _armar, después de descargar_esqueleto y antes de crear Partida, SOLO cuando sea una partida nueva (no al reconstruir con ordenes_previas, ni al cargar un guardado, ni en replay): obtener las llaves (primero almacen_cripta si tiene_llaves con la versión correcta; si no, fuente.llaves(id_cripta) y guardarlas con almacen_cripta.guardar_llaves), y llamar a verificar_resolubilidad con el esqueleto, las ubicaciones, sala_inicial, sala_salida y llave_salida de los datos generales. Si hay fichas de llaves ya disponibles localmente (sin gastar solicitudes), pásalas como catalogo_llaves para respetar "abre"; si no, no las pidas.
+- Guardar el resultado en self.reporte_resolubilidad (ResultadoResolubilidad). El controlador NO usa print.
+- Si falla la consulta por ErrorRed o ErrorPresupuesto y no hay copia local: reporte_resolubilidad = ResultadoResolubilidad("NO VERIFICADA", motivo=...) con la causa.
+- Si el estado no es RESOLUBLE y no se pidió forzar: no crear la Partida y lanzar una excepción subclase de ErrorCripta (por ejemplo ErrorNoResoluble) que lleve el reporte, dejando self.partida en None.
+- forzar: parámetro del constructor (forzar=False) y también de crear_partida(..., forzar=None), donde None usa el valor del constructor.
+- Agrega un método verificar(id_cripta) que haga los mismos pasos (datos, esqueleto, llaves, verificación) SIN crear Partida, ni log, ni precarga, y devuelva el ResultadoResolubilidad; reutiliza el mismo código que _armar en lugar de duplicarlo.
+
+main.py:
+- --forzar (store_true) que se pasa a Aplicacion.
+- --verificar CRIPTA: crea la fuente con crear_fuente_datos (respeta --offline), crea Aplicacion con registrar_log=False y registrar_puntajes=False, llama a verificar, imprime SOLO reporte.formatear_reporte() (nada antes) y devuelve 0 si RESOLUBLE, 1 si NO RESOLUBLE, 2 si NO VERIFICADA o si la cripta no existe (ErrorRed con código 404 u otro ErrorCripta, con MOTIVO). Nunca llama a crear_vista. Se evalúa antes del modo interactivo.
+
+Revisa cómo controlador/controlador.py maneja un ErrorCripta lanzado por crear_partida. Si con la excepción nueva el usuario no vuelve a la selección de cripta ni ve el reporte, NO lo cambies: dime exactamente qué tendría que agregar Axel.
+
+Ejecuta con venv\Scripts\python.exe: tests.test_resolubilidad (ahora deben pasar los 7), tests.test_resolubilidad_unitaria, tests.test_partida, tests.test_controlador, tests.test_replay_puntajes y tests.test_red. Muéstrame la salida, los archivos modificados y lo que haría falta en controlador.py. Marca las tareas hechas. No hagas commits.
+```
+
+**Para qué:** Verificación al iniciar, `--verificar` y `--forzar` sin romper replay ni carga.
+
+**Resultado / qué se corrigió a mano:** 92 pruebas correctas. Aprobé las pruebas de integración y de replay fuera del aislamiento tras leer los archivos (solo carpetas temporales). Verifiqué con `git diff` que el cambio en `tests/test_resolubilidad.py` solo ajustaba un objeto simulado. Le pasé a Axel lo que faltaba en la interfaz (mostrar el reporte cuando la partida sí inicia). Commit `dc5f4e8`.
+
+### 2026-11-08 · Jeferson · Codex en VS Code (modelo GPT-6.1 Sol)
+
+**Prompt:**
+
+```text
+$speckit-implement
+Implementa SOLO las tareas T030 a T035 de specs/003-resolubilidad/tasks.md. Solo puedes crear o modificar bench/bench_resolubilidad.py, main.py (únicamente para registrar el subsistema "resolubilidad" en el bench), archivos dentro de tests/ y specs/003-resolubilidad/tasks.md. No toques modelo/juego/resolubilidad.py salvo que encuentres un error real: en ese caso no lo cambies, avísame.
+
+bench/bench_resolubilidad.py (sigue el estilo de los otros archivos de bench/, por ejemplo bench/bench_red.py, y cómo main.py los registra):
+- Compara la verificación por etapas (verificar_resolubilidad) contra la alternativa descartada: repetir el recorrido completo desde la sala inicial cada vez que se obtiene una llave. Implementa esa alternativa dentro del archivo del bench, solo para medir, sin estructuras prohibidas.
+- Usa bench/generador_criptas.py con semilla fija: topologia="linea" con cadenas de 10, 50, 100 y 200 llaves (peor caso del repetido), y topologia="cuadricula" con cerca de 1000 salas y 50 llaves.
+- Para cada caso: número de salas, salidas y llaves, tiempo de cada versión con time.perf_counter (mediana de varias repeticiones), cuántas veces más rápida es la versión por etapas, y comprobación de que ambas dan el mismo estado y el mismo orden de llaves.
+- Indica en la salida si el caso más grande queda por debajo de 200 ms (SC-001). Aclara que son criptas sintéticas, no la cripta oficial.
+
+Después:
+- T033: busca en los archivos nuevos o modificados de la rama 003-resolubilidad respecto de Coso (git diff --name-only Coso...HEAD) las palabras dict(, set(, {} usados como índice, heapq, bisect, collections, sorted( y .sort(. Informa cada aparición y si es una violación real o un uso permitido (por ejemplo, leer respuesta.json() o armar registros de salida).
+- Ejecuta con venv\Scripts\python.exe: main.py --bench resolubilidad, main.py --bench red, y todas las pruebas: tests.test_resolubilidad, tests.test_resolubilidad_unitaria, tests.test_resolubilidad_integracion, tests.test_esqueleto, tests.test_generador_criptas, tests.test_red, tests.test_almacen_cripta, tests.test_partida, tests.test_controlador y tests.test_replay_puntajes.
+
+Muéstrame la salida COMPLETA de los dos bench (la necesito para DECISIONES.md), el resumen de pruebas, el resultado de T033 y los archivos modificados. Marca las tareas hechas. No hagas commits.
+```
+
+**Para qué:** Medir la decisión de §5.4 contra la alternativa descartada.
+
+**Resultado / qué se corrigió a mano:** La suite completa (23 módulos, con 001, 002 y 004 ya mergeados) pasó y T033 no encontró violaciones. Al revisar la tabla, con 200 llaves la versión por etapas tardaba 19,5 ms contra 1,6 ms con 100 (crecimiento cuadrático). Diagnostiqué la causa: `ordenar()` elige inserción cuando la lista «parece» casi ordenada, y la lista de ids son dos tramos ordenados concatenados. Hice commit del bench tal cual, como evidencia del «antes»: `809f398`.
+
+### 2026-11-08 · Jeferson · Codex en VS Code (modelo GPT-6.1 Sol)
+
+**Prompt:**
+
+```text
+Corrección basada en la medición del bench (commit 809f398). Solo puedes modificar specs/003-resolubilidad/plan.md, specs/003-resolubilidad/research.md, specs/003-resolubilidad/tasks.md, modelo/juego/resolubilidad.py, bench/bench_resolubilidad.py, bench/bench_red.py y archivos dentro de tests/. No hagas commits.
+
+Problema detectado: en la línea con 200 llaves la versión por etapas tardó 19,5 ms contra 1,6 ms con 100 llaves (crecimiento cuadrático). Causa: ordenar() de modelo/estructuras/ordenamiento.py elige inserción cuando el porcentaje de desorden lejano es <= 2 %, y la lista de identificadores que arma _Indices (llave_salida + cerraduras de las puertas + ids de las ubicaciones) son dos tramos ordenados concatenados que el detector toma como "casi ordenada", así que paga O(n²).
+
+1. Primero actualiza plan.md y research.md: la preparación de índices y el orden dentro de cada etapa usan ordenar_merge() del mismo módulo (O(n log n) garantizado), explicando la causa medida y citando el commit 809f398 como evidencia. Agrega en tasks.md una tarea nueva para esta corrección.
+2. modelo/juego/resolubilidad.py: reemplaza todos los usos de ordenar() por ordenar_merge(). No cambies nada más del algoritmo.
+3. bench/bench_resolubilidad.py: agrega el caso topologia="linea" con 400 llaves y una columna o línea final que muestre cómo crece el tiempo por etapas al duplicar las llaves (50 -> 100 -> 200 -> 400).
+4. T032, bench/bench_red.py: agrega una sección que mida /llaves con el cliente simulado de ese bench: solicitudes gastadas sin copia local (1), con copia local de la misma versión (0), y con una respuesta 429 seguida de 200 (2). Sin red real.
+5. Agrega una prueba en tests/ que verifique que la verificación da exactamente el mismo resultado y orden de llaves que antes en las criptas de las pruebas existentes (el cambio de ordenamiento no debe alterar resultados).
+
+Ejecuta con venv\Scripts\python.exe -X utf8: main.py --bench resolubilidad, main.py --bench red, tests.test_resolubilidad, tests.test_resolubilidad_unitaria, tests.test_resolubilidad_integracion, tests.test_bench_resolubilidad y tests.test_red. Muéstrame la salida COMPLETA de los dos bench, el resumen de pruebas y los archivos modificados. Marca T032 y la tarea nueva.
+```
+
+**Para qué:** Corregir el caso O(n²) detectado por la medición y completar T032 (§5.6 de red).
+
+**Resultado / qué se corrigió a mano:** Con 200 llaves pasó de 19,5 a 4,7 ms; con 400 llaves, 10,6 ms contra 63,2 ms del recorrido repetido (5,97×). Verifiqué con `git diff` que en `tests/test_red.py` solo se agregó una prueba (la línea «borrada» era `unittest.main()` reescrita con salto de línea final). Commit `d5bc68a`.
+
+### 2026-11-14 · Jeferson · Claude (app de Claude, claude-opus-5-5)
+
+**Prompt:**
+
+```text
+Claudio se supone que ya Mariano, Axel y Kim terminaron todas sus partes y se supone que la documentacion de ellos ya esta lista, te abjunto el .zip
+```
+
+**Para qué:** Revisar el estado integrado y redactar mis secciones de `DECISIONES.md` (8b, 8c y 8d) y esta bitácora.
+
+**Resultado / qué se corrigió a mano:** Claude corrió los 42 módulos de pruebas sobre la rama integrada (39 pasan; los 3 de interfaz gráfica requieren pygame y se corren localmente) y redactó las secciones con los datos reales del bench, que revisé antes de hacer commit. Commit `4879b82`.
