@@ -2506,6 +2506,174 @@ Claudio se supone que ya Mariano, Axel y Kim terminaron todas sus partes y se su
 
 **Resultado / qué se corrigió a mano:** Claude corrió los 42 módulos de pruebas sobre la rama integrada (39 pasan; los 3 de interfaz gráfica requieren pygame y se corren localmente) y redactó las secciones con los datos reales del bench, que revisé antes de hacer commit. Commit `4879b82`.
 
+### 2026-11-14 · Jeferson · Claude (app de Claude, claude-opus-5-5)
+
+**Prompt:**
+
+```text
+La IA de axel me dijo esto
+[revisión cruzada de 003 enviada por Axel, 8 observaciones]
+```
+
+**Para qué:** Analizar la revisión cruzada de Axel contra el código y decidir qué corregir.
+
+**Resultado / qué se corrigió a mano:** Claude verificó las 8 observaciones; se aceptaron todas; se decidió que la verificación no use fichas del catálogo (determinismo) en lugar de pedirlas a la red.
+
+### 2026-11-14 · Jeferson · Claude (app de Claude, claude-opus-5-5)
+
+**Prompt:**
+
+```text
+dame los pasos para hacer eso
+```
+
+**Para qué:** Obtener el orden de trabajo (spec, código, documentación) y los prompts para Codex.
+
+**Resultado / qué se corrigió a mano:** Se siguió el orden spec → código → documentación, en commits separados (§2.6).
+
+### 2026-11-14 · Jeferson · Codex en VS Code (modelo GPT-6.1 Sol, intensidad Medium)
+
+**Prompt:**
+
+```text
+Soy Jeferson, responsable de la capacidad 003-resolubilidad. Antes de empezar, lee AGENTS.md y .specify/memory/constitution.md.
+
+Tarea: corregir SOLO la documentación de spec-kit de 003 para que coincida con lo que el grupo decidió tras la revisión cruzada de Axel. Esta corrección va en un commit propio, antes de cualquier cambio de código (§2.6 del enunciado).
+
+Solo puedes modificar estos archivos:
+- specs/003-resolubilidad/spec.md
+- specs/003-resolubilidad/plan.md
+- specs/003-resolubilidad/tasks.md
+- specs/003-resolubilidad/research.md
+- specs/003-resolubilidad/data-model.md
+No toques código, pruebas, bench, README, DECISIONES.md ni PROMPTS_LLM.md. No hagas commits, push, merge, reset ni checkout. No instales nada.
+
+Cambios en spec.md (redacción en español, sin nombres de estructuras, clases ni módulos):
+
+1. FR-014 y FR-018: todo resultado NO RESOLUBLE DEBE incluir la sección MOTIVO, aunque no haya llaves no obtenibles, frontera bloqueada ni ciclos. Define los motivos exactos y su prioridad (se usa el primero que aplique):
+   a) "no existe puerta hacia sala_salida que pida llave_salida" (ya existe, no cambies el texto);
+   b) "llave_salida no puede obtenerse";
+   c) "ninguna puerta hacia sala_salida que pide llave_salida es alcanzable" (la llave se obtiene, pero todas esas puertas salen de salas inalcanzables).
+   En FR-018 indica que MOTIVO es obligatoria en NO RESOLUBLE y NO VERIFICADA. Agrega un escenario de aceptación para el caso c).
+
+2. FR-010 (supuestos), con una nueva aclaración en Clarifications: una llave abre una puerta si su id coincide con la llave que pide la puerta, o si su registro de /llaves trae un campo abre igual a esa llave. La verificación NO usa fichas del catálogo (ni guardadas en disco ni en memoria), para que el resultado dependa solo del esqueleto y de /llaves y sea igual en cualquier equipo. Agrega en Edge Cases el límite: si una llave abre una puerta solo por el abre de su ficha de catálogo, la verificación la reporta NO RESOLUBLE; en ese caso se puede jugar con --forzar.
+
+3. FR-009: la verificación se ejecuta solo al iniciar una partida nueva y con --verificar. --replay (con o sin --hasta) y cargar una partida guardada no verifican ni consultan /llaves.
+
+4. Escenario de aceptación de US1 que dice "en consola la aplicación termina con mensaje informativo": corrígelo a que en consola se muestra el reporte y se vuelve a la selección de cripta (igual que en Pygame).
+
+5. FR-007: además del valor por defecto 100, si una salida declara un costo que no es un entero mayor o igual que 1, el sistema DEBE rechazar los datos con un error, sin corregirlo en silencio.
+
+6. SC-001: medido con la cripta publicada más grande disponible al momento de medir; el informe de medición indica su id y versión (mientras no exista, se mide con la cuadrícula sintética de 1000 salas del bench y se dice así).
+   SC-002: define "aproximadamente lineal" de forma medible: en las criptas sintéticas del bench con al menos 100 llaves, al duplicar salas, salidas y llaves el tiempo de la verificación por etapas se multiplica como máximo por 3. El costo total es el de la verificación completa, incluida la preparación.
+
+7. En Assumptions, cambia "grafo de adyacencias del calabozo" por "conexiones declaradas entre salas".
+
+8. Cambia el Status a "Implementada; corregida tras revisión cruzada (2026-11-14)".
+
+Alineación del resto de la documentación de 003:
+- plan.md (línea ~245) y tasks.md T016: el costo no se corrige con max(1, int(...)); se rechaza el valor inválido con ErrorRed (así está el código). Deja T016 marcada [X] y agrega "(corregido en revisión)".
+- plan.md, research.md (Decisión 3) y data-model.md: quita el uso de fichas del catálogo local para abre; queda solo id o abre del registro de /llaves. Conserva la alternativa descartada en research.md con el motivo (determinismo).
+- tasks.md: agrega al final una fase "Correcciones tras revisión cruzada" con tareas nuevas sin marcar, que citen sus FR/SC:
+  T037 motivo obligatorio y caso c) (FR-014, FR-018)
+  T038 quitar el catálogo de la verificación (FR-010, FR-012)
+  T039 pruebas con nombre de requisito para FR-001, FR-006, FR-007, SC-001, SC-002, SC-003 y SC-004
+  No renumeres las tareas existentes.
+
+Al terminar, no ejecutes pruebas. Muéstrame:
+1. La lista de archivos modificados.
+2. El texto final de FR-007, FR-009, FR-010, FR-014, FR-018, SC-001 y SC-002.
+3. Cualquier punto del spec que haya quedado contradictorio con estos cambios.
+```
+
+**Para qué:** Corregir spec, plan, tasks, research y data-model de 003 antes del código.
+
+**Resultado / qué se corrigió a mano:** Revisé con git diff que solo cambiaron los 5 archivos de specs/003-resolubilidad; commit `6b60532`.
+
+### 2026-11-14 · Jeferson · Codex en VS Code (modelo GPT-6.1 Sol, intensidad Medium)
+
+**Prompt:**
+
+```text
+Soy Jeferson, responsable de 003-resolubilidad. Lee AGENTS.md y .specify/memory/constitution.md. La spec ya está corregida y confirmada en Git; ahora implementa T037, T038 y T039 de specs/003-resolubilidad/tasks.md, ajustando el código a spec.md (FR-007, FR-010, FR-012, FR-014, FR-018, SC-001 a SC-004).
+
+Archivos que puedes modificar: modelo/juego/resolubilidad.py, controlador/aplicacion.py, bench/bench_resolubilidad.py, tests/test_resolubilidad.py, tests/test_resolubilidad_unitaria.py, tests/test_resolubilidad_integracion.py, tests/test_bench_resolubilidad.py, y specs/003-resolubilidad/tasks.md (solo para marcar T037-T039 con evidencia). Si necesitas tocar otro archivo, detente y pregúntame. No hagas commits, push, merge, reset ni checkout. No instales nada. Usa venv\Scripts\python.exe. Respeta la constitución: sin dict/set como índice o caché, sin heapq, bisect, collections, sorted() ni list.sort().
+
+T037 (FR-014, FR-018): todo NO RESOLUBLE lleva MOTIVO con el primer motivo aplicable y su texto exacto:
+ a) "no existe puerta hacia sala_salida que pida llave_salida"
+ b) "llave_salida no puede obtenerse"
+ c) "ninguna puerta hacia sala_salida que pide llave_salida es alcanzable"
+Usa datos que ya calcula el recorrido; no hagas un segundo recorrido (SC-003). Cambia test_FR011_no_basta_otra_entrada_a_la_salida para que espere el motivo c). En las pruebas que comparan el reporte exacto de un NO RESOLUBLE, agrega solo la línea MOTIVO esperada, sin cambiar lo demás.
+
+T038 (FR-010, FR-012): la verificación ya no recibe ni usa fichas del catálogo. Quita el parámetro de catálogo de verificar_resolubilidad y de los índices; una llave abre por su id o por el campo abre de su registro de /llaves. Ajusta la llamada en controlador/aplicacion.py y en el bench. Reescribe test_FR012_abre_solo_se_lee_de_fichas_locales_sin_pedir_catalogo para comprobar lo contrario: con o sin la ficha guardada en disco, el resultado es el mismo, sin pedir catálogo. Ajusta test_FR010_coincidencia_por_abre_en_ubicacion_o_catalogo_en_memoria y test_FR010_alias_de_ubicacion_y_catalogo_y_llave_portada para que solo prueben el abre del registro de /llaves, y renómbralos si su nombre menciona el catálogo.
+
+T039: agrega pruebas cuyo nombre empiece con el requisito, siguiendo el estilo del archivo donde las pongas:
+ - test_FR001_...: /llaves devuelve id, sala y enemigo opcional y se interpreta así.
+ - test_FR006_...: --offline da el mismo esqueleto, costos y llaves que en línea con los datos guardados.
+ - test_FR007_...: costo ausente es 100; costo 0, negativo, decimal o texto se rechaza con error.
+ - test_SC001_...: la cuadrícula sintética de 1000 salas del bench se verifica en menos de 200 ms.
+ - test_SC002_...: sin medir tiempo; al duplicar salas y llaves, la cantidad de salidas examinadas crece como máximo unas 2.5 veces (cuenta operaciones con patch o un contador, no cambies el algoritmo para eso).
+ - test_SC003_...: el reporte de un NO RESOLUBLE sale de un solo recorrido (el recorrido se ejecuta una vez).
+ - test_SC004_...: dos verificaciones de la misma cripta con ciclo dan exactamente el mismo texto de CICLOS DETECTADOS.
+Ninguna prueba usa la red real.
+
+Al final ejecuta, uno por uno:
+venv\Scripts\python.exe -m tests.test_resolubilidad
+venv\Scripts\python.exe -m tests.test_resolubilidad_unitaria
+venv\Scripts\python.exe -m tests.test_resolubilidad_integracion
+venv\Scripts\python.exe -m tests.test_bench_resolubilidad
+venv\Scripts\python.exe -m tests.test_generador_criptas
+venv\Scripts\python.exe -m tests.test_historia_interfaces
+Marca T037-T039 como [X] solo si pasan. Muéstrame: archivos modificados, resumen de cada cambio, los nombres de las pruebas nuevas o renombradas y los resultados reales de cada comando.
+```
+
+**Para qué:** Implementar T037-T039: MOTIVO obligatorio, verificación sin catálogo y pruebas con nombre de requisito.
+
+**Resultado / qué se corrigió a mano:** 65 pruebas de los 6 módulos indicados aprobadas; corrí yo los 42 módulos del proyecto: 0 con fallos. SC-001 14.7 ms, SC-002 ×2.0. Commit `dd98792`.
+
+### 2026-11-14 · Jeferson · Codex en VS Code (modelo GPT-6.1 Sol, intensidad Medium)
+
+**Prompt:**
+
+```text
+Soy Jeferson, responsable de 003-resolubilidad. Lee AGENTS.md. Tarea solo de documentación: actualizar mis secciones de DECISIONES.md (8b, 8c y 8d) y una línea del README.md según los commits ya confirmados 6b60532 (corrección de la spec) y dd98792 (corrección del código, fix(003)).
+
+Solo puedes modificar DECISIONES.md (únicamente las secciones 8b, 8c y 8d) y README.md (únicamente la línea indicada). No toques secciones de Mariano, Kim ni Axel. No hagas commits, push, merge, reset ni checkout. No instales nada. No ejecutes pruebas.
+
+Cambios en 8c:
+1. 8c.2 (tabla de alternativas): agrega la fila "Coincidencia de llaves con puertas": alternativas = usar también el abre de la ficha del catálogo local · pedir siempre las fichas de las llaves (gasta presupuesto) · solo el id o el abre del registro de /llaves. Elegida: la última, porque con la primera la misma cripta daba NO RESOLUBLE o RESOLUBLE según el caché de cada equipo (lo detectó la revisión cruzada de Axel), y la segunda gasta solicitudes y se aleja de §3.5, que pide usar solo el esqueleto y la ubicación de las llaves.
+2. 8c.3: corrige la firma (ya no tiene catalogo_llaves) y el punto de las listas de espera (se liberan por el id y por el abre del registro de /llaves, nunca por fichas). Reemplaza el punto del MOTIVO por: todo NO RESOLUBLE lleva MOTIVO con el primero que aplique de "no existe puerta hacia sala_salida que pida llave_salida", "llave_salida no puede obtenerse" y "ninguna puerta hacia sala_salida que pide llave_salida es alcanzable".
+3. 8c.4: actualiza las cantidades de pruebas: test_resolubilidad 7, test_resolubilidad_unitaria 17, test_resolubilidad_integracion 14, test_bench_resolubilidad 9. Menciona que ahora hay pruebas con nombre de requisito para FR-001, FR-006, FR-007 y SC-001 a SC-004.
+4. 8c.5: agrega al final una línea con lo que midieron las pruebas nuevas: SC-001 provisional en la cuadrícula sintética de 1000 salas, semilla 7, mediana de 7 verificaciones completas: 14.7 ms; SC-002: al duplicar salas y llaves, las salidas examinadas pasaron de 1406 a 2818 (×2.0).
+5. 8c.6: reemplaza el punto "abre depende de que la ficha esté en el catálogo local" por: si una llave abre una puerta solo por el abre de su ficha de catálogo, la verificación la reporta NO RESOLUBLE; en ese caso se juega con --forzar.
+6. "Plan frente a lo final": agrega dos puntos. (5) El plan liberaba también por el abre de la ficha local; tras la revisión cruzada se quitó por determinismo, corrigiendo primero spec, plan, research y data-model (6b60532) y después el código (dd98792). (6) El reporte sin puerta alcanzable hacia la salida salía sin explicación; ahora MOTIVO es obligatorio en todo NO RESOLUBLE.
+7. Línea de commits: agrega 6b60532 (corrección de la spec) y dd98792 (corrección del código).
+
+Cambio en 8b.6: si hay un punto sobre abre y el catálogo local, ajústalo igual que en 8c.6.
+
+Cambio en 8d.2: debajo de la tabla de recorrido, agrega que esas solicitudes incluyen también las del catálogo, así que la revisión de §5.6 cubre las decisiones de las secciones 5 y 6.
+
+README.md: en la sección "Desarrollo dirigido por especificaciones (spec-kit)", la línea que dice "y el agente **Google Antigravity** (`agy`)." debe decir que se usó Google Antigravity (`agy`) y, desde el 2026-11-08, OpenAI Codex.
+
+Al terminar muéstrame el diff completo de DECISIONES.md y README.md.
+```
+
+**Para qué:** Documentar el cambio de diseño con su antes y después (§7.1) y agregar Codex al README.
+
+**Resultado / qué se corrigió a mano:** Revisé el diff (solo 8b, 8c, 8d y una línea del README); commit `5883e69`.
+
+### 2026-11-14 · Jeferson · Claude (app de Claude, claude-opus-5-5)
+
+**Prompt:**
+
+```text
+Por favor revisa todo
+```
+
+**Para qué:** Revisión de toda la documentación del grupo contra §2.5, §2.6, §5.6, §7.1 y §7.2.
+
+**Resultado / qué se corrigió a mano:** Lista de pendientes por integrante; resolución de los conflictos del merge con la documentación de Kim (`1bda622`).
+
 
 ---
 
