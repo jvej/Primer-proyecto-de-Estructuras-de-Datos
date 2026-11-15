@@ -55,7 +55,7 @@ python --version
 
 ## Desarrollo dirigido por especificaciones (spec-kit)
 
-La segunda parte se desarrolla con [GitHub spec-kit](https://github.com/github/spec-kit), versión fija **v1.0.10**, y el agente **Google Antigravity** (`agy`).
+La segunda parte se desarrolla con [GitHub spec-kit](https://github.com/github/spec-kit), versión fija **v1.0.10**; se usó **Google Antigravity** (`agy`) y, desde el 2026-11-08, **OpenAI Codex**.
 
 Instalar spec-kit (cada integrante, la misma versión):
 ```

@@ -584,7 +584,7 @@ Pruebas: `test_esqueleto` (4, FR-007: costo por defecto, costos válidos, rechaz
 
 ### 8b.6 Límites conocidos
 
-- `abre` solo se respeta si la ficha de la llave ya está en el catálogo local; no se gastan solicitudes para buscarla.
+- Si una llave abre una puerta necesaria para resolver la cripta solo por el `abre` de su ficha de catálogo, la verificación la reporta `NO RESOLUBLE`; en ese caso se juega con `--forzar`.
 - El generador cierra con `cierre_automatico` solo las puertas de la cadena de llaves; no genera trampas.
 - Las mediciones son con sesión simulada y criptas sintéticas, no con la cripta oficial.
 
@@ -608,17 +608,18 @@ Antes de iniciar una partida hay que decidir si la cripta se puede ganar: obtene
 | Orden de las llaves | Orden en que se descubren · Por distancia · Por etapas y, dentro de cada etapa, por id de texto | **Por etapas.** La etapa 0 es todo lo alcanzable sin llaves; en una etapa solo se usan llaves de etapas anteriores. El resultado no depende del orden interno del recorrido ni del orden en que llegan los datos. |
 | Índice id → número | `dict` (prohibido) · Tabla hash propia · Lista ordenada con búsqueda binaria propia | **Lista ordenada + búsqueda binaria** (el equipo acordó no usar tablas hash). |
 | Ordenamiento para los índices | `ordenar()` (elige inserción o mergesort) · `ordenar_merge()` | **`ordenar_merge()`**, por la medición del punto 8c.5. |
+| Coincidencia de llaves con puertas | Usar también el `abre` de la ficha del catálogo local · Pedir siempre las fichas de las llaves (gasta presupuesto) · Solo el `id` o el `abre` del registro de `/llaves` | **Solo el `id` o el `abre` del registro de `/llaves`.** Con la primera alternativa, la misma cripta daba `NO RESOLUBLE` o `RESOLUBLE` según el caché de cada equipo (lo detectó la revisión cruzada de Axel); la segunda gasta solicitudes y se aleja de §3.5, que pide usar solo el esqueleto y la ubicación de las llaves. |
 | Ciclos | DFS desde cada llave · Componentes fuertemente conexas (Kosaraju) y luego un DFS para el testigo | **Kosaraju**, ambos recorridos iterativos: elige siempre el ciclo que contiene el menor id, en tiempo lineal. |
 | Reporte de no resoluble | Segundo recorrido · Lo que quedó en las listas de espera más una continuación desde la frontera | **Mismo recorrido**: la frontera son las listas de espera que quedaron; para los ciclos se continúa desde la frontera etiquetando cada sala con la llave de la puerta cerrada más cercana (X → Y si X está detrás de una puerta que pide Y). |
 
 ### 8c.3 Decisión
 
-`modelo/juego/resolubilidad.py` es puro (sin red, archivos, controlador ni vista): `verificar_resolubilidad(esqueleto, ubicaciones, sala_inicial, sala_salida, llave_salida, catalogo_llaves=None)` devuelve `ResultadoResolubilidad` (`RESOLUBLE`, `NO RESOLUBLE` o `NO VERIFICADA`) con `formatear_reporte()` según la plantilla FR-018.
+`modelo/juego/resolubilidad.py` es puro (sin red, archivos, controlador ni vista): `verificar_resolubilidad(esqueleto, ubicaciones, sala_inicial, sala_salida, llave_salida)` devuelve `ResultadoResolubilidad` (`RESOLUBLE`, `NO RESOLUBLE` o `NO VERIFICADA`) con `formatear_reporte()` según la plantilla FR-018.
 
 - Recorrido por etapas con la `ColaFIFO` propia, salidas en orden N, S, E, O.
-- Listas de espera indexadas por lo que pide la puerta; al activar una llave se liberan las de su id y, si hay ficha local, las de su `abre`.
+- Listas de espera indexadas por lo que pide la puerta; al activar una llave se liberan las de su `id` y las de su `abre` del registro de `/llaves`, si lo contiene, nunca por fichas del catálogo.
 - Puerta cerrada sin llave: infranqueable; si es adyacente a la región alcanzable, aparece en la frontera "sin llave asociada".
-- Si no existe ninguna puerta hacia `sala_salida` que pida `llave_salida`: `NO RESOLUBLE` con `MOTIVO`.
+- Todo `NO RESOLUBLE` lleva `MOTIVO` con el primero que aplique, en este orden: "no existe puerta hacia sala_salida que pida llave_salida", "llave_salida no puede obtenerse" y "ninguna puerta hacia sala_salida que pide llave_salida es alcanzable".
 - Integración (`controlador/aplicacion.py`, `main.py`): solo en partidas nuevas (no en replay, reconstrucción ni carga de guardado) se obtienen las llaves (copia local primero), se verifica y se guarda `app.reporte_resolubilidad`. Si no es `RESOLUBLE` y no hay `--forzar`, se lanza `ErrorNoResoluble` (subclase de `ErrorCripta`) y no se crea la partida; el controlador muestra el reporte y vuelve a la selección. Sin red o sin presupuesto y sin copia local: `NO VERIFICADA`, misma regla. `--verificar CRIPTA` no crea vista, imprime solo el reporte y sale con 0 / 1 / 2.
 
 ### 8c.4 Análisis de complejidad
@@ -633,6 +634,8 @@ S = salas, E = salidas, L = llaves y cerraduras distintas.
 | Frontera, ubicaciones y continuación para ciclos | O(S + E + L) |
 | Ciclos (Kosaraju + testigo) | O(L + aristas del grafo de dependencias), con aristas ≤ L |
 | Alternativa descartada (recorrido repetido) | O(L · (S + E)) |
+
+Pruebas: `test_resolubilidad` (7 de aceptación: ciclo de la llave de salida, llave en la `suelta` de un errante, mismo orden en ejecuciones repetidas, no inicia sin `--forzar`, `/llaves` en el presupuesto, códigos 0/1/2 de `--verificar`, plantilla exacta), `test_resolubilidad_unitaria` (17: ciclo de tres llaves, coincidencia por `abre` del registro de `/llaves`, independencia del catálogo, `MOTIVO` obligatorio, etapa 0 sin llaves de la misma etapa, entre otras), `test_resolubilidad_integracion` (14: replay y carga no verifican, contingencia de red y presupuesto, `--forzar`, offline real sin vista), `test_bench_resolubilidad` (9, incluida la igualdad de resultados antes y después del cambio de ordenamiento). Ahora hay pruebas con nombre de requisito para FR-001, FR-006, FR-007 y SC-001 a SC-004.
 
 ### 8c.5 Evidencia empírica
 
@@ -665,14 +668,14 @@ Con 200 llaves el tiempo se multiplicó por 12 al duplicar el tamaño. Causa: `o
 - Con 100 llaves, `ordenar_merge` es algo más lento que la inserción (2.66 frente a 1.58 ms): es el costo fijo de mergesort en listas chicas, que se acepta a cambio de no caer nunca en O(n²).
 - **SC-001:** 13.3 ms en la cuadrícula de 1000 salas, muy por debajo de 200 ms (referencia sintética).
 
-Pruebas: `test_resolubilidad` (7 de aceptación: ciclo de la llave de salida, llave en la `suelta` de un errante, mismo orden en ejecuciones repetidas, no inicia sin `--forzar`, `/llaves` en el presupuesto, códigos 0/1/2 de `--verificar`, plantilla exacta), `test_resolubilidad_unitaria` (11: ciclo de tres llaves, coincidencia por `abre`, `MOTIVO` sin puerta a la salida, etapa 0 sin llaves de la misma etapa, entre otras), `test_resolubilidad_integracion` (12: replay y carga no verifican, contingencia de red y presupuesto, `--forzar`, offline real sin vista), `test_bench_resolubilidad` (7, incluida la igualdad de resultados antes y después del cambio de ordenamiento).
+Pruebas nuevas: **SC-001 provisional**, en sustitución de la cripta publicada, en la cuadrícula sintética de 1000 salas, semilla 7, mediana de 7 verificaciones completas: **14.7 ms**; **SC-002**: al duplicar salas y llaves, las salidas examinadas pasaron de **1406 a 2818 (×2.0)**.
 
 ### 8c.6 Límites conocidos
 
 - **SC-001 no está validado con la cripta oficial publicada**; los números son de criptas sintéticas.
 - La preparación agrega un factor logarítmico (búsquedas binarias y ordenamiento); el recorrido en sí es lineal. Con tamaños chicos la aceleración es modesta porque ambas versiones incluyen esa preparación.
 - Se reporta un solo ciclo (el que contiene el menor id), no todos.
-- `abre` depende de que la ficha esté en el catálogo local (ver 8b.6).
+- Si una llave abre una puerta necesaria para resolver la cripta solo por el `abre` de su ficha de catálogo, la verificación la reporta `NO RESOLUBLE`; en ese caso se juega con `--forzar`.
 - Lección para el equipo: `ordenar()` puede caer en O(n²) con listas formadas por tramos ordenados concatenados; donde eso pueda ocurrir, usar `ordenar_merge()` o medir.
 
 **Plan frente a lo final.**
@@ -680,8 +683,10 @@ Pruebas: `test_resolubilidad` (7 de aceptación: ciclo de la llave de salida, ll
 2. El plan proponía un DFS de tres colores; la versión final agrega Kosaraju para elegir siempre el mismo ciclo sin enumerarlos todos.
 3. La primera versión del plan dejaba usar en una etapa las llaves encontradas en esa misma etapa, lo que hacía depender el orden del recorrido; se corrigió en el plan antes de programar.
 4. El reporte se guarda en `app.reporte_resolubilidad` y lo muestra la vista activa; el controlador no imprime (MVC).
+5. El plan liberaba también por el `abre` de la ficha local; tras la revisión cruzada se quitó por determinismo, corrigiendo primero `spec.md`, `plan.md`, `research.md` y `data-model.md` (`6b60532`) y después el código (`dd98792`).
+6. El reporte sin puerta alcanzable hacia la salida salía sin explicación; ahora `MOTIVO` es obligatorio en todo `NO RESOLUBLE`.
 
-Commits: `ff0ace9` (spec), `8ddfd70` y `9dab2b6` (plan, tareas y análisis), `809a7b6` (pruebas de aceptación), `b3a2a01` (algoritmo), `dc5f4e8` (integración, `--verificar`, `--forzar`), `809f398` (bench), `d5bc68a` (corrección del ordenamiento).
+Commits: `ff0ace9` (spec), `8ddfd70` y `9dab2b6` (plan, tareas y análisis), `809a7b6` (pruebas de aceptación), `b3a2a01` (algoritmo), `dc5f4e8` (integración, `--verificar`, `--forzar`), `809f398` (bench), `d5bc68a` (corrección del ordenamiento), `6b60532` (corrección de la spec), `dd98792` (corrección del código).
 
 ---
 
@@ -700,6 +705,8 @@ Commits: `ff0ace9` (spec), `8ddfd70` y `9dab2b6` (plan, tareas y análisis), `80
 | 20 | **5** (2) | 33 (20) |
 | 60 | **9** (6) | 73 (60) |
 | 200 | **23** (20) | 213 (200) |
+
+Estas solicitudes incluyen también las del catálogo, así que la revisión de §5.6 cubre las decisiones de las secciones 5 y 6.
 
 Iguales a la Parte I (sección 5.5): el costo de las salidas no cambia cuántas páginas ni cuántos lotes se piden.
 
