@@ -2513,9 +2513,10 @@ Claudio se supone que ya Mariano, Axel y Kim terminaron todas sus partes y se su
 
 ### 8.1 Alcance y fuentes
 
-Registro retrospectivo de 002 y su integración en 617f666. Herramienta
-verificable en esta conversación: Codex. No se asignan modelo, intensidad o
-fecha por consulta sin fuente original. La sección 2 conserva íntegra su
+Registro de 002 y su integración en 617f666. Herramientas con evidencia:
+Codex en la conversación de trabajo y Antigravity en las bases históricas
+recuperadas. Se distinguen resúmenes y transcripciones; no se asignan modelo,
+intensidad o fecha por consulta sin fuente original. La sección 2 conserva íntegra su
 bitácora de Parte I y sus declaraciones dentro del período allí indicado;
 no constituye una declaración de ausencia de uso de Codex en Parte II.
 
@@ -2529,7 +2530,9 @@ las recuperaciones pendientes identificadas en 8.4.
 ### 8.2 Extractos auténticos recuperables
 
 Son extractos literales de mensajes de usuario, no exportaciones completas.
-No se recuperaron fechas individuales. El contexto resumido figura en 8.3.
+Para estos extractos previos no se recuperaron fechas individuales. Los nuevos
+registros fechados y completos se encuentran en 8.4; el contexto resumido figura
+en 8.3.
 
 Solicitud de conocimiento:
 
@@ -2572,55 +2575,502 @@ Las celdas siguientes son resúmenes de consultas y resultados, NO prompts liter
 | Integración y fixtures autorizados | 617f666; resultados previos 42/42 módulos y 229/229 unittest; validación posterior 15/15 módulos. No son ejecuciones nuevas de esta edición. |
 | Consolidación documental | Solicitud actual: conservar las incorporaciones de Axel/Jeferson y editar solo estos dos documentos, sin código ni commits. |
 
-### 8.4 Spec-kit: búsqueda en sesiones y evidencia pendiente
+### 8.4 Invocaciones originales y revisiones recuperadas de Antigravity
 
-Se inspeccionó el directorio local de sesiones de Codex indicado por Kimberly.
-Contiene un archivo JSONL disponible:
-`rollout-2026-11-08T23-28-16-01a1bec7-5367-7dc1-ac66-cce25984377c.jsonl`.
-La fecha del nombre no acredita la fecha de cada consulta. Se leyeron mensajes
-originales de usuario (response_item y event_msg), historial de reemplazo y
-mensajes retenidos de los tres bloques compactados; se excluyeron respuestas,
-código de herramientas y contenido de las skills como supuestos prompts.
+Se recuperaron **cinco invocaciones explícitas, correspondientes a cuatro
+comandos distintos**: specify, clarify, plan y tasks. El segundo tasks es un
+mensaje independiente con texto idéntico; se transcribe y contabiliza por separado.
 
-Resultado: **cero invocaciones históricas recuperadas con texto propio** para
-las seis fases de 002. Las menciones dentro del pedido de recuperación son
-criterios de búsqueda, no invocaciones anteriores. Se buscaron variantes
-`$speckit-*`, `/speckit-*` y `/speckit.*`.
+Fuentes: las dos bases SQLite de conversaciones ubicadas en
+`%USERPROFILE%\.gemini\antigravity\conversations\`. El índice
+`conversation_summaries.db` permitió localizarlas; los textos y timestamps se
+contrastaron con los mensajes originales `steps`, tipo 14. Las bases se abrieron
+con `mode=ro&immutable=1`, sin editar historiales. La fecha del archivo de sesión
+de Codex no se utilizó para fechar estas consultas de Antigravity.
 
-| Invocación histórica de Kimberly | Estado de recuperación | Evidencia disponible |
-|---|---|---|
-| speckit-specify | Pendiente de recuperar mensaje completo | Artefacto en 14602fb; no sustituye el prompt. |
-| speckit-clarify | Pendiente de recuperar mensaje completo | Aclaraciones en spec.md; sin mensaje original localizado. |
-| speckit-plan | Pendiente de recuperar mensaje completo | Plan y tareas en db75930; sin transcripción original. |
-| speckit-tasks | Pendiente de recuperar mensaje completo | tasks.md existente; no prueba el texto de la invocación. |
-| speckit-analyze | Pendiente de recuperar mensaje histórico completo | Las skills adjuntas ahora no prueban un análisis histórico de 002. |
-| speckit-implement | Pendiente de recuperar mensaje histórico completo | Commits y pruebas acreditan resultados, no el prompt literal. |
+Los bloques siguientes se extrajeron completos del campo de texto del mensaje.
+Solo se representan los saltos CRLF originales como LF, coherentes con este
+Markdown; no se recortan ni reescriben palabras, signos o párrafos.
+Se normalizaron los espacios finales de Markdown en una línea vacía, sin
+alterar el contenido textual recuperado de los prompts. No se atribuye
+un modelo concreto a partir de identificadores encontrados en otros metadatos.
+Las solicitudes de corrección al agente no demuestran edición manual de código
+por la estudiante.
 
-**Adjuntos actuales identificados, separados del historial de implementación:**
-los seis contenidos de skills fueron adjuntados como mensajes de usuario en
-`2026-11-15T05:31:28.031Z` (analyze, clarify), `.032Z` (implement, plan,
-specify y tasks), equivalentes al 14 de noviembre a las 23:31:28 en Costa Rica.
-Son plantillas de instrucciones; no se transcriben aquí como consultas redactadas
-por Kimberly ni se cuentan entre las seis invocaciones históricas.
-El contexto de turno disponible identifica gpt-6.1-sol y el metadato de sesión
-identifica Codex en VS Code, CLI 0.164.0-alpha.11.1, para esa actividad actual;
-esos datos no se extrapolan a las fases anteriores. El propósito del pedido
-actual es recuperar trazabilidad y cerrar documentación, no rehacer la capacidad.
-No hay evidencia suficiente para atribuir correcciones manuales en esas fases.
+#### 8.4.1 /speckit-specify
 
-El historial conserva 14602fb y db75930 como evidencia de especificación y
-planificación anteriores a implementaciones posteriores. Para completar las
-transcripciones se requieren las exportaciones originales o sesiones faltantes;
-no se deducen fechas de consulta a partir de los commits ni se reconstruyen
-prompts por similitud con artefactos. No se incorporaron credenciales ni
-contenido de proyectos ajenos.
+**Tipo:** Invocación explícita de spec-kit.
+
+**Fecha y hora:** 08/11/2026, 13:25:50 (Costa Rica, UTC−06:00); 2026-11-08 19:25:50 UTC.
+
+**Herramienta:** Antigravity. **Modelo:** no pudo verificarse por invocación.
+
+**Fuente:** `b6447e31-8e56-423e-abd9-4b5b066a467d.db`, tabla `steps`, `idx=0`.
+
+**Propósito:** Definir la funcionalidad 002: conocimiento, antorcha, IR_A, rendimiento y aceptación.
+
+```text
+/speckit-specify Niebla de guerra, mapa conocido y viaje automático "ir a" para CRIPTA. Describe solo qué pasa en el juego, sin nombrar estructuras de datos, clases ni módulos.
+
+Conocimiento del jugador: cada sala está en uno de tres estados. Explorada: el jugador entró al menos una vez (la sala inicial lo está desde el instante 0); conoce su nombre, sus salidas, el costo de cada salida y el estado de sus puertas según la última vez que las observó. Avistada: no está explorada, pero es destino de una salida de una sala explorada; el jugador solo sabe que existe. Desconocida: ninguna de las anteriores.
+
+Memoria de puertas: el jugador observa una puerta cuando está en cualquiera de las dos salas que conecta. El mapa guarda el estado de la última observación, aunque la puerta cambie después (una puerta con cierre automático puede figurar abierta y estar cerrada).
+
+Antorcha: con la antorcha encendida, al entrar a una sala quedan exploradas todas sus vecinas por cualquier salida, abierta o cerrada. Se revela nombre y salidas, no el contenido, y no se activan enemigos ni trampas de esas vecinas.
+
+Separación: el programa sigue descargando el esqueleto completo y la precarga puede usarlo, pero todo lo que muestra la interfaz y todo lo que usa "ir a" sale solo de lo que el jugador conoce. El conocimiento es parte del estado del juego: se guarda en el archivo de partida, se revierte con el pergamino y forma parte de la línea de tiempo. La interfaz ofrece un comando para ver el mapa conocido: salas exploradas, sus salidas y las salas avistadas.
+
+"ir a <sala>": lleva al jugador a una sala explorada con una secuencia de movimientos ordinarios. La ruta usa solo salas exploradas y salidas que el mapa recuerda abiertas, minimiza la suma de costos y, si hay empate, el primer paso va hacia la vecina de menor id. Cada paso es una acción completa del jugador y entre pasos ocurren los eventos del reloj. La ruta se recalcula antes de cada paso con el conocimiento vigente. El viaje se detiene al llegar, al entrar a una sala con enemigos (activos o dormidos), al recibir daño o cuando ya no hay ruta conocida, y la interfaz dice por qué se detuvo. Nunca abre puertas, aunque el jugador tenga la llave. En partida.log cada paso queda como un movimiento individual y la orden "ir a" queda además como comentario. El pergamino revierte solo el último paso.
+
+Rendimiento: un paso de "ir a" se calcula en menos de 5 ms con el mapa conocido completo de la cripta de referencia. Consultar el estado de una sala o de una puerta recordada es muy frecuente y debe ser barato. Explorar cuesta proporcional a las salas reveladas, no al tamaño del mapa conocido. Registrar e invertir cambios del mapa conocido es barato.
+
+Escenarios de aceptación obligatorios:
+1. "ir a" hacia una sala no explorada se rechaza y no consume tiempo.
+2. El mapa recuerda abierta una puerta que está cerrada: al observarla se actualiza y se recalcula; si no queda ruta, el viaje se detiene sin consumir tiempo adicional.
+3. "ir a" entra a una sala con enemigos dormidos: se activan y el viaje se detiene.
+4. Con la antorcha encendida, entrar a una sala explora sus vecinas sin activar enemigos ni trampas.
+5. Un pergamino revierte una entrada con antorcha: las salas exploradas por la antorcha vuelven a su estado anterior.
+6. Un pergamino durante un viaje revierte solo el último paso y el viaje no continúa.
+7. Cargar un archivo de partida de la primera parte reporta la incompatibilidad de formato o lo migra de forma explícita, nunca en silencio.
+
+Numera los requisitos funcionales como FR-001, FR-002... y los de rendimiento como SC-001, SC-002...
+```
+
+**Seguimiento documentado:** En el paso 38 se solicita corregir cinco aspectos de spec.md; el texto íntegro figura en 8.4.6. Es una corrección solicitada al agente, no evidencia de edición manual.
+
+#### 8.4.2 /speckit-clarify
+
+**Tipo:** Invocación explícita de spec-kit.
+
+**Fecha y hora:** 08/11/2026, 14:20:57 (Costa Rica, UTC−06:00); 2026-11-08 20:20:57 UTC.
+
+**Herramienta:** Antigravity. **Modelo:** no pudo verificarse por invocación.
+
+**Fuente:** `b6447e31-8e56-423e-abd9-4b5b066a467d.db`, tabla `steps`, `idx=64`.
+
+**Propósito:** Aclarar privacidad, observación de puertas, interrupciones, avisos y compatibilidad de guardado.
+
+```text
+/speckit-clarify Enfócate en estos puntos de la especificación 002-niebla-ir-a: qué se muestra de una sala avistada (¿su id o nada más?); si observar una puerta ocurre en cada acción desde cualquiera de sus dos salas o solo al entrar a una sala; qué pasa si el jugador pide "ir a" la sala donde ya está; si el daño por veneno detiene el viaje; si el viaje se detiene al entrar a una sala cuyos enemigos ya murieron; cómo se muestra el motivo de detención; y qué se hace con un archivo de la primera parte (reportar incompatibilidad o migrar).
+```
+
+**Seguimiento documentado:** Existen respuestas posteriores de usuario en los pasos 70, 82, 88, 94 y 100 (b, a, a, a, a). No se interpretan esas letras sin transcribir y contrastar las preguntas correspondientes; no acreditan ediciones manuales.
+
+#### 8.4.3 /speckit-plan
+
+**Tipo:** Invocación explícita de spec-kit.
+
+**Fecha y hora:** 08/11/2026, 14:41:19 (Costa Rica, UTC−06:00); 2026-11-08 20:41:19 UTC.
+
+**Herramienta:** Antigravity. **Modelo:** no pudo verificarse por invocación.
+
+**Fuente:** `19467a92-7010-4a58-be4e-985ce9acf9e4.db`, tabla `steps`, `idx=0`.
+
+**Propósito:** Evaluar el diseño sobre el código existente, definir C3, memoria, navegación, vistas, v4 y benchmarks.
+
+```text
+/speckit-plan Implementación sobre el código existente: partida.py, sala.py, efectos.py (antorcha), controlador/orden.py, controlador/controlador.py, vista_consola.py, vista_pygame.py y modelo/datos/guardado_binario.py. Sin dict, set, heapq, bisect ni collections, y sin tablas hash.
+
+Propuesta a evaluar:
+- Conocimiento en arreglos indexados por Sala.indice (estado de la sala y estado recordado de cada puerta), consultas O(1). Todo cambio pasa por partida.cambiar para que el pergamino lo revierta y la línea de tiempo lo registre.
+- Búsqueda de rutas compartida en modelo/estructuras/ (contrato C3, también la usa el cazador de Mariano): MonticuloMin propio con eliminación perezosa y entradas (distancia, id_sala), y Dijkstra acotado con filtro de salidas, límite de costo, desempate por menor id y arreglos con marca de búsqueda para no reiniciarlos.
+- "ir a" usa esa búsqueda con un filtro según el conocimiento, buscando desde el destino para aplicar el desempate en las vecinas del jugador. Justifica si conviene compartir la implementación o separarla.
+- El controlador ejecuta IR_A como pasos individuales; cada paso se anota en el log y la orden queda como comentario.
+- La vista no filtra información: revisar _dibujar_puerta y cualquier texto con ids o nombres de salas no exploradas.
+- Guardado versión 4 con el conocimiento; un archivo de versión 3 se reporta como incompatible.
+- Plan de mediciones en bench/bench_mapa_conocido.py y repetición de bench_cache, bench_lista_ordenada, bench_ordenamiento y bench_guardado_binario.
+Incluye complejidad, módulos afectados y riesgos.
+
+Ya existen en el código el método único de puertas (contrato C2) y Sala.indice; úsalos. Alinea C3 con specs/001-terreno-cazador/plan.md, que espera modelo/estructuras/monticulo_min.py y una función dijkstra_acotado con filtro_salida(salida) -> bool, límite de costo y arreglos con marca de búsqueda. Define en el plan la firma exacta (origen, filtro, límite, arreglos que recibe, qué devuelve) y quién crea y administra dist, marca y el contador de búsqueda. Evalúa esta propuesta: cada llamador (cazador de Mariano, ir a) crea su propio juego de arreglos y se lo pasa a la función, que no guarda estado; justifica por qué evita que dos búsquedas del mismo ciclo se pisen. Incluye un ejemplo mínimo de uso para cada llamador.
+```
+
+**Seguimiento documentado:** Los pasos 117 y 153 piden revisión; el 155 solicita seis correcciones documentales y el 199 una verificación final. Se transcriben más abajo.
+
+#### 8.4.4 /speckit-tasks — primera invocación
+
+**Tipo:** Invocación explícita de spec-kit.
+
+**Fecha y hora:** 08/11/2026, 15:54:20 (Costa Rica, UTC−06:00); 2026-11-08 21:54:20 UTC.
+
+**Herramienta:** Antigravity. **Modelo:** no pudo verificarse por invocación.
+
+**Fuente:** `19467a92-7010-4a58-be4e-985ce9acf9e4.db`, tabla `steps`, `idx=209`.
+
+**Propósito:** Generar tareas verificables con dependencias y trazabilidad FR/SC.
+
+```text
+/speckit-tasks Genera `tasks.md` para la capacidad `002-niebla-ir-a`, utilizando los artefactos ya validados de `specs/002-niebla-ir-a/`.
+
+Requisitos:
+- Cada tarea debe estar vinculada a un requisito funcional (FR) o criterio de éxito (SC).
+- Respeta el orden obligatorio de dependencias.
+- Prioriza primero `ConocimientoMapa` y su integración reversible con `Partida.cambiar`.
+- Luego implementa `MonticuloMin` y `dijkstra_acotado` conforme al contrato C3 compartido con Mariano.
+- Después aborda IR_A, vistas, guardado binario v4 y benchmarks.
+- Incluye pruebas verificables para cada componente.
+- No implementes código Python todavía.
+- Edita únicamente archivos dentro de `specs/002-niebla-ir-a/`.
+- No ejecutes `git add`, `git commit` ni `git push`.
+
+Al finalizar, muestra el contenido de `tasks.md` y el resultado de `git status --short`.
+```
+
+**Seguimiento documentado:** El mensaje se reenvía en el paso 234; los pasos 255, 287 y 300 solicitan auditoría y corrección de hallazgos.
+
+#### 8.4.5 /speckit-tasks — segunda invocación
+
+**Tipo:** Invocación explícita de spec-kit, independiente y repetida.
+
+**Fecha y hora:** 08/11/2026, 16:01:13 (Costa Rica, UTC−06:00); 2026-11-08 22:01:13 UTC.
+
+**Herramienta:** Antigravity. **Modelo:** no pudo verificarse por invocación.
+
+**Fuente:** `19467a92-7010-4a58-be4e-985ce9acf9e4.db`, tabla `steps`, `idx=234`.
+
+**Propósito:** Reenviar la solicitud de generación de tareas con el mismo texto.
+
+```text
+/speckit-tasks Genera `tasks.md` para la capacidad `002-niebla-ir-a`, utilizando los artefactos ya validados de `specs/002-niebla-ir-a/`.
+
+Requisitos:
+- Cada tarea debe estar vinculada a un requisito funcional (FR) o criterio de éxito (SC).
+- Respeta el orden obligatorio de dependencias.
+- Prioriza primero `ConocimientoMapa` y su integración reversible con `Partida.cambiar`.
+- Luego implementa `MonticuloMin` y `dijkstra_acotado` conforme al contrato C3 compartido con Mariano.
+- Después aborda IR_A, vistas, guardado binario v4 y benchmarks.
+- Incluye pruebas verificables para cada componente.
+- No implementes código Python todavía.
+- Edita únicamente archivos dentro de `specs/002-niebla-ir-a/`.
+- No ejecutes `git add`, `git commit` ni `git push`.
+
+Al finalizar, muestra el contenido de `tasks.md` y el resultado de `git status --short`.
+```
+
+**Seguimiento documentado:** La identidad textual se comprobó contra el paso 209; ambas fechas y ambos pasos se conservan. No se infiere la causa del reenvío.
+
+#### 8.4.6 Correcciones de spec.md
+
+**Tipo:** Corrección solicitada al agente.
+
+**Fecha y hora:** 08/11/2026, 14:15:58 (Costa Rica, UTC−06:00); 2026-11-08 20:15:58 UTC.
+
+**Herramienta:** Antigravity. **Modelo:** no pudo verificarse por invocación.
+
+**Fuente:** `b6447e31-8e56-423e-abd9-4b5b066a467d.db`, tabla `steps`, `idx=38`.
+
+**Propósito:** Corregir privacidad de avistadas, criterios de complejidad, caso de antorcha, compatibilidad y memoria de puerta.
+
+```text
+Corrige SOLO specs/002-niebla-ir-a/spec.md, sin tocar código ni otros archivos y sin commits:
+1. En el escenario 1 de la historia 1 y en FR-004, di que de una sala avistada el jugador solo sabe que existe una sala detrás de esa salida; no menciones el identificador (eso se decide en clarify).
+2. En SC-002 y SC-004 quita los números de milisegundos: que digan que la consulta del estado de una sala o puerta, y registrar e invertir un cambio del mapa, no dependen del tamaño del mapa conocido y se respaldan con --bench.
+3. Elimina el caso borde "Agotamiento de combustible de la antorcha en pleno viaje".
+4. Reemplaza la última suposición por: "Un archivo de la primera parte no contiene conocimiento del jugador; si se reporta incompatibilidad o se migra se decide en la aclaración."
+5. En la entidad "Memoria de puerta" deja solo el último estado observado, sin "la última vez que".
+```
+
+#### 8.4.7 Análisis de consistencia
+
+**Tipo:** Solicitud de revisión en lenguaje natural; no invocación explícita de analyze.
+
+**Fecha y hora:** 08/11/2026, 15:14:08 (Costa Rica, UTC−06:00); 2026-11-08 21:14:08 UTC.
+
+**Herramienta:** Antigravity. **Modelo:** no pudo verificarse por invocación.
+
+**Fuente:** `19467a92-7010-4a58-be4e-985ce9acf9e4.db`, tabla `steps`, `idx=117`.
+
+**Propósito:** Contrastar artefactos, constitución y contratos C1, C3, C4, C6 y C7.
+
+```text
+Realiza una revisión de consistencia de los artefactos de planificación de `specs/002-niebla-ir-a/` contra la constitución del proyecto y los contratos de las capacidades 001, 003 y 004.
+
+Verifica específicamente:
+- C1: mutaciones reversibles mediante `partida.cambiar`.
+- C3: firma y contrato compartido de `dijkstra_acotado` con Mariano.
+- C4: comentarios en bitácora ignorados por replay.
+- C6: compatibilidad con el resumen de estado para la línea de tiempo de Axel.
+- C7: formato binario v4.
+- Restricciones sobre `dict`, `set`, tablas hash, dependencias externas y estructuras propias.
+- Que los archivos `spec.md`, `plan.md`, `research.md`, `data-model.md`, `quickstart.md` y los contratos no se contradigan.
+
+No edites archivos. No ejecutes `git add`, `git commit` ni implementes código. Devuelve una lista de problemas encontrados y correcciones recomendadas.
+```
+
+#### 8.4.8 Continuación del análisis
+
+**Tipo:** Solicitud de revisión en lenguaje natural.
+
+**Fecha y hora:** 08/11/2026, 15:27:13 (Costa Rica, UTC−06:00); 2026-11-08 21:27:13 UTC.
+
+**Herramienta:** Antigravity. **Modelo:** no pudo verificarse por invocación.
+
+**Fuente:** `19467a92-7010-4a58-be4e-985ce9acf9e4.db`, tabla `steps`, `idx=153`.
+
+**Propósito:** Reiterar la revisión de consistencia sin modificar archivos.
+
+```text
+Continúa con la revisión de consistencia que te solicité. Revisa los artefactos de planificación de `specs/002-niebla-ir-a/` contra la constitución y los contratos de las capacidades 001, 003 y 004.
+
+No edites archivos, no ejecutes `git add` ni `git commit`, y no implementes código.
+
+Devuelve únicamente:
+1. Problemas o contradicciones encontrados.
+2. Archivo y sección donde ocurre cada problema.
+3. Corrección recomendada.
+4. Si todo está correcto, indícalo explícitamente.
+```
+
+#### 8.4.9 Correcciones documentales de contratos
+
+**Tipo:** Corrección solicitada al agente.
+
+**Fecha y hora:** 08/11/2026, 15:40:56 (Costa Rica, UTC−06:00); 2026-11-08 21:40:56 UTC.
+
+**Herramienta:** Antigravity. **Modelo:** no pudo verificarse por invocación.
+
+**Fuente:** `19467a92-7010-4a58-be4e-985ce9acf9e4.db`, tabla `steps`, `idx=155`.
+
+**Propósito:** Corregir C1, C2, C3, C4, C6 y C7 conservando el alcance documental.
+
+```text
+Aplica las correcciones documentales de los 6 problemas encontrados en la revisión de consistencia de `specs/002-niebla-ir-a/`.
+
+Antes de editar, verifica los contratos y el código existente que sean necesarios, especialmente `specs/001-terreno-cazador/plan.md` y `modelo/juego/partida.py` en relación con C2 y C3.
+
+Corrige lo siguiente:
+
+1. **C3 — Dijkstra compartido:** unifica la firma de `dijkstra_acotado` con el contrato acordado con Mariano. `filtro_salida` debe recibir únicamente `salida`. Asegura que contrato, research y plan documenten la misma firma, orden de parámetros y nombres. No inventes una nueva firma sin contrastarla con la capacidad 001.
+
+2. **C1 — Mutaciones reversibles:** corrige el diagrama de secuencia de `data-model.md`. Conocimiento no debe invocar directamente a Registro. Todas las mutaciones deben pasar por `partida.cambiar(...)`, que se encarga de Registro y de las notificaciones correspondientes.
+
+3. **C4 — Orden IR_A:** especifica explícitamente en `contrato_ir_a.md`, `data-model.md` y `plan.md` que `IR_A` es una orden compuesta del controlador y NO pertenece a `ORDENES_DE_PARTIDA`. La intención se registra como comentario; los movimientos individuales se registran como órdenes normales. Verifica el nombre real del método para anotar comentarios, sin inventar métodos.
+
+4. **C6 — Resumen de conocimiento O(1):** incorpora contadores reversibles para salas exploradas y avistadas en `ConocimientoMapa`. Define su inicialización y actualización correctamente, evitando contar una sala varias veces cuando es vecina de múltiples salidas. Las actualizaciones deben pasar por `partida.cambiar(...)`.
+
+5. **C7 — Rango del cazador y guardado v4:** documenta si el rango se conserva en el formato binario o se reconstruye desde el catálogo. Verifica primero el acuerdo existente con Mariano y el código real. No modifiques la estructura binaria sin autorización.
+
+6. **C2 — Observadores de puertas:** homogeneiza la documentación con la implementación real de `partida.py`. No documentes un método privado inexistente. Describe correctamente cómo se notifica el cambio a los observadores.
+
+REGLAS:
+- Edita únicamente archivos dentro de `specs/002-niebla-ir-a/`.
+- No implementes código Python.
+- No modifiques otras capacidades.
+- No ejecutes `git add`, `git commit` ni `git push`.
+- No cambies archivos fuera de esta carpeta.
+- No agregues dependencias ni estructuras prohibidas por la constitución.
+
+Al terminar, presenta un resumen con cada corrección y los archivos modificados. Si algún punto no puede resolverse por falta de información o por conflicto con Mariano/Axel, no lo inventes: déjalo pendiente y explica el motivo.
+```
+
+#### 8.4.10 Verificación final de contratos
+
+**Tipo:** Solicitud de revisión en lenguaje natural.
+
+**Fecha y hora:** 08/11/2026, 15:52:08 (Costa Rica, UTC−06:00); 2026-11-08 21:52:08 UTC.
+
+**Herramienta:** Antigravity. **Modelo:** no pudo verificarse por invocación.
+
+**Fuente:** `19467a92-7010-4a58-be4e-985ce9acf9e4.db`, tabla `steps`, `idx=199`.
+
+**Propósito:** Verificar C3 y los puntos pendientes conforme al texto original siguiente.
+
+```text
+Realiza una verificación final, sin modificar archivos, de estos dos puntos:
+
+1. **Contrato C3:** compara la firma completa de `dijkstra_acotado`, incluyendo su retorno `tuple[List[int], List[int]]`, entre:
+   - `specs/002-niebla-ir-a/contracts/contrato_c3_dijkstra.md`
+   - `specs/001-terreno-cazador/plan.md`
+   - el código existente y las pruebas de Mariano.
+
+   Confirma que el retorno, los arreglos y su propiedad coinciden exactamente entre ambos consumidores. No supongas que la firma es correcta solo porque los parámetros coinciden.
+
+2. **C6:** revisa la inicialización y las transiciones de `num_exploradas` y `num_avistadas`. Confirma que cada sala se cuenta una sola vez, que las salas exploradas no se contabilizan como avistadas y que los contadores se revierten correctamente con `partida.cambiar(...)`.
+
+No edites archivos, no implementes código y no ejecutes `git add` ni `git commit`.
+
+Devuelve los resultados, las discrepancias encontradas y si los documentos están listos para pasar a implementación.
+```
+
+#### 8.4.11 Auditoría de tareas
+
+**Tipo:** Solicitud de revisión en lenguaje natural.
+
+**Fecha y hora:** 08/11/2026, 16:08:17 (Costa Rica, UTC−06:00); 2026-11-08 22:08:17 UTC.
+
+**Herramienta:** Antigravity. **Modelo:** no pudo verificarse por invocación.
+
+**Fuente:** `19467a92-7010-4a58-be4e-985ce9acf9e4.db`, tabla `steps`, `idx=255`.
+
+**Propósito:** Contrastar las 31 tareas con especificación, contratos, código y pruebas.
+
+```text
+Realiza una revisión exhaustiva de specs/002-niebla-ir-a/tasks.md.
+
+Contrasta las 31 tareas con:
+- specs/002-niebla-ir-a/spec.md
+- specs/002-niebla-ir-a/plan.md
+- specs/002-niebla-ir-a/data-model.md
+- specs/002-niebla-ir-a/research.md
+- specs/002-niebla-ir-a/contracts/
+- El código existente en modelo/
+- Las pruebas existentes, especialmente tests/test_terreno_cazador.py
+
+Verifica:
+1. Que no falte ninguna tarea necesaria para cumplir los requisitos.
+2. Que las dependencias estén ordenadas correctamente.
+3. Que las tareas paralelizables realmente puedan ejecutarse en paralelo.
+4. Que no haya conflictos con la capacidad 001 de Mariano.
+5. Que las pruebas y verificaciones sean ejecutables y realistas.
+6. Que no se infrinjan las restricciones de estructuras de datos.
+7. Que las tareas estén suficientemente detalladas para implementarse sin ambigüedad.
+
+No modifiques ningún archivo.
+No ejecutes git add, git commit ni git push.
+No implementes código.
+
+Presenta los hallazgos clasificados en:
+- CRÍTICOS
+- IMPORTANTES
+- MENORES
+- SIN OBSERVACIONES
+
+Si no hay errores reales, indícalo expresamente.
+```
+
+#### 8.4.12 Corrección de hallazgos — primera solicitud
+
+**Tipo:** Corrección solicitada al agente.
+
+**Fecha y hora:** 08/11/2026, 16:15:16 (Costa Rica, UTC−06:00); 2026-11-08 22:15:16 UTC.
+
+**Herramienta:** Antigravity. **Modelo:** no pudo verificarse por invocación.
+
+**Fuente:** `19467a92-7010-4a58-be4e-985ce9acf9e4.db`, tabla `steps`, `idx=287`.
+
+**Propósito:** Resolver hallazgos críticos, importantes y menores de tasks.md.
+
+```text
+Aplica las correcciones identificadas en la revisión exhaustiva de
+specs/002-niebla-ir-a/tasks.md.
+
+Corrige los 4 hallazgos críticos, los 6 importantes y los 6 menores,
+sin eliminar tareas ni requisitos funcionales.
+
+Prioriza especialmente:
+
+1. T001: actualizar Registro.cambiar para aceptar campo: str | int y
+   especificar el comportamiento cuando no hay grupo abierto.
+
+2. T017: asegurar que leer_log omita comentarios con # antes del try/except,
+   evitando que el replay falle.
+
+3. T018 y T019: definir la inyección desacoplada de comentarista en
+   Controlador.__init__ y su conexión desde Aplicacion._armar.
+
+4. T003, T006 y T019: aclarar que salas_por_indice reutiliza mapa.salas
+   como referencia, sin copiar la lista ni usar diccionarios.
+
+5. Resolver todos los hallazgos importantes y menores del informe,
+   incluyendo la inicialización perezosa de los arreglos de navegación,
+   las verificaciones de guardado binario y las dependencias entre tareas.
+
+Restricciones:
+- Modifica únicamente specs/002-niebla-ir-a/tasks.md.
+- No modifiques código Python.
+- No cambies otros documentos.
+- No ejecutes git add, git commit ni git push.
+- No elimines ni reduzcas la cobertura de requisitos.
+- Mantén el formato oficial de las tareas.
+
+Al finalizar:
+1. Muestra las correcciones realizadas.
+2. Confirma que los 16 hallazgos están atendidos.
+3. Comprueba que las 31 tareas siguen cubriendo todos los requisitos.
+4. Ejecuta git status --short.
+5. No hagas commits.
+```
+
+#### 8.4.13 Corrección de hallazgos — reenvío
+
+**Tipo:** Corrección solicitada al agente, mensaje independiente repetido.
+
+**Fecha y hora:** 08/11/2026, 16:22:42 (Costa Rica, UTC−06:00); 2026-11-08 22:22:42 UTC.
+
+**Herramienta:** Antigravity. **Modelo:** no pudo verificarse por invocación.
+
+**Fuente:** `19467a92-7010-4a58-be4e-985ce9acf9e4.db`, tabla `steps`, `idx=300`.
+
+**Propósito:** Reenviar la solicitud de corrección de hallazgos; no se infiere el motivo de la repetición.
+
+```text
+Aplica las correcciones identificadas en la revisión exhaustiva de
+specs/002-niebla-ir-a/tasks.md.
+
+Corrige los 4 hallazgos críticos, los 6 importantes y los 6 menores,
+sin eliminar tareas ni requisitos funcionales.
+
+Prioriza especialmente:
+
+1. T001: actualizar Registro.cambiar para aceptar campo: str | int y
+   especificar el comportamiento cuando no hay grupo abierto.
+
+2. T017: asegurar que leer_log omita comentarios con # antes del try/except,
+   evitando que el replay falle.
+
+3. T018 y T019: definir la inyección desacoplada de comentarista en
+   Controlador.__init__ y su conexión desde Aplicacion._armar.
+
+4. T003, T006 y T019: aclarar que salas_por_indice reutiliza mapa.salas
+   como referencia, sin copiar la lista ni usar diccionarios.
+
+5. Resolver todos los hallazgos importantes y menores del informe,
+   incluyendo la inicialización perezosa de los arreglos de navegación,
+   las verificaciones de guardado binario y las dependencias entre tareas.
+
+Restricciones:
+- Modifica únicamente specs/002-niebla-ir-a/tasks.md.
+- No modifiques código Python.
+- No cambies otros documentos.
+- No ejecutes git add, git commit ni git push.
+- No elimines ni reduzcas la cobertura de requisitos.
+- Mantén el formato oficial de las tareas.
+
+Al finalizar:
+1. Muestra las correcciones realizadas.
+2. Confirma que los 16 hallazgos están atendidos.
+3. Comprueba que las 31 tareas siguen cubriendo todos los requisitos.
+4. Ejecuta git status --short.
+5. No hagas commits.
+```
+
+#### 8.4.14 Alcance y pendientes de recuperación
+
+| Comando histórico | Evidencia disponible |
+|---|---|
+| speckit-specify | Una invocación explícita completa, 8.4.1. |
+| speckit-clarify | Una invocación explícita completa, 8.4.2. |
+| speckit-plan | Una invocación explícita completa, 8.4.3. |
+| speckit-tasks | Dos invocaciones independientes completas, 8.4.4 y 8.4.5. |
+| speckit-analyze | Invocación explícita no localizada. Hay revisiones en lenguaje natural, que no prueban que se ejecutara ese comando. |
+| speckit-implement | Invocación explícita no localizada. Los commits y las pruebas no sustituyen el mensaje de invocación. |
+
+Los artefactos en 14602fb y db75930 son evidencia de resultados, separada de los
+prompts originales recuperados arriba. Los resúmenes de 8.3 siguen identificados
+como retrospectivos. Los adjuntos de skills del pedido de recuperación no se
+cuentan como invocaciones históricas. Queda pendiente establecer, con metadatos
+inequívocos, el modelo asociado a cada turno y recuperar analyze/implement si
+sus registros existen en otras sesiones. No se acreditan ediciones manuales de
+la estudiante a partir de instrucciones dadas al agente. No se incorporaron
+credenciales ni información de otros proyectos.
 
 ### 8.5 Límites del registro
 
-- No es una exportación exhaustiva de las sesiones; faltan transcripciones y
-  fechas verificables. La fecha de un commit no prueba la fecha de una consulta.
+- No es una exportación exhaustiva de todas las sesiones. Se recuperaron cinco
+  invocaciones fechadas y ocho solicitudes adicionales en 8.4; faltan las
+  invocaciones explícitas de analyze/implement y modelos verificables por turno.
+  La fecha de un commit no prueba la fecha de una consulta.
 - No se inventan modelos, revisiones humanas, autoría manual ni resultados.
 - Los registros originales se conservan sin reescribirlos para aparentar otro proceso.
 - Las mediciones sintéticas no acreditan SC-001 oficial.
-- La revisión de P1 §10.3 y la recuperación de los mensajes faltantes completarán
-  la evidencia académica; el alcance disponible queda delimitado en 8.4.
+- La revisión de P1 §10.3 y la recuperación de los mensajes aún no localizados
+  completarán la evidencia académica; el alcance disponible queda delimitado en 8.4.
