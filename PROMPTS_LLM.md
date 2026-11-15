@@ -988,6 +988,202 @@ esearch.md, data-model.md, 	asks.md) y el reporte de análisis de consistencia p
 > Entregame archivos completos modificados, resultados reales,
 > pendientes y comandos de git para que yo haga el commit.
 
+#### 28. Cierre integral de la capacidad 001 y del motor de Mariano (T024-T029) - 14/11/2026
+
+- **Integrante**: Mariano
+- **Fecha**: 14/11/2026
+- **Herramienta**: Google Antigravity (IDE v2.0)
+- **Modelo**: Gemini 3.8 Flash
+- **Uso de la respuesta**: Cerrar de forma integral y verificable la capacidad 001-terreno-cazador de Mariano. Implementar la garantía de cierre del instante $t$ en el motor (`_avanzar` y `AgendaEventos.proximo_en_tiempo`) para la integración con Historia <t>; escribir pruebas completas en `tests/test_cierre_instante_t.py`; demostrar mediante pruebas en `tests/test_terreno_cazador.py` la compartición de Dijkstra entre múltiples cazadores, conservación ante rangos decrecientes y reactividad ante puertas en el mismo $t$; verificar la persistencia binaria de rango y comportamiento en `tests/test_persistencia_cazador.py`; integrar `--bench cazador` en `main.py` (T024); crear `bench/bench_cazador.py` y medir SC-004 (< 20 ms), SC-005 (individual vs compartido hasta 100 cazadores) y SC-006 (reutilización vs recálculo); extender `bench/bench_motor.py` con cazadores de la Parte II (§5.6); actualizar `DECISIONES.md` (§5.1, §5.2, §5.6 y capacidad 001) y la documentación de la capacidad en `plan.md`, `research.md` y `tasks.md`.
+
+> Actúa como colaborador técnico del proyecto CRIPTA, Parte II. Vamos a cerrar la parte de Mariano: motor del juego, capacidad 001-terreno-cazador.
+>
+> Trabaja sobre el proyecto existente en la rama nano. Conserva su arquitectura y los cambios actuales. No reconstruyas módulos ni sobrescribas trabajo del equipo.
+>
+> CONTEXTO Y OBJETIVO
+>
+> T001–T020 fueron reportadas como completadas.
+> El último reporte declara T021–T023 implementadas: reutilización del campo de distancias, invalidación por puertas, movimiento del jugador, aumento de rango y retroceso.
+>
+> Ese reporte todavía no demuestra:
+> - Procesamiento completo de eventos del mismo instante t antes de devolver el control al jugador.
+> - Una prueba explícita de varios cazadores compartiendo una sola ejecución de Dijkstra.
+> - Una prueba específica de guardado/carga que conserve rango y comportamiento del cazador.
+>
+> También están pendientes T024–T029: benchmarks, integración y documentación.
+>
+> Completa estos puntos y entrega evidencia suficiente para cerrar la parte de Mariano. No declares completado lo que no puedas verificar.
+>
+> 1. INSPECCIÓN Y REGLAS DE TRABAJO
+>
+> Lee AGENTS.md y los documentos actuales de specs/001-terreno-cazador:
+> spec.md, plan.md, tasks.md y research.md.
+>
+> Revisa el código y las pruebas existentes antes de modificar. Los reportes anteriores son contexto; verifica el estado real.
+>
+> Usa el intérprete autorizado del proyecto:
+> .\venv\Scripts\python.exe
+>
+> No instales dependencias ni cambies de intérprete. Si no está disponible, informa el bloqueo y continúa con lo que puedas revisar sin ejecución.
+>
+> Respeta las restricciones del curso:
+> - Sin dict como índice, caché o mecanismo de búsqueda.
+> - Sin sorted() ni list.sort().
+> - Usa las estructuras propias y el contrato C3 existente.
+> - Sin copias completas del estado para retroceso.
+> - Mantén MVC y el Modelo independiente de HTTP, archivos e interfaz.
+> - No introduzcas librerías o abstracciones innecesarias.
+>
+> No ejecutes commits, push, reset, checkout ni otras operaciones que alteren el estado de Git. Mariano realiza los commits.
+>
+> Estás autorizado a actualizar la documentación de esta capacidad y las secciones de Mariano en DECISIONES.md. Conserva las secciones de otros integrantes.
+>
+> Registra este prompt textualmente en PROMPTS_LLM.md, con el siguiente número disponible, fecha real, herramienta/modelo si se conoce y propósito. No inventes metadatos.
+>
+> 2. CIERRE DEL INSTANTE t EN EL MOTOR
+>
+> Comprueba el comportamiento actual de _avanzar() y _turno_jugador().
+>
+> El requisito acordado para integrar historia <t> es que, mientras la partida continúe jugando, antes de aceptar otra acción del jugador se procesen todos los eventos válidos del instante t en que recupera el turno.
+>
+> Primero escribe pruebas que cubran:
+> - Eventos A, turno del jugador y B con el mismo tiempo y secuencias crecientes: A y B deben ejecutarse antes de devolver el control.
+> - Un evento que programe otro evento para ese mismo t.
+> - Eventos cancelados que no deben ejecutarse.
+> - Eventos posteriores a t que deben permanecer pendientes.
+> - Victoria o derrota durante el procesamiento.
+> - Retroceso que restaure correctamente los cambios del ciclo.
+>
+> Si el comportamiento falla, aplica el ajuste mínimo en el motor y, si es necesario, en la agenda.
+>
+> Conserva el orden determinista (tiempo, secuencia). No extraigas ni pierdas eventos futuros para comprobar su tiempo. Respeta el registro de operaciones inversas y la terminación de la partida.
+>
+> Revisa las pruebas existentes sensibles a empates. Si cambia un resultado esperado, justifícalo por este requisito; no modifiques aserciones solo para obtener resultados verdes.
+>
+> Verifica dónde historia <t> observa el estado. Si el módulo o contrato de historia no está disponible, deja comprobada la garantía del motor y reporta la integración pendiente; no inventes su funcionamiento ni reconstruyas el módulo de otro integrante.
+>
+> 3. VERIFICACIÓN FINAL DE T021–T023
+>
+> Comprueba mediante pruebas:
+>
+> - Varios cazadores activos reutilizan una sola ejecución de Dijkstra mientras las condiciones permanezcan válidas.
+> - Una invalidación provoca un nuevo cálculo en la siguiente consulta; los cazadores posteriores reutilizan ese resultado.
+> - Cierre de puerta sobre una ruta.
+> - Apertura que habilita una ruta antes inaccesible.
+> - Apertura que crea un camino más barato.
+> - Movimiento del jugador.
+> - Activación de un cazador que aumenta el rango requerido.
+> - Conservación del campo cuando el rango activo disminuye.
+> - Cambio de puerta fuera de la región calculada que no exige recalcular.
+> - Retroceso que restaura puertas e invalida las rutas sin avisos duplicados.
+> - Independencia entre el conocimiento del jugador y la topología real consultada por el cazador.
+>
+> Distingue R_activo de R_utilizado y respeta las marcas vigentes del token de búsqueda.
+>
+> Compara las decisiones con un cálculo desde cero que no reutilice el campo bajo prueba. Verifica distancia, movimiento o espera y desempate por menor ID entero cuando corresponda.
+>
+> Las notificaciones de cambios de puertas deben invalidar el campo antes de la siguiente consulta que dependa de ellas, incluso dentro del mismo instante t.
+>
+> Reutiliza las pruebas existentes que ya demuestren estos puntos. Añade únicamente la cobertura que falte.
+>
+> 4. PERSISTENCIA DEL CAZADOR
+>
+> Agrega o identifica una prueba específica que use el flujo real de guardado y carga y compruebe:
+> - Conservación de rango.
+> - Conservación de comportamiento cazador.
+> - Una decisión posterior coherente con esos valores.
+>
+> No basta con que las pruebas generales de guardado pasen.
+>
+> Respeta el formato y los contratos de persistencia existentes. Si encuentras una pérdida de datos, aplica la corrección mínima compatible. Si requiere un cambio de formato coordinado con Kim, documenta el bloqueo y no declares la integración resuelta.
+>
+> 5. T024–T029: BENCHMARKS E INTEGRACIÓN
+>
+> T024:
+> Integra --bench cazador en main.py siguiendo el mecanismo existente de selección de benchmarks.
+>
+> T025:
+> Implementa bench/bench_cazador.py y mide cada ciclo completo del motor entre decisiones del jugador, incluyendo el procesamiento final de los eventos empatados.
+>
+> Usa un reloj de alta resolución. Excluye preparación, renderizado, red e impresión del intervalo medido.
+>
+> Reporta:
+> - Cantidad de ciclos.
+> - Tiempo máximo en milisegundos.
+> - Cantidad de ciclos que exceden 20 ms.
+> - Configuración, semilla y cantidad real de cazadores activos.
+> - Datos adicionales útiles, sin sustituir el máximo por un promedio.
+>
+> Contrasta los resultados con el criterio exacto SC-004 de la especificación. Si exige menos de 20 ms, incluye también cuántos ciclos incumplen ese límite estricto.
+>
+> T026:
+> Compara cálculo individual contra cálculo compartido con 1, 10, 30 y 100 cazadores, usando rangos pequeños y grandes definidos explícitamente.
+>
+> Asegura condiciones equivalentes, mismas semillas y cargas comparables. Comprueba que los cazadores estén activos y participen realmente.
+>
+> T027:
+> Compara reutilización con invalidación contra recálculo continuo, tanto con puertas estables como con cambios de puertas.
+>
+> Comprueba equivalencia observable en cada paso: decisiones, posiciones, tiempos y efectos pertinentes. Si divergen, corrige antes de interpretar la mejora de rendimiento.
+>
+> Incluye conteos de cálculos y reutilizaciones. No confundas disponer de un planificador común con reutilizar efectivamente sus resultados.
+>
+> T028:
+> Ejecuta bench_motor.py con cazadores y costos variables. Conserva el escenario anterior si sirve como referencia.
+>
+> Compara con mediciones previas solo si están disponibles y son comparables. Identifica diferencias de equipo, configuración o metodología.
+>
+> Usa la cripta de referencia si está disponible. Si utilizas el generador del equipo, identifica los escenarios como sintéticos. No declares validación sobre la cripta oficial si no la ejecutaste.
+>
+> No inventes resultados, no elimines ciclos lentos para cumplir el umbral y no rebajes criterios. Si hay incumplimientos, investiga y aplica optimizaciones justificadas por las mediciones.
+>
+> 6. DOCUMENTACIÓN Y TRAZABILIDAD — T029
+>
+> Actualiza las secciones de Mariano en DECISIONES.md:
+> - §5.1 y §5.2 según el enunciado.
+> - Revisión de §5.6.
+> - Diseño del cálculo compartido y su invalidación.
+> - Diferencia entre R_activo y R_utilizado.
+> - Garantía de cierre del instante t.
+> - Interacción con retroceso e historia.
+> - Complejidad temporal y espacial de la implementación real.
+> - Metodología, comandos, tablas de resultados y límites conocidos.
+>
+> Incluye en el análisis el recorrido de cazadores para obtener el rango máximo, si sigue realizándose en cada decisión. No atribuyas complejidad O(1) a toda la búsqueda por usar tokens: esa propiedad corresponde al reinicio lógico de las marcas.
+>
+> Actualiza tasks.md, plan.md y research.md únicamente conforme a lo implementado y verificado. Registra el ajuste de eventos empatados como trabajo adicional trazable sin renumerar arbitrariamente T001–T029.
+>
+> Marca como completadas solo las tareas con evidencia. Diferencia:
+> - Implementación terminada.
+> - Validación ejecutada.
+> - Validación o integración bloqueada por una dependencia externa.
+>
+> 7. VERIFICACIÓN FINAL
+>
+> Ejecuta las pruebas afectadas y las regresiones pertinentes con el intérprete autorizado.
+>
+> Revisa cómo se ejecutan las pruebas del proyecto: algunas suites pueden usar funciones o ejecutores manuales que unittest discover no recoge. No asumas que una sola ejecución cubre todo.
+>
+> Reporta los comandos, sus resultados y los conteos por suite. No sumes pruebas de ejecuciones superpuestas como si fueran pruebas distintas.
+>
+> Comprueba además:
+> - Ausencia de nuevos usos prohibidos de estructuras u ordenamientos.
+> - Compatibilidad con niebla, viaje «ir a», puertas, agenda y retroceso.
+> - Ausencia de scripts temporales creados para aplicar cambios.
+> - Que no se modificaron archivos ajenos al alcance.
+>
+> 8. ENTREGA FINAL
+>
+> Entrega:
+> 1. Estado de cierre de la parte de Mariano: completada o pendiente, con razones concretas.
+> 2. Tabla de T024–T029 y verificaciones adicionales con evidencia.
+> 3. Resumen de cambios y archivos afectados.
+> 4. Comandos y resultados reales de pruebas y benchmarks.
+> 5. Incumplimientos, limitaciones o dependencias externas pendientes.
+> 6. Comandos sugeridos para commits separados y coherentes, sin ejecutarlos.
+>
+> Trabaja hasta completar el alcance autorizado. Si aparece un bloqueo externo, termina lo independiente y especifica exactamente qué falta y cómo verificarlo después. No cierres con una afirmación de éxito basada únicamente en que el código fue escrito.
+
 ---
 
 ## 4. Inventario, retroceso, replay, controlador y vista — Axel

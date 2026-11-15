@@ -913,6 +913,209 @@ def test_FR008_puerta_fuera_de_region_no_invalida():
     esc.cerrar()
 
 
+
+def test_FR008_multiples_cazadores_comparten_unica_ejecucion_dijkstra():
+    """FR-008: Varios cazadores activos en el mismo instante comparten una sola ejecución Dijkstra."""
+    salas = [
+        {"id": 1, "nombre": "Sala 1", "salidas": {"N": {"sala": 2, "costo": 100}}},
+        {"id": 2, "nombre": "Sala 2", "salidas": {"S": {"sala": 1, "costo": 100}, "N": {"sala": 3, "costo": 100}}},
+        {"id": 3, "nombre": "Sala 3", "salidas": {"S": {"sala": 2, "costo": 100}, "N": {"sala": 4, "costo": 100}}},
+        {"id": 4, "nombre": "Sala 4", "salidas": {"S": {"sala": 3, "costo": 100}}},
+    ]
+    esc = armar(salas)
+    p = esc.partida
+    p.jugador.mover_a(p.mapa.sala(1))
+
+    c1 = Enemigo("C1", 10, 4, 1, 100, "cazador", "c-1", None, 10, [], 0, "ent_cazador", rango=400)
+    c1.mover_a(p.mapa.sala(2))
+    c1.activo = True
+    p.mapa.enemigos.append(c1)
+
+    c2 = Enemigo("C2", 10, 4, 1, 100, "cazador", "c-2", None, 10, [], 0, "ent_cazador", rango=400)
+    c2.mover_a(p.mapa.sala(3))
+    c2.activo = True
+    p.mapa.enemigos.append(c2)
+
+    c3 = Enemigo("C3", 10, 4, 1, 100, "cazador", "c-3", None, 10, [], 0, "ent_cazador", rango=400)
+    c3.mover_a(p.mapa.sala(4))
+    c3.activo = True
+    p.mapa.enemigos.append(c3)
+
+    calc_ini = p.planificador_cazador._calculos_realizados
+    reutil_ini = p.planificador_cazador._reutilizaciones
+
+    # C1 decide: debe realizar cálculo compartido acotado a 400
+    v1, s1 = p.planificador_cazador.decidir_movimiento(c1, p)
+    v1_cero, s1_cero = _calculo_desde_cero(p, c1)
+    assert (v1, s1) == (v1_cero, s1_cero)
+    assert p.planificador_cazador._calculos_realizados == calc_ini + 1
+    assert p.planificador_cazador._reutilizaciones == reutil_ini
+
+    # C2 decide: DEBE REUTILIZAR el cálculo compartido sin ejecutar Dijkstra
+    v2, s2 = p.planificador_cazador.decidir_movimiento(c2, p)
+    v2_cero, s2_cero = _calculo_desde_cero(p, c2)
+    assert (v2, s2) == (v2_cero, s2_cero)
+    assert p.planificador_cazador._calculos_realizados == calc_ini + 1
+    assert p.planificador_cazador._reutilizaciones == reutil_ini + 1
+
+    # C3 decide: DEBE REUTILIZAR también el cálculo compartido
+    v3, s3 = p.planificador_cazador.decidir_movimiento(c3, p)
+    v3_cero, s3_cero = _calculo_desde_cero(p, c3)
+    assert (v3, s3) == (v3_cero, s3_cero)
+    assert p.planificador_cazador._calculos_realizados == calc_ini + 1
+    assert p.planificador_cazador._reutilizaciones == reutil_ini + 2
+    esc.cerrar()
+
+
+def test_FR008_conservacion_campo_cuando_rango_activo_disminuye():
+    """FR-008: Si el rango activo de la siguiente consulta disminuye (R_activo <= R_utilizado), se conserva."""
+    salas = [
+        {"id": 1, "nombre": "Sala 1", "salidas": {"N": {"sala": 2, "costo": 100}}},
+        {"id": 2, "nombre": "Sala 2", "salidas": {"S": {"sala": 1, "costo": 100}, "N": {"sala": 3, "costo": 100}}},
+        {"id": 3, "nombre": "Sala 3", "salidas": {"S": {"sala": 2, "costo": 100}}},
+    ]
+    esc = armar(salas)
+    p = esc.partida
+    p.jugador.mover_a(p.mapa.sala(1))
+
+    c_grande = Enemigo("CGrande", 10, 4, 1, 100, "cazador", "cg", None, 10, [], 0, "ent_cazador", rango=300)
+    c_grande.mover_a(p.mapa.sala(3))
+    c_grande.activo = True
+    p.mapa.enemigos.append(c_grande)
+
+    # Primer cálculo con rango 300
+    v_g, s_g = p.planificador_cazador.decidir_movimiento(c_grande, p)
+    assert p.planificador_cazador._rango_utilizado == 300
+    calc_base = p.planificador_cazador._calculos_realizados
+    reutil_base = p.planificador_cazador._reutilizaciones
+
+    # Ahora consulta un cazador con rango menor (150)
+    c_pequeno = Enemigo("CPequeno", 10, 4, 1, 100, "cazador", "cp", None, 10, [], 0, "ent_cazador", rango=150)
+    c_pequeno.mover_a(p.mapa.sala(2))
+    c_pequeno.activo = True
+    p.mapa.enemigos.append(c_pequeno)
+
+    v_p, s_p = p.planificador_cazador.decidir_movimiento(c_pequeno, p)
+    v_cero, s_cero = _calculo_desde_cero(p, c_pequeno)
+    assert (v_p, s_p) == (v_cero, s_cero)
+    # No debió realizar nuevo cálculo; debió reutilizar el existente
+    assert p.planificador_cazador._calculos_realizados == calc_base
+    assert p.planificador_cazador._reutilizaciones == reutil_base + 1
+    assert p.planificador_cazador._rango_utilizado == 300
+    esc.cerrar()
+
+
+def test_FR008_invalidacion_provoca_nuevo_calculo_y_posteriores_reutilizan():
+    """FR-008: Tras invalidación, el primer cazador recalcula y los siguientes reutilizan el nuevo resultado."""
+    salas = [
+        {"id": 1, "nombre": "Sala 1", "salidas": {"N": {"sala": 2, "costo": 100}}},
+        {"id": 2, "nombre": "Sala 2", "salidas": {"S": {"sala": 1, "costo": 100}, "N": {"sala": 3, "costo": 100}}},
+        {"id": 3, "nombre": "Sala 3", "salidas": {"S": {"sala": 2, "costo": 100}}},
+    ]
+    esc = armar(salas)
+    p = esc.partida
+    p.jugador.mover_a(p.mapa.sala(1))
+
+    c1 = Enemigo("C1", 10, 4, 1, 100, "cazador", "c1", None, 10, [], 0, "ent_cazador", rango=300)
+    c1.mover_a(p.mapa.sala(2))
+    c1.activo = True
+    p.mapa.enemigos.append(c1)
+
+    c2 = Enemigo("C2", 10, 4, 1, 100, "cazador", "c2", None, 10, [], 0, "ent_cazador", rango=300)
+    c2.mover_a(p.mapa.sala(3))
+    c2.activo = True
+    p.mapa.enemigos.append(c2)
+
+    # Cálculo inicial
+    p.planificador_cazador.decidir_movimiento(c1, p)
+    calc_base = p.planificador_cazador._calculos_realizados
+
+    # Ocurre un cambio de puerta en la ruta (invalida C2)
+    salida_1_2 = p.mapa.sala(1).salidas[DIRECCIONES.index("N")]
+    p.cambiar_estado_puerta(salida_1_2, "cerrada")
+    assert p.planificador_cazador._valido is False
+
+    # C1 consulta: nuevo cálculo provocado por la invalidación
+    v1, s1 = p.planificador_cazador.decidir_movimiento(c1, p)
+    assert p.planificador_cazador._calculos_realizados == calc_base + 1
+    reutil_tras_c1 = p.planificador_cazador._reutilizaciones
+
+    # C2 consulta inmediatamente después: reutiliza el nuevo cálculo
+    v2, s2 = p.planificador_cazador.decidir_movimiento(c2, p)
+    assert p.planificador_cazador._calculos_realizados == calc_base + 1
+    assert p.planificador_cazador._reutilizaciones == reutil_tras_c1 + 1
+    esc.cerrar()
+
+
+def test_FR008_notificacion_puerta_invalida_antes_de_siguiente_consulta_mismo_t():
+    """FR-008: Cambio de puerta en t invalida inmediatamente antes de que el cazador consulte en ese mismo t."""
+    salas = [
+        {"id": 1, "nombre": "Sala 1", "salidas": {"N": {"sala": 2, "costo": 100}}},
+        {"id": 2, "nombre": "Sala 2", "salidas": {"S": {"sala": 1, "costo": 100}}},
+    ]
+    esc = armar(salas)
+    p = esc.partida
+    p.jugador.mover_a(p.mapa.sala(1))
+
+    cazador = Enemigo("C", 10, 4, 1, 100, "cazador", "c", None, 10, [], 0, "ent_cazador", rango=200)
+    cazador.mover_a(p.mapa.sala(2))
+    cazador.activo = True
+    p.mapa.enemigos.append(cazador)
+
+    # En t=0, cazador consulta y cachea campo
+    v, s = p.planificador_cazador.decidir_movimiento(cazador, p)
+    assert v.id == 1
+    assert p.planificador_cazador._valido is True
+
+    # En el mismo instante t=0, un evento cierra la puerta
+    salida = p.mapa.sala(1).salidas[DIRECCIONES.index("N")]
+    p.cambiar_estado_puerta(salida, "cerrada")
+
+    # Invalida inmediatamente
+    assert p.planificador_cazador._valido is False
+
+    # Consulta subsiguiente en el mismo t toma en cuenta la puerta cerrada
+    v_post, s_post = p.planificador_cazador.decidir_movimiento(cazador, p)
+    assert v_post is None and s_post is None
+    esc.cerrar()
+
+
+def test_FR008_independencia_conocimiento_jugador_y_topologia_real_cazador():
+    """FR-008: El cazador evalúa la topología real sin condicionarse por el conocimiento del jugador."""
+    from modelo.juego.conocimiento import PUERTA_ABIERTA, PUERTA_CERRADA
+    salas = [
+        {"id": 1, "nombre": "Sala 1", "salidas": {"N": {"sala": 2, "cerrada": True, "costo": 100}}},
+        {"id": 2, "nombre": "Sala 2", "salidas": {"S": {"sala": 1, "cerrada": True, "costo": 100}}},
+    ]
+    esc = armar(salas)
+    p = esc.partida
+    p.jugador.mover_a(p.mapa.sala(1))
+
+    cazador = Enemigo("C", 10, 4, 1, 100, "cazador", "c", None, 10, [], 0, "ent_cazador", rango=200)
+    cazador.mover_a(p.mapa.sala(2))
+    cazador.activo = True
+    p.mapa.enemigos.append(cazador)
+
+    # La puerta física está CERRADA, pero alteramos la memoria del jugador haciéndole creer que está ABIERTA
+    salida = p.mapa.sala(1).salidas[DIRECCIONES.index("N")]
+    assert not salida.esta_abierta()
+    p.conocimiento.memoria_puertas[p.mapa.sala(1).indice * 4 + DIRECCIONES.index("N")] = PUERTA_ABIERTA
+
+    # El cazador NO atraviesa la puerta física cerrada
+    v, s = p.planificador_cazador.decidir_movimiento(cazador, p)
+    assert v is None and s is None
+
+    # Ahora abrimos físicamente la puerta, pero en la memoria del jugador la ponemos como CERRADA
+    p.cambiar_estado_puerta(salida, "abierta")
+    p.conocimiento.memoria_puertas[p.mapa.sala(1).indice * 4 + DIRECCIONES.index("N")] = PUERTA_CERRADA
+    assert salida.esta_abierta()
+
+    # El cazador sí avanza porque la puerta real está abierta
+    v2, s2 = p.planificador_cazador.decidir_movimiento(cazador, p)
+    assert v2 is not None and v2.id == 1
+    esc.cerrar()
+
+
 if __name__ == "__main__":
     pruebas = [
         test_FR001_costo_predeterminado_y_simetria,
@@ -943,6 +1146,11 @@ if __name__ == "__main__":
         test_FR008_activacion_cazador_mayor_rango_expande_calculo,
         test_FR008_retroceso_restaura_y_descarta_rutas,
         test_FR008_puerta_fuera_de_region_no_invalida,
+        test_FR008_multiples_cazadores_comparten_unica_ejecucion_dijkstra,
+        test_FR008_conservacion_campo_cuando_rango_activo_disminuye,
+        test_FR008_invalidacion_provoca_nuevo_calculo_y_posteriores_reutilizan,
+        test_FR008_notificacion_puerta_invalida_antes_de_siguiente_consulta_mismo_t,
+        test_FR008_independencia_conocimiento_jugador_y_topologia_real_cazador,
     ]
     for p in pruebas:
         p()

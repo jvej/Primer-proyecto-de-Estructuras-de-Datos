@@ -4,11 +4,12 @@ import ast
 import inspect
 from pathlib import Path
 import sys
+import subprocess
 import unittest
 from unittest.mock import patch
 
 from controlador.controlador import Controlador
-from controlador.orden import ABRIR, ESPERAR, IR_A, MOVER, Orden, RECOGER
+from controlador.orden import ABRIR, ESPERAR, IR_A, MOVER, Orden, RECOGER, USAR
 from controlador.reproductor import reproducir
 from modelo.datos.fabrica_fuentes import crear_fuente_datos
 from modelo.datos.persistencia_partida import ErrorCarga, PersistenciaPartida
@@ -51,13 +52,30 @@ class PruebasHistoriaPersistencia(BaseHistoria):
             self.assertTrue(c.ejecutar(Orden(ESPERAR)))
         esperado = formatear_resumen(p.linea_tiempo.consultar_t(150))
         ruta = app.cerrar()
-        fuente, presupuesto = crear_fuente_datos(True, entorno.paquete)
-        with patch("main.crear_vista", side_effect=AssertionError("FR-007: creó una vista")):
-            resultado = reproducir(ruta, fuente, presupuesto, entorno.datos,
-                                   hasta=150, checkpoint_cada=2)
-        self.assertTrue(resultado.reproducido, resultado.texto())
-        self.assertIn(esperado, resultado.texto())
-        self.assertNotIn("pygame", sys.modules)
+        codigo = '''
+import sys
+import unittest
+from unittest.mock import patch
+from controlador.reproductor import reproducir
+from modelo.datos.fabrica_fuentes import crear_fuente_datos
+
+caso = unittest.TestCase()
+esperado = sys.stdin.read()
+fuente, presupuesto = crear_fuente_datos(True, sys.argv[2])
+with patch("main.crear_vista", side_effect=AssertionError("FR-007: creo una vista")):
+    resultado = reproducir(sys.argv[1], fuente, presupuesto, sys.argv[3],
+                           hasta=150, checkpoint_cada=2)
+caso.assertTrue(resultado.reproducido, resultado.texto())
+caso.assertIn(esperado, resultado.texto())
+caso.assertNotIn("pygame", sys.modules)
+'''
+        proceso = subprocess.run(
+            [sys.executable, "-B", "-X", "utf8", "-c", codigo, str(ruta),
+             str(entorno.paquete), str(entorno.datos)],
+            input=esperado, text=True, encoding="utf-8", capture_output=True,
+            cwd=str(Path(__file__).resolve().parents[1]),
+        )
+        self.assertEqual(proceso.returncode, 0, proceso.stdout + proceso.stderr)
 
     def test_FR008_hasta_posterior_al_final(self):
         entorno, app, c = self.aplicacion()
@@ -68,7 +86,11 @@ class PruebasHistoriaPersistencia(BaseHistoria):
             from controlador.resumen_historia import formatear_resumen
         p = c.partida
         inicializar_historia(p, 3)
-        llegar = JUGADAS[:8] + [Orden(RECOGER, 0)] + [Orden(MOVER, "N")] * 4 + [
+        llegar = JUGADAS[:8] + [
+            Orden(RECOGER, 0),  # Cota existente.
+            Orden(RECOGER, 0),  # Pocion de la rata.
+            Orden(USAR, 2),     # Recuperar vida mediante una accion ordinaria.
+        ] + [Orden(MOVER, "N")] * 4 + [
             Orden(RECOGER, 0), Orden(MOVER, "N"), Orden(ABRIR, "N"), Orden(MOVER, "N")]
         for orden in llegar:
             self.assertTrue(c.ejecutar(orden), str(orden))

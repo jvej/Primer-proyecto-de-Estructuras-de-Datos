@@ -57,6 +57,7 @@
 - [x] T018 [US2] Implementar en `modelo/juego/cazador.py` el cálculo compartido desde la posición del jugador acotado a $R_{\text{utilizado}}$, con arreglos contiguos de tamaño $N$ indexados por `Sala.indice` y token de búsqueda $O(1)$ sin reinicialización (FR-005). -> `python -m tests.test_terreno_cazador`
 - [x] T019 [US2] Implementar en `modelo/juego/comportamiento.py` la función `_cazador(partida, enemigo)`: verificar sala compartida (atacar), consultar distancia mínima hacia el jugador, verificar $d \le rango$, desempatar por menor `id` entero de sala vecina abierta y avanzar agendando con `salida.costo` (FR-003, FR-004, FR-005, FR-006). -> `python -m tests.test_terreno_cazador`
 - [x] T020 [US2] Agregar prueba de aceptación de cazador operando con salas no descargadas y niebla de guerra activa del jugador, validando que no abre puertas cerradas (FR-007). -> `python -m tests.test_terreno_cazador`
+- [x] T020b [US2] Implementar prueba específica de persistencia real de cazador (`tests/test_persistencia_cazador.py`) comprobando conservación de comportamiento normalizado, rango y decisión coherente posterior con guardado binario v3/v4 (C5). -> `python -m tests.test_persistencia_cazador`
 
 ---
 
@@ -71,6 +72,7 @@
   - Activación de cazador que requiere $R_{\text{activo}} > R_{\text{utilizado}}$ (FR-008). -> `python -m tests.test_terreno_cazador`
 - [x] T022 [US3] Implementar en `modelo/juego/cazador.py` la lógica de invalidación reactiva diferenciando $R_{\text{activo}}$ y $R_{\text{utilizado}}$, conservando distancias si el jugador no se movió, no aumenta el rango requerido y ninguna puerta con extremo $\le R_{\text{utilizado}}$ cambió de estado (FR-008). -> `python -m tests.test_terreno_cazador`
 - [x] T023 [US3] Conectar el despachador de puertas de `Partida` (Contrato C2) con la caché de rutas del cazador (FR-008). -> `python -m tests.test_terreno_cazador`
+- [x] T023b [US3] Implementar cierre estricto del instante t en `Partida._avanzar()` y `AgendaEventos.proximo_en_tiempo()` para integración con Historia <t> de Axel, con suite completa en `tests/test_cierre_instante_t.py`. -> `python -m tests.test_cierre_instante_t`
 
 ---
 
@@ -78,9 +80,9 @@
 
 **Propósito**: Validar empíricamente los presupuestos y documentar las decisiones de diseño.
 
-- [ ] T024 [P] [BENCH] Integrar el comando `--bench cazador` en `main.py` dentro de `SUBSISTEMAS_BENCH` (SC-004..SC-006). -> `python main.py --bench cazador`
-- [ ] T025 [BENCH] Crear `bench/bench_cazador.py` instrumentando la medición del tiempo de cada ciclo individual entre decisiones del jugador (sintético y preparado para cripta de referencia de cátedra), reportando `tiempo_maximo_ms` y conteo de ciclos que exceden los 20 ms (SC-004). -> `python main.py --bench cazador`
-- [ ] T026 [BENCH] Implementar en `bench/bench_cazador.py` la comparación sistemática entre cálculo individual y compartido variando densidad (1, 10, 30 y 100 cazadores) y rangos (pequeño frente a grande) sobre criptas sintéticas deterministas (SC-005). -> `python main.py --bench cazador`
-- [ ] T027 [BENCH] Implementar en `bench/bench_cazador.py` la comparación entre reutilización con invalidación y recálculo continuo en escenarios con puertas estables e inestables, verificando equivalencia observable en cada paso (SC-006). -> `python main.py --bench cazador`
-- [ ] T028 [BENCH] Repetir `bench/bench_motor.py` con cazadores activos y costos variables para contrastar el rendimiento de la agenda de eventos contra las mediciones de la primera parte (§5.6). -> `python -m bench.bench_motor`
-- [ ] T029 [P] [BENCH] Redactar las secciones de Mariano en `DECISIONES.md` (§5.1, §5.2 y la revisión §5.6 del motor) enlazando `spec.md` y `plan.md`.
+- [x] T024 [P] [BENCH] Integrar el comando `--bench cazador` en `main.py` dentro de `SUBSISTEMAS_BENCH` (SC-004..SC-006). -> `python main.py --bench cazador`
+- [x] T025 [BENCH] Crear `bench/bench_cazador.py` instrumentando la medición del tiempo de cada ciclo individual entre decisiones del jugador (sintético y preparado para cripta de referencia de cátedra), reportando `tiempo_maximo_ms` y conteo de ciclos que exceden los 20 ms (SC-004). -> `python main.py --bench cazador`
+- [x] T026 [BENCH] Implementar en `bench/bench_cazador.py` la comparación sistemática entre cálculo individual y compartido variando densidad (1, 10, 30 y 100 cazadores) y rangos (pequeño frente a grande) sobre criptas sintéticas deterministas (SC-005). -> `python main.py --bench cazador`
+- [x] T027 [BENCH] Implementar en `bench/bench_cazador.py` la comparación entre reutilización con invalidación y recálculo continuo en escenarios con puertas estables e inestables, verificando equivalencia observable en cada paso (SC-006). -> `python main.py --bench cazador`
+- [x] T028 [BENCH] Repetir `bench/bench_motor.py` con cazadores activos y costos variables para contrastar el rendimiento de la agenda de eventos contra las mediciones de la primera parte (§5.6). -> `python -m bench.bench_motor`
+- [x] T029 [P] [BENCH] Redactar las secciones de Mariano en `DECISIONES.md` (§5.1, §5.2 y la revisión §5.6 del motor) enlazando `spec.md` y `plan.md`.

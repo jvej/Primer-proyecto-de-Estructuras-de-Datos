@@ -175,14 +175,14 @@ class Controlador:
                 if token != self._token_viaje or self.partida is not p:
                     self._avisar("Viaje automático cancelado por otra orden o cambio de partida.")
                     return True
+                if p.enemigos_en_sala() and p.estado == "jugando":
+                    self._avisar("Viaje automático interrumpido: presencia de enemigos vivos en la sala.")
+                    return True
                 if recibio_dano:
                     self._avisar("Viaje automático interrumpido: has recibido daño.")
                     return True
                 if p.estado != "jugando":
                     self._avisar("Viaje automático terminado: %s." % p.estado)
-                    return True
-                if p.enemigos_en_sala():
-                    self._avisar("Viaje automático interrumpido: presencia de enemigos vivos en la sala.")
                     return True
                 if not aceptada:
                     mensajes = p.bitacora.ultimos()

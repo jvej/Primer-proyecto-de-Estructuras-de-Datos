@@ -225,6 +225,12 @@ class Partida:
             self.reloj.tiempo_actual = evento.tiempo_siguiente
             evento.ejecutar(evento.tiempo_siguiente)
 
+        while self.estado == "jugando" and self.esperando:
+            evento = self.agenda.proximo_en_tiempo(self.reloj.tiempo_actual)
+            if evento is None:
+                break
+            evento.ejecutar(evento.tiempo_siguiente)
+
     def _accion(self, costo, efecto) -> None:
         ahora = self.reloj.tiempo_actual
         grupo = self.registro.abrir_grupo()
@@ -262,7 +268,7 @@ class Partida:
     def _activar_sala(self, sala) -> None:
         dormidos = []
         for actor in sala.actores:
-            if isinstance(actor, Enemigo) and not actor.activo:
+            if isinstance(actor, Enemigo) and not actor.activo and actor.esta_vivo():
                 dormidos.append(actor)
         ahora = self.reloj.tiempo_actual
         for enemigo in ordenar(dormidos, clave=lambda e: e.id_instancia):

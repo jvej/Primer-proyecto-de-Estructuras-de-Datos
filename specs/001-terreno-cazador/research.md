@@ -164,3 +164,24 @@ En la implementacin de `PlanificadorCazador` (`modelo/juego/cazador.py`):
 2. **Filtrado de Puertas C2**: Mediante `notificar_cambio_puerta(salida, anterior, nuevo)`, se verifica si al menos uno de los extremos (`salida.sala_a` o `salida.sala_b`) fue alcanzado en la bsqueda vigente con distancia $\le R_{\text{utilizado}}$. Si ambos extremos estn fuera del radio o no alcanzados, el campo de distancias se conserva y no se altera el token de bsqueda.
 3. **Descarte tras Retroceso**: Tras la invocacin de `Partida.usar_pergamino()`, la ejecucin de `deshacer_ultimo()` concluye invocando `_notificar_invalidacion_rutas()`. Se ajust dicho mtodo para evitar invalidar dos veces un mismo componente (verificando `if cache.invalidar_todo not in self._observadores_invalidacion_rutas`).
 4. **Independencia Cognitiva**: El cazador consulta siempre el estado fsico real de las puertas (`salida.esta_abierta()`), mientras que la memoria de observacin del jugador reside en `ConocimientoMapa` (`puerta_recordada`), respetando la separacin de responsabilidades de Kim y Mariano.
+
+
+### 4.5 Resultados Empíricos Oficiales de Benchmarks (T024-T028)
+Ejecutados con `python main.py --bench cazador` y `python main.py --bench agenda`:
+
+1. **SC-004 (Ciclos entre decisiones del jugador < 20 ms)**:
+   - Configuración: 100 salas sintéticas, 30 cazadores activos, rango = 600, 50 ciclos.
+   - Máximo: **0.075 ms** | Medio: **0.013 ms** | Percentiles: p50=0.010 ms, p95=0.021 ms, p99=0.075 ms.
+   - Ciclos que exceden 20 ms: **0 (0%)**. Cumple estrictamente.
+
+2. **SC-005 (Individual vs. Compartido)**:
+   - Pequeño ($R=250$): 1 cazador (0.00 vs 0.00 ms), 10 cazadores (0.00 vs 0.00 ms), 30 cazadores (0.41 vs 0.12 ms, 3.4x), 100 cazadores (1.18 vs 0.10 ms, 11.3x).
+   - Grande ($R=1500$): 30 cazadores (5.23 vs 1.15 ms, 4.6x), 100 cazadores (10.97 vs 0.42 ms, **26.3x**).
+
+3. **SC-006 (Reutilización vs. Recálculo continuo)**:
+   - Puertas estables: 16.35 ms vs 1.83 ms (**8.91x**, 1 cálculo, 209 reutilizaciones).
+   - Puertas inestables: 13.35 ms vs 1.74 ms (**7.67x**, 6 cálculos, 204 reutilizaciones).
+   - Equivalencia observable: **100% idénticas**.
+
+4. **Cierre del instante $t$ (§4.1 / Historia `<t>`)**:
+   - `AgendaEventos.proximo_en_tiempo(t)` permite a `Partida._avanzar()` agotar todos los eventos empatados en $t$ antes de devolver el control al jugador, preservando determinismo sin extraer eventos futuros.

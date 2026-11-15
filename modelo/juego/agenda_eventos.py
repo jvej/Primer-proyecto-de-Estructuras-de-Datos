@@ -67,6 +67,18 @@ class AgendaEventos:
                 return evento
         return None
 
+    def proximo_en_tiempo(self, tiempo: int) -> Optional[Evento]:
+        """Extrae y devuelve el próximo evento válido con tiempo_siguiente == tiempo, o None."""
+        while self._heap:
+            raiz = self._heap[0]
+            if raiz.tiempo_siguiente > tiempo:
+                return None
+            evento = self._extraer_minimo()
+            self._inverso(lambda e=evento: self.agendar(e))
+            if evento.valido:
+                return evento
+        return None
+
     def _extraer_minimo(self) -> Evento:
         raiz = self._heap[0]
         ultimo = self._heap.pop()

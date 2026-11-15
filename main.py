@@ -55,6 +55,7 @@ BENCHES = (
     ("linea_tiempo", "bench_linea_tiempo.py"),
     ("ordenamiento", "bench_ordenamiento.py"),  
     ("guardado", "bench_guardado_binario.py"),  
+    ("cazador", "bench_cazador.py"),
 )
 
 

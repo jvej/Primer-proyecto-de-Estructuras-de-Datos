@@ -5,6 +5,8 @@ from modelo.juego.sala import DIRECCIONES, Sala
 
 
 def resolver_turno(partida, enemigo, ahora) -> int:
+    if not enemigo.esta_vivo():
+        return COSTO_ESPERAR
     if partida.jugador.sala is enemigo.sala:
         _atacar(partida, enemigo)
         return COSTO_ATACAR
