@@ -206,16 +206,9 @@ class Aplicacion:
             almacen_cripta.guardar_llaves(respuesta)
 
         ubicaciones = respuesta["llaves"] if isinstance(respuesta, dict) else respuesta
-        catalogo = []
-        for ubicacion in ubicaciones:
-            id_llave = ubicacion["id"]
-            if self.local.disponible(id_llave):
-                ficha = self.local.obtener(id_llave)
-                if ficha is not None:
-                    catalogo.append(ficha)
         self.reporte_resolubilidad = verificar_resolubilidad(
             esqueleto, ubicaciones, datos["sala_inicial"], datos["sala_salida"],
-            datos["llave_salida"], catalogo_llaves=catalogo)
+            datos["llave_salida"])
         return self.reporte_resolubilidad
 
     def verificar(self, id_cripta) -> ResultadoResolubilidad:

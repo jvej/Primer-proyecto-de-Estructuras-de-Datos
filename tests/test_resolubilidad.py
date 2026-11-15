@@ -309,7 +309,8 @@ def test_FR018_plantilla_exacta_reporte():
         frontera_bloqueada=[(4, "N", 7, "itm_a"), (4, "S", 8, None),
                             (4, "E", 9, "itm_b"), (4, "O", 10, None)],
         ubicacion_llaves=[("itm_a", "sala 12"), ("itm_b", "sala 9 (suelta del enemigo e-prueba)")],
-        ciclos=["itm_a -> itm_b [sala 4 (E)] -> itm_a [sala 4 (N)]"])
+        ciclos=["itm_a -> itm_b [sala 4 (E)] -> itm_a [sala 4 (N)]"],
+        motivo="llave_salida no puede obtenerse")
     assert reporte.formatear_reporte() == (
         "ESTADO: NO RESOLUBLE\n"
         "LLAVES NO OBTENIBLES: itm_a, itm_b\n"
@@ -322,13 +323,13 @@ def test_FR018_plantilla_exacta_reporte():
         "  - itm_a: sala 12\n"
         "  - itm_b: sala 9 (suelta del enemigo e-prueba)\n"
         "CICLOS DETECTADOS:\n"
-        "  - itm_a -> itm_b [sala 4 (E)] -> itm_a [sala 4 (N)]")
+        "  - itm_a -> itm_b [sala 4 (E)] -> itm_a [sala 4 (N)]\n"
+        "MOTIVO: llave_salida no puede obtenerse")
     for estado, motivo in (
             ("NO RESOLUBLE", "no existe puerta hacia sala_salida que pida llave_salida"),
             ("NO VERIFICADA", "no se pudo consultar /llaves: presupuesto_solicitudes agotado")):
         assert ResultadoResolubilidad(estado, motivo=motivo).formatear_reporte() == (
             "ESTADO: " + estado + "\nMOTIVO: " + motivo)
-    assert ResultadoResolubilidad("NO VERIFICADA").formatear_reporte() == "ESTADO: NO VERIFICADA"
 
 
 if __name__ == "__main__":

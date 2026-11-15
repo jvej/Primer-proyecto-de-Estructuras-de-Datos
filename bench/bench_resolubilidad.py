@@ -51,15 +51,14 @@ def _recorrido_completo(indices, inicio, salida, disponibles, obtenidas):
 
 
 def verificar_repetido(esqueleto, ubicaciones_llaves, sala_inicial,
-                       sala_salida, llave_salida, catalogo_llaves=None):
+                       sala_salida, llave_salida):
     """Alternativa de medición O(L * (S + E)), además del preprocesamiento.
 
     Después de activar cada llave se repite un recorrido completo. Si varias
     pertenecen a una etapa, las descubiertas en esos recorridos se acumulan
     para la siguiente: nunca se activan antes de cerrar la etapa actual.
     """
-    catalogo = catalogo_llaves if catalogo_llaves is not None else []
-    indices = _Indices(esqueleto, ubicaciones_llaves, llave_salida, catalogo)
+    indices = _Indices(esqueleto, ubicaciones_llaves, llave_salida)
     inicio = esqueleto.posicion(sala_inicial)
     salida = esqueleto.posicion(sala_salida)
     disponibles = [False] * len(indices.textos)
@@ -95,7 +94,7 @@ def _crear_caso(topologia, numero_salas, cantidad_llaves):
         esqueleto.agregar_pagina(pagina)
     general = datos["general"]
     return (esqueleto, datos["llaves"]["llaves"], general["sala_inicial"],
-            general["sala_salida"], general["llave_salida"], datos["catalogo"]["entidades"])
+            general["sala_salida"], general["llave_salida"])
 
 
 def _comprobar_equivalencia(esperado, resultado):

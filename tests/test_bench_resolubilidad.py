@@ -1,6 +1,7 @@
 """Validación del comparador de SC-005; no prueba tiempos de la máquina."""
 
 from copy import deepcopy
+import time
 import unittest
 from unittest.mock import patch
 
@@ -16,6 +17,72 @@ def _esqueleto(salas):
 
 
 class PruebasBenchResolubilidad(unittest.TestCase):
+    def test_SC001_cuadricula_sintetica_de_1000_salas_menos_de_200_ms(self):
+        # Sustitución provisional: no se consulta ninguna cripta publicada.
+        argumentos = bench._crear_caso("cuadricula", 1000, 50)
+        verificar_resolubilidad(*argumentos)  # Calentamiento fuera de la medición.
+        muestras = []
+        for _ in range(bench.REPETICIONES):
+            inicio = time.perf_counter()
+            resultado = verificar_resolubilidad(*argumentos)
+            muestras.append((time.perf_counter() - inicio) * 1000)
+            self.assertTrue(resultado.es_resoluble())
+        mediana = bench._mediana(muestras)
+        print("SC-001 provisional: cuadrícula sintética, 1000 salas, semilla %d; "
+              "mediana de %d verificaciones completas: %.3f ms" %
+              (bench.SEMILLA, len(muestras), mediana))
+        self.assertLess(mediana, 200)
+
+    def test_SC002_duplicar_salas_y_llaves_examina_como_maximo_2_5_veces_salidas(self):
+        from modelo.juego import resolubilidad
+
+        cantidades = []
+        for salas, llaves in ((202, 100), (404, 200)):
+            argumentos = bench._crear_caso("linea", salas, llaves)
+            contador = [0]
+
+            class SalidasEntrada:
+                # Adaptador de lectura del payload; cuenta la preparación.
+                def __init__(self, registro):
+                    self.registro = registro
+
+                def __contains__(self, direccion):
+                    return direccion in self.registro
+
+                def __getitem__(self, direccion):
+                    contador[0] += 1
+                    return self.registro[direccion]
+
+                def get(self, direccion):
+                    salida = self.registro.get(direccion)
+                    if salida is not None:
+                        contador[0] += 1
+                    return salida
+
+            class VecinosContados(list):
+                def __iter__(self):
+                    for salida in super().__iter__():
+                        contador[0] += 1
+                        yield salida
+
+            preparar = resolubilidad._Indices.__init__
+
+            def preparar_contando(indices, *entradas):
+                preparar(indices, *entradas)
+                indices.vecinos = [VecinosContados(v) for v in indices.vecinos]
+
+            esqueleto = argumentos[0]
+            salidas = sum(len(s) for s in esqueleto.salidas)
+            esqueleto.salidas = [SalidasEntrada(s) for s in esqueleto.salidas]
+            with patch.object(resolubilidad._Indices, "__init__", preparar_contando):
+                resultado = verificar_resolubilidad(*argumentos)
+            self.assertTrue(resultado.es_resoluble())
+            self.assertGreaterEqual(contador[0], 2 * salidas)
+            cantidades.append(contador[0])
+        self.assertLessEqual(cantidades[1], 2.5 * cantidades[0])
+        print("SC-002: salidas examinadas (preparación y recorrido): %d -> %d (%.3fx)" %
+              (cantidades[0], cantidades[1], cantidades[1] / cantidades[0]))
+
     def test_FR013_merge_conserva_resultado_y_orden_de_criptas_existentes(self):
         from modelo.estructuras.ordenamiento import ordenar
         from modelo.juego import resolubilidad
@@ -74,19 +141,15 @@ class PruebasBenchResolubilidad(unittest.TestCase):
                 self.assertEqual(resultado.estado, "RESOLUBLE")
                 self.assertEqual(resultado.orden_llaves, esperado)
 
-    def test_FR010_alias_de_ubicacion_y_catalogo_y_llave_portada(self):
+    def test_FR010_alias_del_registro_de_llaves_y_llave_portada(self):
         salas = [{"id": 3, "salidas": {"N": {"sala": 9, "cerrada": True, "llave": "puerta"}}},
                  {"id": 9, "salidas": {}}]
-        for en_catalogo in (False, True):
-            llaves = [{"id": "llave", "sala": 3, "enemigo": "instancia-sintetica"}]
-            catalogo = [{"id": "llave", "abre": "puerta"}] if en_catalogo else []
-            if not en_catalogo:
-                llaves[0]["abre"] = "puerta"
-            argumentos = (_esqueleto(salas), llaves, 3, 9, "puerta", catalogo)
-            for funcion in (verificar_resolubilidad, bench.verificar_repetido):
-                resultado = funcion(*argumentos)
-                self.assertEqual(resultado.estado, "RESOLUBLE")
-                self.assertEqual(resultado.orden_llaves, [(0, ["llave"])])
+        llaves = [{"id": "llave", "sala": 3, "enemigo": "instancia-sintetica", "abre": "puerta"}]
+        argumentos = (_esqueleto(salas), llaves, 3, 9, "puerta")
+        for funcion in (verificar_resolubilidad, bench.verificar_repetido):
+            resultado = funcion(*argumentos)
+            self.assertEqual(resultado.estado, "RESOLUBLE")
+            self.assertEqual(resultado.orden_llaves, [(0, ["llave"])])
 
     def test_FR011_rechaza_salida_sin_llave_o_sin_puerta_correspondiente(self):
         for cerrada, pedido, sala_llave in ((True, "fin", 9), (False, None, 3),

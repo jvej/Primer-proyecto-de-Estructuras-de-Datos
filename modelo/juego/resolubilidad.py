@@ -4,9 +4,8 @@ Los índices se preparan una vez con ordenar_merge() y búsquedas binarias propi
 Después, cada sala y salida se procesa un número constante de veces entre
 recorrido y diagnóstico: O(S + E + L), más ordenar las llaves de cada etapa.
 El preprocesamiento incluye ordenar identificadores y salas y traducir sus
-posiciones. No se consulta ningún almacén: el catálogo opcional debe llegar
-como fichas ya materializadas en memoria. Sin ficha ni ``abre`` en la ubicación,
-una llave únicamente abre la cerradura que coincide con su id.
+posiciones. Solo se usan el esqueleto y los registros de /llaves; una llave
+abre por su id o por el campo ``abre`` de su registro.
 """
 
 from modelo.estructuras.cola_fifo import ColaFIFO
@@ -78,7 +77,7 @@ def _buscar_cerradura(identificadores, id_texto):
 class _Indices:
     """Listas contiguas; los registros de entrada solo se leen."""
 
-    def __init__(self, esqueleto, ubicaciones, llave_salida, catalogo):
+    def __init__(self, esqueleto, ubicaciones, llave_salida):
         self.salas = esqueleto.ids
         cantidad_salas = len(self.salas)
         self.orden_salas = ordenar_merge(range(cantidad_salas), clave=lambda p: self.salas[p])
@@ -87,11 +86,10 @@ class _Indices:
             for direccion in DIRECCIONES:
                 if direccion in salidas and salidas[direccion].get("llave") is not None:
                     textos.append(salidas[direccion]["llave"])
-        for registros in (ubicaciones, catalogo):
-            for registro in registros:
-                textos.append(registro["id"])
-                if registro.get("abre") is not None:
-                    textos.append(registro["abre"])
+        for registro in ubicaciones:
+            textos.append(registro["id"])
+            if registro.get("abre") is not None:
+                textos.append(registro["abre"])
         self.textos = []
         for texto in ordenar_merge(textos):
             if not self.textos or self.textos[-1] != texto:
@@ -102,9 +100,6 @@ class _Indices:
         self.es_llave = [False] * cantidad
         self.ubicaciones = [[] for _ in range(cantidad)]
         self.llaves_en_sala = [[] for _ in range(cantidad_salas)]
-        for ficha in catalogo:
-            indice = _buscar_cerradura(self.textos, ficha["id"])
-            self.abre[indice] = _buscar_cerradura(self.textos, ficha.get("abre"))
         for ubicacion in ubicaciones:
             indice = _buscar_cerradura(self.textos, ubicacion["id"])
             if ubicacion.get("abre") is not None:
@@ -318,14 +313,13 @@ def _detectar_ciclo(indices, grafo):
 
 
 def verificar_resolubilidad(esqueleto, ubicaciones_llaves, sala_inicial,
-                           sala_salida, llave_salida, catalogo_llaves=None) -> ResultadoResolubilidad:
-    """Recibe ubicaciones y, opcionalmente, una lista de fichas en memoria.
+                           sala_salida, llave_salida) -> ResultadoResolubilidad:
+    """Recibe exclusivamente el esqueleto y las ubicaciones de /llaves.
 
-    No llama a fuentes de datos ni altera el esqueleto, ubicaciones o fichas.
+    No llama a fuentes de datos ni altera el esqueleto o las ubicaciones.
     Las llaves portadas se obtienen al alcanzar la sala inicial de su enemigo.
     """
-    catalogo = catalogo_llaves if catalogo_llaves is not None else []
-    indices = _Indices(esqueleto, ubicaciones_llaves, llave_salida, catalogo)
+    indices = _Indices(esqueleto, ubicaciones_llaves, llave_salida)
     inicio = esqueleto.posicion(sala_inicial)
     salida = esqueleto.posicion(sala_salida)
     visitado, disponibles, obtenidas, orden, entrada_salida = _recorrer(indices, inicio, salida)
@@ -357,7 +351,12 @@ def verificar_resolubilidad(esqueleto, ubicaciones_llaves, sala_inicial,
                 ubicaciones.append((indices.textos[i], lugar))
     grafo = _dependencias(indices, visitado, disponibles, obtenidas, frontera)
     ciclos = _detectar_ciclo(indices, grafo)
-    motivo = None if existe_puerta_salida else "no existe puerta hacia sala_salida que pida llave_salida"
+    if not existe_puerta_salida:
+        motivo = "no existe puerta hacia sala_salida que pida llave_salida"
+    elif indices.salida < 0 or not disponibles[indices.salida]:
+        motivo = "llave_salida no puede obtenerse"
+    else:
+        motivo = "ninguna puerta hacia sala_salida que pide llave_salida es alcanzable"
     return ResultadoResolubilidad("NO RESOLUBLE", llaves_no_obtenibles=llaves_no_obtenibles,
                                  frontera_bloqueada=frontera_reporte, ubicacion_llaves=ubicaciones,
                                  ciclos=ciclos, motivo=motivo)

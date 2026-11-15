@@ -11,9 +11,13 @@ import main
 import controlador.aplicacion as modulo
 from controlador.controlador import Controlador
 from modelo.datos.presupuesto_red import PresupuestoRed
+from modelo.datos.cliente_http import ClienteHTTP
+from modelo.datos.esqueleto import descargar_esqueleto
 from modelo.juego.errores import ErrorCripta, ErrorPresupuesto, ErrorRed
 from tests import crear_paquete_prueba
-from tests.test_resolubilidad import _AlmacenMemoria, _FuenteMemoria, _integracion_memoria
+from tests.test_resolubilidad import (
+    _AlmacenMemoria, _FuenteMemoria, _integracion_memoria, _Respuesta, _Sesion,
+)
 
 
 def _entradas(sala_llave=1):
@@ -26,6 +30,57 @@ def _entradas(sala_llave=1):
 
 
 class PruebasIntegracionResolubilidad(unittest.TestCase):
+    def test_FR001_llaves_interpreta_id_sala_y_enemigo_opcional(self):
+        datos, salas, _ = _entradas()
+        for enemigo in ({}, {"enemigo": None}, {"enemigo": "e-sintetico"}):
+            for sala in (1, 2):
+                with self.subTest(enemigo=enemigo, sala=sala):
+                    registro = {"id": "itm_fin", "sala": sala, **enemigo}
+                    sesion = _Sesion([_Respuesta(200, {"llaves": [registro]})])
+                    cliente = ClienteHTTP(PresupuestoRed(100), sesion=sesion)
+                    respuesta = cliente.llaves("sintetica")
+                    self.assertEqual(respuesta, {"llaves": [registro]})
+                    self.assertTrue(sesion.llamadas[0].endswith("/criptas/sintetica/llaves"))
+                    fuente = _FuenteMemoria(datos, salas, respuesta)
+                    almacen = _AlmacenMemoria(datos, salas, None)
+                    with _integracion_memoria(fuente, almacen):
+                        reporte = modulo.Aplicacion(fuente, PresupuestoRed(100)).verificar("sintetica")
+                    self.assertEqual(reporte.es_resoluble(), sala == 1)
+                    if sala == 1:
+                        self.assertEqual(reporte.orden_llaves, [(0, ["itm_fin"])])
+                    else:
+                        lugar = "sala 2"
+                        if enemigo.get("enemigo") is not None:
+                            lugar += " (suelta del enemigo e-sintetico)"
+                        self.assertEqual(reporte.ubicacion_llaves, [("itm_fin", lugar)])
+
+    def test_FR006_offline_conserva_esqueleto_costos_y_llaves_guardados_en_linea(self):
+        datos, salas, llaves = _entradas()
+        # Una salida declara costo y otra usa el valor predeterminado.
+        salas[0]["salidas"]["E"]["costo"] = 37
+        salas[1]["salidas"] = {"O": {"sala": 1}}
+        pagina = {"pagina": 1, "total_paginas": 1, "salas": salas}
+        sesion = _Sesion([_Respuesta(200, datos), _Respuesta(200, pagina), _Respuesta(200, llaves)])
+        cliente = ClienteHTTP(PresupuestoRed(100), sesion=sesion)
+        with TemporaryDirectory() as carpeta, patch(
+                "requests.sessions.Session.request", side_effect=AssertionError("Red real")):
+            general = cliente.datos_cripta("sintetica")
+            en_linea = descargar_esqueleto(cliente, "sintetica")
+            ubicaciones = cliente.llaves("sintetica")
+            crear_paquete_prueba._escribir_cripta(carpeta, general, [pagina], [], ubicaciones)
+            argumentos = main.leer_argumentos(["--offline", carpeta])
+            offline, presupuesto = main.crear_fuente_datos(
+                offline=argumentos.offline is not None, carpeta_offline=argumentos.offline)
+            sin_red = descargar_esqueleto(offline, "sintetica")
+            self.assertEqual(offline.datos_cripta("sintetica"), general)
+            self.assertEqual(sin_red.ids, en_linea.ids)
+            self.assertEqual(sin_red.vecinos, en_linea.vecinos)
+            self.assertEqual(sin_red.salidas, en_linea.salidas)
+            self.assertEqual([s[d]["costo"] for s, d in
+                              ((sin_red.salidas[0], "E"), (sin_red.salidas[1], "O"))], [37, 100])
+            self.assertEqual(offline.llaves("sintetica"), ubicaciones)
+            self.assertEqual(len(sesion.llamadas), 3)
+
     def test_FR009_verificar_no_inicializa_motor_red_precarga_log_ni_puntajes(self):
         datos, salas, llaves = _entradas()
         fuente = _FuenteMemoria(datos, salas, llaves)
@@ -150,19 +205,26 @@ class PruebasIntegracionResolubilidad(unittest.TestCase):
             self.assertEqual(app.verificar("sintetica").estado, "NO RESOLUBLE")
             self.assertEqual(fuente.consultas_llaves, 2)
 
-    def test_FR012_abre_solo_se_lee_de_fichas_locales_sin_pedir_catalogo(self):
-        datos, salas, llaves = _entradas()
-        llaves = {"llaves": [{"id": "itm_maestra", "sala": 1}]}
-        fuente = _FuenteMemoria(datos, salas, llaves)
-        with TemporaryDirectory() as carpeta, patch.object(
-                fuente, "catalogo", create=True, side_effect=AssertionError("Solicitud de catálogo")):
-            app = modulo.Aplicacion(fuente, PresupuestoRed(100), carpeta)
-            self.assertEqual(app.verificar("sintetica").estado, "NO RESOLUBLE")
-            app.local.guardar("itm_maestra", {"id": "itm_maestra", "abre": "itm_fin"})
-            # Una aplicación nueva recupera también la ficha del disco, sin red.
-            otra = modulo.Aplicacion(fuente, PresupuestoRed(100), carpeta)
-            self.assertEqual(otra.verificar("sintetica").estado, "RESOLUBLE")
-            self.assertEqual(fuente.consultas_llaves, 1)
+    def test_FR012_ficha_local_no_cambia_resultado_ni_orden_sin_pedir_catalogo(self):
+        for abre_registro in (None, "itm_fin"):
+            with self.subTest(abre=abre_registro), TemporaryDirectory() as carpeta:
+                datos, salas, _ = _entradas()
+                registro = {"id": "itm_maestra", "sala": 1, "abre": abre_registro}
+                fuente = _FuenteMemoria(datos, salas, {"llaves": [registro]})
+                with patch.object(fuente, "catalogo", create=True,
+                                  side_effect=AssertionError("Solicitud de cat?logo")), patch(
+                        "requests.sessions.Session.request", side_effect=AssertionError("Red real")):
+                    app = modulo.Aplicacion(fuente, PresupuestoRed(100), carpeta)
+                    antes = app.verificar("sintetica")
+                    app.local.guardar("itm_maestra", {"id": "itm_maestra", "abre": "itm_fin"})
+                    otra = modulo.Aplicacion(fuente, PresupuestoRed(100), carpeta)
+                    with patch.object(modulo.AlmacenLocalCache, "obtener", side_effect=AssertionError("Lee ficha")), patch.object(
+                            modulo.AlmacenLocalCache, "disponible", side_effect=AssertionError("Consulta ficha")):
+                        despues = otra.verificar("sintetica")
+                    self.assertEqual(antes.es_resoluble(), abre_registro is not None)
+                    self.assertEqual(antes.formatear_reporte(), despues.formatear_reporte())
+                    self.assertEqual(antes.orden_llaves, despues.orden_llaves)
+                    self.assertEqual(fuente.consultas_llaves, 1)
 
     def test_FR015_rechazo_despues_de_partida_anterior_deja_partida_en_none(self):
         datos, salas, llaves = _entradas(sala_llave=2)
