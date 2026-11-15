@@ -39,7 +39,7 @@ El diseño técnico se apoya en arreglos contiguos de tamaño fijo $N$ indexados
 **Target Platform**: Multiplataforma (Windows, Linux, macOS). Pruebas y `--bench` 100% en consola sin inicializar Pygame.  
 **Project Type**: Motor de juego por eventos con arquitectura MVC estricta.  
 **Performance Goals**:
-- Recálculo de ruta completa para un paso de "ir a" $< 5\text{ ms}$ en la cripta de referencia de 1000 salas (`SC-001`).
+- Recálculo de ruta completa para un paso de "ir a" $< 5\text{ ms}$ en la cripta oficial de referencia (`SC-001`), todavía no identificada; no se presupone que tenga 1000 salas.
 - Consulta de estado de sala y puerta recordada en tiempo constante $O(1)$ independiente de $N$ (`SC-002`).
 - Exploración de sala proporcional exclusivamente al número de salidas de la sala (`SC-003`).
 - Registro y reversión de cambios de conocimiento en $O(1)$ por sala/puerta (`SC-004`).
@@ -112,7 +112,7 @@ vista/
 └── vista_pygame.py      # Corrección de _dibujar_puerta para no filtrar IDs de salas avistadas
 
 bench/
-└── bench_mapa_conocido.py # Mediciones oficiales de SC-001, SC-002, SC-003 y SC-004
+└── bench_mapa_conocido.py # Instrumentación sintética SC-001..SC-004; aceptación oficial pendiente
 
 main.py                  # Integración del benchmark 'mapa_conocido' en BENCHES
 

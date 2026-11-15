@@ -4,7 +4,17 @@
 
 **Prerequisites**: `plan.md` ✓ | `spec.md` ✓ | `research.md` ✓ | `data-model.md` ✓ | `contracts/` ✓ | `quickstart.md` ✓ | `constitution.md` ✓
 
-## Estado verificado en la integracion 002 + 003 + 004
+## Verificación funcional posterior
+
+Sobre 18b9364 se ejecutaron nuevamente 42/42 módulos, sin fallos, y
+229/229 unittest conjuntos, sin errores, en 140,442 s. Los 13 fallos citados
+en la auditoría histórica de abajo ya fueron corregidos. Dos corridas nuevas
+de mapa_conocido y los cuatro benchmarks de T030 terminaron con código 0;
+la comparación con Parte I y sus límites están en DECISIONES.md de la raíz,
+sección 17.5. SC-001, T030 y T031 siguen pendientes de evidencia suficiente.
+Esta edición documental no ejecuta otra vez las pruebas.
+
+## Estado histórico de la auditoría 002 + 003 + 004
 
 Base revisada: `75cc63eae09b3c7c85d388f44457086ba443da8a`, rama
 `integracion-002-003` (2026-11-13). Implementacion funcional de conocimiento,
@@ -172,7 +182,7 @@ Ambas suites deben aprobar; comprueban codec, conocimiento, rechazo v3, reconstr
 - [x] T028 Instrumentacion sintetica SC001-SC004 en tests/bench_niebla_ir_a.py y adaptador bench/bench_mapa_conocido.py: consultas, exploracion sin/con antorcha, registro/inversion por celda y pergamino real. Instrumentacion ejecutada; SC-001 oficial sigue pendiente. -> Evidencia: `test_bench_mapa_conocido_002; main.py --bench mapa_conocido`.
 - [x] T029 Registro mapa_conocido en main.py:BENCHES; adaptador main([]) aisla argumentos externos, sin cambiar otros benchmarks. -> Evidencia: `test_bench_mapa_conocido_002`.
 - [ ] T030 Ejecutados cache, lista_ordenada, ordenamiento y guardado en temporal externo, codigo 0. Pendiente comparacion de regresiones: no hay linea base equivalente; no afirmar ausencia de degradacion. -> Evidencia: `mediciones en DECISIONES.md`.
-- [ ] T031 Regresiones ejecutadas: 35/39 modulos aprobados. Pendiente cierre integral de cobertura FR/SC, SC-001 oficial, comparacion T030 y correcciones compartidas; no declarar cobertura del 100%. -> Evidencia: `matriz en DECISIONES.md`.
+- [ ] T031 Regresiones nuevas sobre 18b9364: 42/42 módulos y 229/229 unittest aprobados; fallos compartidos anteriores corregidos. Pendiente cierre integral FR/SC, SC-001 oficial y comparación equivalente T030; no declarar cobertura del 100%. -> Evidencia: `DECISIONES.md de la raíz, 17.5; matriz local de trazabilidad`.
 
 ---
 

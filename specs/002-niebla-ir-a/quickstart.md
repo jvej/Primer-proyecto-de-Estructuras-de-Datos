@@ -24,8 +24,9 @@ Completar con test_mapa_consola, test_integracion_comentarios_002, motor,
 Partida, terreno/cazador, resolubilidad y replay/puntajes. No basta C3 para toda
 002. Ejecutar cada tests.test_* como modulo: unittest discover por si solo no
 ejecuta las pruebas del proyecto basadas en funciones.
-Ultima suite: 35/39 modulos; 13 fallos conocidos (9 interfaces historicas,
-2 replay hasta, 1 simultaneos, 1 falso positivo GUI). No alterar expectativas.
+Verificación posterior sobre 18b9364: 42/42 módulos y 229/229 unittest conjuntos
+aprobados. Los 13 fallos de la auditoría histórica fueron corregidos. La
+aceptación de SC-001 y la comparación equivalente T030 siguen pendientes.
 Matriz y resultados reales en DECISIONES.md.
 
 ## Interfaz
