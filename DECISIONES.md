@@ -18,6 +18,9 @@ Una sección por cada problema de §4 resuelto, más las decisiones de rendimien
   - [6. §4.3 Resolución de referencias del catálogo](#6-43-resolución-de-referencias-del-catálogo)
   - [7. §4.8 Bitácora en pantalla](#7-48-bitácora-en-pantalla)
   - [8. §5.1 Presupuesto de red](#8-51-presupuesto-de-red)
+  - [8b. Parte II — Servicio web, datos nuevos y contrato C5 (003)](#8b-parte-ii--servicio-web-datos-nuevos-y-contrato-c5-003-fr-001fr-008)
+  - [8c. Parte II — §5.4 Verificación de resolubilidad (003)](#8c-parte-ii--54-verificación-de-resolubilidad-003-fr-009fr-018-sc-001sc-005)
+  - [8d. Parte II — §5.6 Revisión de la red con los datos nuevos](#8d-parte-ii--56-revisión-de-la-red-con-los-datos-nuevos)
 - **Kim** (caché persistente, ordenamiento y guardado binario)
   - [9. §4.4 Reutilización y caché persistente](#9-44-reutilización-y-caché-persistente)
   - [10. §4.9 Ordenamiento](#10-49-ordenamiento)
@@ -528,6 +531,197 @@ Registrar y reservar son O(1) con un cerrojo, porque el hilo de red y el princip
 - Las consultas de versión de cripta y de catálogo, necesarias para validar la caché, gastan presupuesto en cada partida.
 - Con un presupuesto muy pequeño la reserva de 2 puede no alcanzar en criptas con muchas puertas seguidas.
 - No se midió una corrida en frío contra una con caché caliente en la misma cripta; conviene agregarlo (borrar `datos_cripta/`, jugar, y jugar de nuevo).
+
+---
+
+## 8b. Parte II — Servicio web, datos nuevos y contrato C5 (003, FR-001..FR-008)
+
+Especificación: [`specs/003-resolubilidad/spec.md`](specs/003-resolubilidad/spec.md) · Plan: [`specs/003-resolubilidad/plan.md`](specs/003-resolubilidad/plan.md) · Contratos: [`specs/003-resolubilidad/contracts/`](specs/003-resolubilidad/contracts/)
+
+### 8b.1 Problema
+
+La Parte II agrega datos al servicio web: cada salida puede traer `costo` (100 si falta), las fichas de enemigo pueden ser `cazador` con `rango` (en unidades de costo) y hay una consulta nueva, `GET /criptas/<id>/llaves`, que dice dónde está cada llave (en el suelo o en la `suelta` de un enemigo). Todo debe respetar `presupuesto_solicitudes`, la validación por versión y el modo `--offline`. Además, el equipo necesitaba criptas sintéticas reproducibles para medir (contrato C5).
+
+### 8b.2 Alternativas consideradas
+
+| Tema | Alternativas | Elegida y motivo |
+|---|---|---|
+| Costo inválido (`0`, negativo, texto) | Corregirlo en silencio a 1 · Rechazarlo como respuesta mal formada | **Rechazar con `ErrorRed`** indicando sala, dirección y valor. Igual que el resto de validaciones de la Parte I; esconder un dato roto del servidor no se puede defender. Solo si **falta** se usa 100. |
+| `/llaves` en cada partida | Consultar siempre · Guardar junto a la cripta y reutilizar mientras coincida la versión | **Guardar en `AlmacenCripta`**, ligado a la versión: con copia vigente se gastan 0 solicitudes. |
+| Campo `abre` de las llaves | Pedir las fichas al catálogo (gasta presupuesto) · Usar solo fichas ya disponibles localmente | **Solo fichas locales**. Si no hay ficha, la llave abre únicamente la cerradura igual a su id (límite documentado). |
+| Topología del generador | Solo línea · Línea y cuadrícula | **Ambas.** La línea es el peor caso de la cadena de llaves; la cuadrícula da caminos alternativos con costos distintos (necesaria para Dijkstra, cazador e IR_A). |
+| Rango de los cazadores generados | Un valor para todos · Intervalo sorteado | **Entero o intervalo** `(min, max)` sorteado con la semilla, para tener distintos rangos. |
+
+### 8b.3 Decisión
+
+- `llaves(id_cripta)` en `FuenteDatos`, `ClienteHTTP` (`GET /criptas/<id>/llaves`, cuenta en el presupuesto, incluidos los reintentos 429), `ClienteOffline` (`criptas/<id>/llaves.json`) y `FuenteAlmacen`. `AlmacenCripta` guarda y descarta las llaves con la versión de la cripta (sin borrar archivos a mano).
+- `Esqueleto` conserva `costo` en cada salida; no modifica la respuesta original.
+- `bench/generador_criptas.py → generar_cripta(...)`: determinista por semilla (un `random.Random` local que no toca el azar de ninguna partida), mismo formato que la API (`general`, `paginas`, `contenido`, `catalogo`, `llaves`, `version_catalogo`), parámetros validados con `ValueError` y sin ajustes silenciosos.
+- Paquete offline (`tests/crear_paquete_prueba.py`): costos, `llaves.json`, una cripta no resoluble con ciclo y una con 32 cazadores.
+
+### 8b.4 Análisis de complejidad
+
+| Operación | Costo |
+|---|---|
+| `llaves()` con red | 1 solicitud (+1 por cada 429) y O(L) para leer la respuesta |
+| `llaves()` con copia de la misma versión | 0 solicitudes, O(L) |
+| Costo de una salida al armar el esqueleto | O(1) por salida |
+| `generar_cripta` | O(S + L + C) (salas, llaves, cazadores) |
+
+### 8b.5 Evidencia empírica
+
+`bench_red.py`, sección `/llaves` (sesión simulada, sin red real ni espera de reintento):
+
+| Caso | Solicitudes gastadas | Tiempo (ms) |
+|---|---|---|
+| Sin copia local (200) | **1** | 0.075 |
+| Copia local de la misma versión | **0** | 0.065 |
+| Sin copia local (429 → 200) | **2** | 0.136 |
+
+Pruebas: `test_esqueleto` (4, FR-007: costo por defecto, costos válidos, rechazo de inválidos, payload sin mutar), `test_generador_criptas` (9, FR-008: determinismo, línea y cuadrícula, rangos, validación), `test_red` (`test_FR003_bench_llaves_cuenta_consulta_copia_y_reintento_sin_red`), `test_almacen_cripta` (versión distinta descarta) y `test_resolubilidad` (`test_FR003_endpoint_llaves_cuenta_en_presupuesto_solicitudes`).
+
+### 8b.6 Límites conocidos
+
+- `abre` solo se respeta si la ficha de la llave ya está en el catálogo local; no se gastan solicitudes para buscarla.
+- El generador cierra con `cierre_automatico` solo las puertas de la cadena de llaves; no genera trampas.
+- Las mediciones son con sesión simulada y criptas sintéticas, no con la cripta oficial.
+
+**Plan frente a lo final.** La primera implementación corregía en silencio los costos inválidos a 1; en la revisión se cambió a rechazo con `ErrorRed`. La cuadrícula y los rangos por intervalo se agregaron al revisar el generador, porque la línea no servía para los bench de Dijkstra y cazador. Commits: `2a0432e`.
+
+---
+
+## 8c. Parte II — §5.4 Verificación de resolubilidad (003, FR-009..FR-018, SC-001..SC-005)
+
+Especificación: [`specs/003-resolubilidad/spec.md`](specs/003-resolubilidad/spec.md) · Plan: [`specs/003-resolubilidad/plan.md`](specs/003-resolubilidad/plan.md) · Investigación: [`specs/003-resolubilidad/research.md`](specs/003-resolubilidad/research.md) · Modelo de datos: [`specs/003-resolubilidad/data-model.md`](specs/003-resolubilidad/data-model.md)
+
+### 8c.1 Problema
+
+Antes de iniciar una partida hay que decidir si la cripta se puede ganar: obtener `llave_salida` y entrar a `sala_salida` por una puerta que la pide, con los supuestos de §3.5 (las llaves no se gastan, todo enemigo se vence, una llave en la `suelta` se obtiene en la sala donde empieza el enemigo, trampas y cierres no bloquean). Si no se puede, el reporte debe decir qué llaves faltan, la frontera bloqueada, dónde está cada llave y el ciclo si existe. Debe tardar menos de 200 ms y crecer de forma lineal, sin repetir el recorrido por cada llave.
+
+### 8c.2 Alternativas consideradas
+
+| Tema | Alternativas | Elegida y motivo |
+|---|---|---|
+| Recorrido | Repetir un recorrido completo desde la sala inicial cada vez que se obtiene una llave, O(L·(S+E)) · Un solo recorrido incremental con listas de espera por cerradura | **Incremental.** Cada sala y cada puerta se procesan una vez. La alternativa se implementó en el bench para medir. |
+| Orden de las llaves | Orden en que se descubren · Por distancia · Por etapas y, dentro de cada etapa, por id de texto | **Por etapas.** La etapa 0 es todo lo alcanzable sin llaves; en una etapa solo se usan llaves de etapas anteriores. El resultado no depende del orden interno del recorrido ni del orden en que llegan los datos. |
+| Índice id → número | `dict` (prohibido) · Tabla hash propia · Lista ordenada con búsqueda binaria propia | **Lista ordenada + búsqueda binaria** (el equipo acordó no usar tablas hash). |
+| Ordenamiento para los índices | `ordenar()` (elige inserción o mergesort) · `ordenar_merge()` | **`ordenar_merge()`**, por la medición del punto 8c.5. |
+| Ciclos | DFS desde cada llave · Componentes fuertemente conexas (Kosaraju) y luego un DFS para el testigo | **Kosaraju**, ambos recorridos iterativos: elige siempre el ciclo que contiene el menor id, en tiempo lineal. |
+| Reporte de no resoluble | Segundo recorrido · Lo que quedó en las listas de espera más una continuación desde la frontera | **Mismo recorrido**: la frontera son las listas de espera que quedaron; para los ciclos se continúa desde la frontera etiquetando cada sala con la llave de la puerta cerrada más cercana (X → Y si X está detrás de una puerta que pide Y). |
+
+### 8c.3 Decisión
+
+`modelo/juego/resolubilidad.py` es puro (sin red, archivos, controlador ni vista): `verificar_resolubilidad(esqueleto, ubicaciones, sala_inicial, sala_salida, llave_salida, catalogo_llaves=None)` devuelve `ResultadoResolubilidad` (`RESOLUBLE`, `NO RESOLUBLE` o `NO VERIFICADA`) con `formatear_reporte()` según la plantilla FR-018.
+
+- Recorrido por etapas con la `ColaFIFO` propia, salidas en orden N, S, E, O.
+- Listas de espera indexadas por lo que pide la puerta; al activar una llave se liberan las de su id y, si hay ficha local, las de su `abre`.
+- Puerta cerrada sin llave: infranqueable; si es adyacente a la región alcanzable, aparece en la frontera "sin llave asociada".
+- Si no existe ninguna puerta hacia `sala_salida` que pida `llave_salida`: `NO RESOLUBLE` con `MOTIVO`.
+- Integración (`controlador/aplicacion.py`, `main.py`): solo en partidas nuevas (no en replay, reconstrucción ni carga de guardado) se obtienen las llaves (copia local primero), se verifica y se guarda `app.reporte_resolubilidad`. Si no es `RESOLUBLE` y no hay `--forzar`, se lanza `ErrorNoResoluble` (subclase de `ErrorCripta`) y no se crea la partida; el controlador muestra el reporte y vuelve a la selección. Sin red o sin presupuesto y sin copia local: `NO VERIFICADA`, misma regla. `--verificar CRIPTA` no crea vista, imprime solo el reporte y sale con 0 / 1 / 2.
+
+### 8c.4 Análisis de complejidad
+
+S = salas, E = salidas, L = llaves y cerraduras distintas.
+
+| Fase | Costo |
+|---|---|
+| Preparación: ordenar ids de salas y de llaves/cerraduras, traducir vecinos a posiciones | O(S log S + E log S + L log L) (búsquedas binarias propias y `ordenar_merge`) |
+| Recorrido por etapas | **O(S + E + L)**: cada sala entra una vez a la cola y cada lista de espera se libera una vez |
+| Ordenar las llaves dentro de cada etapa | O(L log L) en total |
+| Frontera, ubicaciones y continuación para ciclos | O(S + E + L) |
+| Ciclos (Kosaraju + testigo) | O(L + aristas del grafo de dependencias), con aristas ≤ L |
+| Alternativa descartada (recorrido repetido) | O(L · (S + E)) |
+
+### 8c.5 Evidencia empírica
+
+`python main.py --bench resolubilidad`. Criptas sintéticas de `generar_cripta` (semilla 7), mediana de 7 repeticiones con `time.perf_counter`, preprocesamiento incluido en ambas versiones. Ambas versiones dieron siempre el mismo estado y el mismo orden de llaves. Equipo: laptop de Jeferson, Windows, Python 3.13.18 del venv, repositorio fuera de OneDrive.
+
+**Antes (commit `809f398`, índices con `ordenar()`):**
+
+| Topología | Salas | Llaves | Por etapas (ms) | Repetido (ms) |
+|---|---|---|---|---|
+| línea | 51 | 50 | 0.759 | 1.280 |
+| línea | 101 | 100 | 1.577 | 3.687 |
+| línea | 201 | 200 | **19.503** | 29.284 |
+| cuadrícula | 1000 | 50 | 10.783 | 24.100 |
+
+Con 200 llaves el tiempo se multiplicó por 12 al duplicar el tamaño. Causa: `ordenar()` elige inserción cuando el desorden "lejano" es ≤ 2 %, y la lista de ids (llave de salida + cerraduras de las puertas + ids de las ubicaciones) son dos tramos ordenados pegados, que el detector toma como "casi ordenada" (≈1,5 % de desorden con 200 llaves; ≈3 % con 100, donde sí elige mergesort). Así la preparación pagaba O(n²).
+
+**Después (commit `d5bc68a`, `ordenar_merge()`):**
+
+| Topología | Salas | Salidas | Llaves | Por etapas (ms) | Repetido (ms) | Aceleración |
+|---|---|---|---|---|---|---|
+| línea | 11 | 20 | 10 | 0.153 | 0.179 | 1.17× |
+| línea | 51 | 100 | 50 | 0.899 | 1.509 | 1.68× |
+| línea | 101 | 200 | 100 | 2.663 | 5.776 | 2.17× |
+| línea | 201 | 400 | 200 | **4.732** | 15.950 | 3.37× |
+| línea | 401 | 800 | 400 | **10.586** | 63.248 | **5.97×** |
+| cuadrícula | 1000 | 3872 | 50 | 13.319 | 27.342 | 2.05× |
+
+- **Por etapas crece lineal:** al duplicar las llaves el tiempo se multiplica por 1.78 (100 → 200) y 2.24 (200 → 400). El 2.96 de 50 → 100 es ruido de mediciones de menos de 3 ms.
+- **El repetido crece cuadrático:** ×2.8 y ×4.0 en los mismos pasos. La ventaja de la versión por etapas aumenta con el tamaño.
+- Con 100 llaves, `ordenar_merge` es algo más lento que la inserción (2.66 frente a 1.58 ms): es el costo fijo de mergesort en listas chicas, que se acepta a cambio de no caer nunca en O(n²).
+- **SC-001:** 13.3 ms en la cuadrícula de 1000 salas, muy por debajo de 200 ms (referencia sintética).
+
+Pruebas: `test_resolubilidad` (7 de aceptación: ciclo de la llave de salida, llave en la `suelta` de un errante, mismo orden en ejecuciones repetidas, no inicia sin `--forzar`, `/llaves` en el presupuesto, códigos 0/1/2 de `--verificar`, plantilla exacta), `test_resolubilidad_unitaria` (11: ciclo de tres llaves, coincidencia por `abre`, `MOTIVO` sin puerta a la salida, etapa 0 sin llaves de la misma etapa, entre otras), `test_resolubilidad_integracion` (12: replay y carga no verifican, contingencia de red y presupuesto, `--forzar`, offline real sin vista), `test_bench_resolubilidad` (7, incluida la igualdad de resultados antes y después del cambio de ordenamiento).
+
+### 8c.6 Límites conocidos
+
+- **SC-001 no está validado con la cripta oficial publicada**; los números son de criptas sintéticas.
+- La preparación agrega un factor logarítmico (búsquedas binarias y ordenamiento); el recorrido en sí es lineal. Con tamaños chicos la aceleración es modesta porque ambas versiones incluyen esa preparación.
+- Se reporta un solo ciclo (el que contiene el menor id), no todos.
+- `abre` depende de que la ficha esté en el catálogo local (ver 8b.6).
+- Lección para el equipo: `ordenar()` puede caer en O(n²) con listas formadas por tramos ordenados concatenados; donde eso pueda ocurrir, usar `ordenar_merge()` o medir.
+
+**Plan frente a lo final.**
+1. El plan usaba `ordenar()`; la medición obligó a cambiar a `ordenar_merge()` (en el mismo commit se actualizaron primero `plan.md` y `research.md` y después el código).
+2. El plan proponía un DFS de tres colores; la versión final agrega Kosaraju para elegir siempre el mismo ciclo sin enumerarlos todos.
+3. La primera versión del plan dejaba usar en una etapa las llaves encontradas en esa misma etapa, lo que hacía depender el orden del recorrido; se corrigió en el plan antes de programar.
+4. El reporte se guarda en `app.reporte_resolubilidad` y lo muestra la vista activa; el controlador no imprime (MVC).
+
+Commits: `ff0ace9` (spec), `8ddfd70` y `9dab2b6` (plan, tareas y análisis), `809a7b6` (pruebas de aceptación), `b3a2a01` (algoritmo), `dc5f4e8` (integración, `--verificar`, `--forzar`), `809f398` (bench), `d5bc68a` (corrección del ordenamiento).
+
+---
+
+## 8d. Parte II — §5.6 Revisión de la red con los datos nuevos
+
+### 8d.1 Problema
+
+§5.6 pide repetir las mediciones de la Parte I con los datos de la Parte II y decir si las decisiones siguen valiendo. En red, lo nuevo es `/llaves` (una solicitud más antes de jugar) y que las salidas traen costo.
+
+### 8d.2 Evidencia (`python main.py --bench red`)
+
+**Recorrido de la cripta (lotes de 10 frente a una sala por solicitud):**
+
+| Salas | Lotes de 10: solicitudes (esperas) | Una por solicitud: solicitudes (esperas) |
+|---|---|---|
+| 20 | **5** (2) | 33 (20) |
+| 60 | **9** (6) | 73 (60) |
+| 200 | **23** (20) | 213 (200) |
+
+Iguales a la Parte I (sección 5.5): el costo de las salidas no cambia cuántas páginas ni cuántos lotes se piden.
+
+**Bitácora en pantalla (µs por mensaje):**
+
+| Capacidad | Circular | `pop(0)` |
+|---|---|---|
+| 20 | 0.146 | **0.113** |
+| 1000 | **0.156** | 0.216 |
+| 20000 | **0.162** | 46.305 |
+| 200000 | **0.147** | 136.538 |
+
+Misma conclusión que la sección 7.5: el circular se mantiene constante y `pop(0)` crece con la capacidad.
+
+**`/llaves`:** 1 solicitud por partida nueva sin copia local, 0 con copia de la misma versión, 2 si hay un 429. En replay, reconstrucción y carga de guardado no se consulta (no se verifica).
+
+### 8d.3 Conclusión
+
+Las decisiones de la Parte I (lotes de 10, prioridad por cercanía, bitácora circular, presupuesto con reserva) siguen siendo correctas con los datos nuevos. El único costo nuevo es una solicitud por partida nueva, que desaparece cuando la cripta ya se jugó con esa versión.
+
+### 8d.4 Límites conocidos
+
+- Con un presupuesto muy chico, la solicitud de `/llaves` compite con la reserva de la precarga; si no alcanza y no hay copia local, la verificación queda `NO VERIFICADA` y la partida no inicia sin `--forzar` (el programa no se cae).
+- No se midió contra el servidor real con la cripta oficial.
 
 ---
 
