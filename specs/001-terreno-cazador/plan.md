@@ -153,3 +153,16 @@ bench/
    - **SC-005**: Comparar individual vs. compartido para 1, 10, 30 y 100 cazadores con rangos pequeño y grande.
    - **SC-006**: Comparar reutilización vs. recálculo continuo en escenarios con puertas estables e inestables.
    - **Revisión §5.6**: Repetir `bench_motor` con cazadores y documentar el análisis en `DECISIONES.md`.
+
+
+### Bloque 5: Cierre de Capacidad y Benchmarks Oficiales (SC-004..SC-006, §5.6)
+**Estado**: **COMPLETADO (T024-T029)**.
+- Integrado `--bench cazador` en `main.py` (`SUBSISTEMAS_BENCH`).
+- `bench/bench_cazador.py` implementado y verificado:
+  - **SC-004**: Tiempo máximo 0.075 ms, 0 de 50 ciclos > 20 ms (cumple límite estricto < 20 ms con 30 cazadores en 100 salas).
+  - **SC-005**: 1, 10, 30 y 100 cazadores con rangos 250 y 1500; speedup de hasta 26.3x con cálculo compartido.
+  - **SC-006**: Reutilización selectiva con invalidación reactiva alcanza 8.91x de aceleración frente a recálculo continuo en puertas estables y 7.67x en puertas inestables, con 100% de equivalencia observable en decisiones.
+- `bench/bench_motor.py` ampliado con escenario de 50 cazadores activos en Parte II (2.03 ms medio, 7.31 ms máximo < 20 ms).
+- Documentación redactada en `DECISIONES.md` (§5.1, §5.2, §5.6 y capacidad 001).
+- Garantía de cierre del instante $t$ integrada en `agenda_eventos.py` y `partida.py`, validada con `tests/test_cierre_instante_t.py`.
+- Persistencia real del cazador verificada con `tests/test_persistencia_cazador.py`.

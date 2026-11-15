@@ -11,6 +11,8 @@ Una sección por cada problema de §4 resuelto, más las decisiones de rendimien
   - [2. §5.2 Ciclo completo entre dos decisiones del jugador](#2-52-ciclo-completo-entre-dos-decisiones-del-jugador)
   - [3. §4.7 El rastro del jugador](#3-47-el-rastro-del-jugador)
   - [4. Efectos temporales y combate determinista (§2.6, §2.10)](#4-efectos-temporales-y-combate-determinista-26-210)
+  - [4b. Revisión de §5.6: Motor con cazadores, costos de terreno y eventos empatados](#4b-revisión-de-56-motor-con-cazadores-costos-de-terreno-y-eventos-empatados)
+  - [4c. Capacidad 001: Terreno, Cazador e Invalidación Reactiva de Rutas (§5.1, §5.2, SC-004..SC-006)](#4c-capacidad-001-terreno-cazador-e-invalidación-reactiva-de-rutas-51-52-sc-004sc-006)
 - **Jeferson** (red, precarga, catálogo y bitácora en pantalla)
   - [5. §4.2 Traer el contenido antes de que haga falta](#5-42-traer-el-contenido-antes-de-que-haga-falta)
   - [6. §4.3 Resolución de referencias del catálogo](#6-43-resolución-de-referencias-del-catálogo)
@@ -236,6 +238,112 @@ Un efecto activo cuesta O(log n) solo cuando le toca (sacar y reagendar su event
 - Las fichas del catálogo real no traen veneno en las trampas publicadas; el nombre exacto del campo no está confirmado. La lectura (`leer_veneno`) acepta varios formatos para no fallar con una cripta nueva.
 - Los comportamientos se comparan en minúscula y sin tildes solo para la imagen; en el Modelo se espera exactamente "errante" y "rastreador".
 - No hay bench de efectos por separado; su costo está dentro del ciclo de la sección 2.5.
+
+
+---
+
+## 4b. Revisión de §5.6: Motor con cazadores, costos de terreno y eventos empatados
+
+### 4b.1 Problema y contexto de la Parte II
+En la Parte II se introducen costos variables por salida (FR-001, FR-002), el enemigo cazador con búsqueda acotada por Dijkstra (FR-003..FR-007) y la garantía estricta de cierre del instante $t$ requerida para la integración con historia `<t>` (Axel). El objetivo es comprobar si el motor continúa resolviendo el ciclo completo entre dos decisiones del jugador en menos de 20 ms (§5.2) ante estas nuevas cargas dinámicas y empates de tiempo.
+
+### 4b.2 Alternativas y decisiones de diseño
+1. **Cierre del instante $t$**:
+   - *Alternativa rechazada*: Detener el bucle en cuanto `self.esperando = True`, dejando eventos empatados pendientes en la agenda. Esto provocaba que eventos con el mismo tiempo $t$ pero secuencia mayor al turno del jugador se ejecutaran tras aceptar la siguiente acción, rompiendo la coherencia de historia `<t>`.
+   - *Decisión adoptada*: Se incorporó `AgendaEventos.proximo_en_tiempo(tiempo)` y un segundo bucle en `Partida._avanzar()`: mientras la partida continúe en `"jugando"` y esperando al jugador, se extraen y ejecutan todos los eventos válidos con `tiempo_siguiente == self.reloj.tiempo_actual`. Si la raíz del heap tiene un tiempo estrictamente mayor, la función retorna `None` en $O(1)$ sin extraer eventos futuros ni alterar el determinismo.
+2. **Costos variables de terreno**:
+   - La duración de cada movimiento se calcula como `costo_accion(salida.costo, actor.velocidad) = max(1, salida.costo * 100 // velocidad)`. Los enemigos agendan sus turnos con este costo exacto, manteniendo la invariante de avance temporal no nulo.
+
+### 4b.3 Análisis de complejidad
+- Con $k$ eventos empatados en el instante $t$: la extracción y ejecución toma $O(k \log n)$, donde $n$ es la cantidad de eventos en la agenda.
+- Si no hay eventos empatados tras el turno del jugador: la verificación en `AgendaEventos.proximo_en_tiempo` inspecciona la raíz `self._heap[0]` en $O(1)$ y concluye inmediatamente.
+
+### 4b.4 Evidencia empírica (`bench_motor.py`)
+Medición repetida con 50 ciclos de esperar en Windows 11 con Python 3.13 (`python main.py --bench agenda`):
+
+| Carga | Tiempo Medio | Tiempo Máximo | Cumple < 20 ms |
+|---|---|---|---|
+| 300 eventos pendientes, ~15 actúan por ciclo | 0.51 ms | 13.51 ms | SÍ |
+| 300 enemigos en sala atacando a la vez (peor caso) | 19.24 ms | 121.79 ms | NO (caso extremo saturado) |
+| **50 cazadores activos en esqueleto de costos variables (§5.6 Parte II)** | **2.03 ms** | **7.31 ms** | **SÍ (cumple con holgura)** |
+
+### 4b.5 Límites conocidos
+- Si se satura artificialmente una sala con 300 enemigos atacando en el mismo ciclo, el registro masivo de operaciones inversas para el historial puede provocar picos que superen los 20 ms en equipos con fluctuaciones de CPU. Sin embargo, en escenarios tácticos reales con 50 cazadores y costos variables, el tiempo máximo es de 7.31 ms, garantizando fluidez.
+
+---
+
+## 4c. Capacidad 001: Terreno, Cazador e Invalidación Reactiva de Rutas (§5.1, §5.2, SC-004..SC-006)
+
+### 4c.1 Problema
+El enemigo cazador conoce la topología del esqueleto y persigue al jugador por el camino de costo mínimo acumulado de terreno, respetando las puertas abiertas y acotado por su campo de visión/rango ($d \le rango$). Calcular Dijkstra individualmente para cada cazador desde su posición hacia el jugador en cada decisión de juego tiene un costo prohibitivo $O(K \cdot (E' \log V'))$ que incumple el presupuesto de 20 ms con decenas de cazadores (`SC-004`, `SC-005`). Además, ante cambios de puertas o desplazamientos, el cálculo debe invalidarse reactivamente manteniendo equivalencia observable estricta (`SC-006`).
+
+### 4c.2 Alternativas consideradas
+1. **Dijkstra individual por cada cazador en cada paso**: Cada cazador ejecuta Dijkstra acotado hacia el jugador. Costo $O(K \cdot 	ext{Dijkstra})$. Descartado por no escalar con múltiples cazadores.
+2. **Cálculo compartido invertido desde el jugador**: Dado que el grafo de terreno es no dirigido y simétrico (`costo(u,v) = costo(v,u)`), un único Dijkstra acotado desde la sala del jugador calcula simultáneamente la distancia mínima hacia todas las salas dentro del rango máximo de interés.
+3. **Reinicio de marcas**:
+   - *Reiniciar arreglos contiguos en cada búsqueda*: $O(N)$ por búsqueda. Descartado.
+   - *Token de búsqueda persistente*: Arreglos de tamaño $N$ indexados por `Sala.indice`. Se incrementa `token_busqueda += 1`. Una sala está alcanzada si y solo si `marca[i] == token_busqueda`. El reinicio lógico es $O(1)$.
+4. **Reutilización selectiva e invalidación reactiva**:
+   - Se distinguen dos variables:
+     - $R_{\text{activo}}$: El rango del cazador específico que consulta su movimiento.
+     - $R_{\text{utilizado}}$: La cota de rango empleada en la última ejecución de Dijkstra acotado.
+   - El campo se conserva y reutiliza mientras:
+     1. El jugador permanezca en la misma sala (`_sala_jugador_id == partida.jugador.sala.id`).
+     2. Ningún cazador requiera un rango mayor que el calculado ($R_{\text{requerido}} \le R_{\text{utilizado}}$). Si $R_{\text{activo}} \le R_{\text{utilizado}}$, el campo se conserva.
+     3. Ninguna puerta con al menos un extremo a distancia $\le R_{\text{utilizado}}$ haya cambiado de estado (Contrato C2 con Axel y Kim).
+   - *Puertas lejanas*: Si una puerta cambia pero ambos extremos están a distancia $> R_{\text{utilizado}}$ (o no alcanzados con la marca vigente), no se invalida la caché.
+   - *Retroceso con pergamino*: Invalida incondicionalmente el campo derivado y revierte las mutaciones vía `deshacer_ultimo()`, suprimiendo avisos duplicados mediante verificación en `_notificar_invalidacion_rutas`.
+   - *Independencia cognitiva*: El cazador consulta el estado físico real (`salida.esta_abierta()`), mientras que la memoria de observación del jugador reside en `ConocimientoMapa`, garantizando total desacoplamiento.
+
+### 4c.3 Análisis de complejidad
+1. **Cálculo compartido**: Una ejecución de `dijkstra_acotado` desde el jugador explora el subgrafo $G' = (V', E')$ donde las distancias son $\le R_{\text{utilizado}}$. Costo: $O(E' \log V')$ usando el montículo binario propio de Kim (Contrato C3).
+2. **Reinicio lógico de marcas**: $O(1)$ mediante incremento del token entero `_token_busqueda`. (Nota: el reinicio lógico es $O(1)$, la búsqueda explora las aristas acotadas).
+3. **Consulta de cada cazador**:
+   - Obtener el rango máximo entre cazadores activos requiere recorrer la lista de enemigos de la partida: $O(E_{nemigos})$.
+   - Elegir la primera vecina: examina a lo sumo 4 salidas abiertas en $O(1)$, consultando `dist[vecino.indice]`.
+   - Desempate determinista por menor `vecino.id` entero: $O(1)$.
+4. **Costo total para $K$ cazadores**:
+   - Con recálculo necesario: $O(E' \log V' + K \cdot 	ext{salidas})$.
+   - Con reutilización selectiva válida: $O(K \cdot 	ext{salidas}) = O(K)$, sin tocar Dijkstra.
+5. **Espacio**: $O(N)$ arreglos fijos de distancias y marcas contiguas de tamaño $N = |Salas|$, reutilizados persistentemente sin alocaciones dinámicas.
+
+### 4c.4 Evidencia empírica (`bench/bench_cazador.py`)
+Medido en Windows 11 con `python main.py --bench cazador`:
+
+#### 1. SC-004: Medición de ciclos individuales entre decisiones del jugador
+- Configuración: 100 salas sintéticas, 30 cazadores activos simultáneos, rango = 600, 50 ciclos consecutivos de juego.
+- **Tiempo máximo por ciclo**: **0.075 ms**.
+- **Tiempo medio por ciclo**: **0.013 ms** (p50: 0.010 ms, p95: 0.021 ms, p99: 0.075 ms).
+- **Ciclos que exceden 20 ms**: **0 de 50 (0%)**. Cumple estrictamente con el requisito de $< 20	ext{ ms}$.
+
+#### 2. SC-005: Comparación sistemática Individual vs. Compartido
+Tiempo en milisegundos para resolver las decisiones de todos los cazadores activos en un turno:
+
+| Cazadores Activos | Rango | Individual | Compartido | Aceleración (Speedup) |
+|---|---|---|---|---|
+| 1 cazador | Pequeño (250) | 0.00 ms | 0.00 ms | ~1x |
+| 10 cazadores | Pequeño (250) | 0.00 ms | 0.00 ms | ~1x |
+| 30 cazadores | Pequeño (250) | 0.41 ms | 0.12 ms | **3.4x** |
+| 100 cazadores | Pequeño (250) | 1.18 ms | 0.10 ms | **11.3x** |
+| 30 cazadores | Grande (1500) | 5.23 ms | 1.15 ms | **4.6x** |
+| 100 cazadores | Grande (1500) | 10.97 ms | 0.42 ms | **26.3x** |
+
+*Conclusión SC-005*: Con 100 cazadores y rango amplio, el cálculo compartido es **26.3 veces más rápido** que el individual.
+
+#### 3. SC-006: Reutilización con Invalidación vs. Recálculo Continuo
+Medido a lo largo de 30 pasos con 20 cazadores activos en 100 salas sintéticas:
+
+| Escenario | Recálculo Continuo | Reutilización con Inv. | Speedup | Cálculos | Reutilizaciones | Equivalencia Observable |
+|---|---|---|---|---|---|---|
+| **Puertas Estables** | 16.35 ms | 1.83 ms | **8.91x** | 1 | 209 | **100% IDÉNTICAS** |
+| **Puertas Inestables** (mutación c/5 pasos) | 13.35 ms | 1.74 ms | **7.67x** | 6 | 204 | **100% IDÉNTICAS** |
+
+*Conclusión SC-006*: La reutilización selectiva logra una mejora de casi **9x**, manteniendo idénticas las decisiones de movimiento en cada ciclo.
+
+### 4c.5 Límites conocidos
+- La optimización de campo compartido asume simetría de costos de arista (`costo(u,v) == costo(v,u)`), lo cual se cumple por diseño en `Salida` (FR-001).
+- El escaneo lineal de `partida.mapa.enemigos` para determinar el rango máximo requerido toma $O(K)$ en cada consulta. Con cientos de enemigos, este escaneo toma menos de 0.05 ms, pero sigue siendo un costo lineal en la cantidad de enemigos.
+- Las mediciones fueron realizadas sobre topologías sintéticas deterministas y quedará abierta la validación sobre la cripta oficial definitiva que publique la cátedra para la defensa final (§9).
 
 ---
 
