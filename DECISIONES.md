@@ -1173,14 +1173,14 @@ Con D=1000 se repitió la anomalía: el máximo de K=50 fue **343.3691 y 355.111
 
 Se confirmó que una recolección de generación 2 explica la mayor parte de esos dos picos diagnósticos. No se reprodujo el orden K=50 peor que K=200 en esta exploración, ni se instrumentaron las corridas históricas: **la causa y el objetivo exactos de sus máximos de 343/355 ms siguen sin confirmar**. La recolección de basura dependiente de la secuencia de asignaciones sigue siendo una explicación posible para la anomalía repetida, no una conclusión probada sobre aquellas dos corridas.
 
-| Entrega | Estado al documentar T064 |
-|---|---|
-| T025, Mariano: eventos simultáneos | Pendiente; `test_FR002_eventos_simultaneos_y_predecision` en rojo |
-| T043, Kim: marcas `# ir a` | Entregado en `69dbc30`, pendiente de verificar en T050; integrar el commit no equivale a cerrar su aceptación |
-| T046, Kim: carga v4 e import de `persistencia_partida.py` | Pendiente; casos `test_FR014` en rojo, incluido MVC. Falta conservar/aplicar las marcas y retirar el import de controlador |
-| FR-010: inverso y persistente sobre destino compartido | Kim informó una corrección en su rama, todavía no integrada; `test_FR010` sigue en rojo en esta rama |
+| Entrega | Estado de verificación | Prueba que lo demuestra |
+|---|---|---|
+| T025, Mariano: eventos simultáneos | Verificado en 617f666 | `tests.test_linea_tiempo`: `test_FR002_eventos_simultaneos_y_predecision` |
+| T043, Kim: marcas `# ir a` | Entregado en `69dbc30`; verificado en 617f666 | `tests.test_historia_persistencia`: `test_FR010_comentario_ir_a_observa_sin_accion`, `test_FR014_ir_a_bloqueo_posterior_sin_paso` y `test_FR014_cancelacion_sin_observacion_fantasma`; `tests.test_ir_a_compuesto` completo |
+| T046, Kim: carga v4 e import de `persistencia_partida.py` | Verificado en 617f666 | `tests.test_historia_persistencia`: `test_FR014_guardar_cargar_historia_completa`, `test_FR014_cargar_con_K_distinta`, `test_FR014_ir_a_bloqueo_posterior_sin_paso`, `test_FR014_fallo_carga_conserva_sesion` y `test_FR014_modelo_datos_sin_imports_controlador`; `tests.test_guardado_binario` completo |
+| FR-010: inverso y persistente sobre destino compartido | Corrección con generaciones integrada; verificado en 617f666 | `tests.test_linea_tiempo`: `test_FR010_destino_compartido_inverso_y_persistente` y `test_FR010_no_reversibles_reubicados_y_estado_actual` |
 
-Estos estados corresponden a la evidencia de integración comunicada por Axel; T064 es documental y no ejecuta el cierre T050/T065. No se declara completa la fidelidad histórica de carga ni la frontera de simultáneos. Archivos antiguos con marcas incompletas no permiten inventar las observaciones faltantes. K=10 cumple los casos medidos, pero K no limita los deltas por acción ni elimina pausas del sistema.
+Las cuatro entregas quedan verificadas en 617f666 mediante el cierre T050/T065: los 14 módulos solicitados pasan con `venv\Scripts\python.exe -m tests.<modulo>`, incluidas las regresiones de resolubilidad, integración, replay, guardado y GUI. La revisión de solo lectura confirma la condición original de `_armar`, los contratos de resolubilidad y CLI, el inverso manual del reloj y la ausencia de cambios de Axel en `_avanzar`, así como las restricciones de estructuras y MVC. Archivos antiguos con marcas incompletas no permiten inventar las observaciones faltantes. K=10 cumple los casos medidos, pero K no limita los deltas por acción ni elimina pausas del sistema.
 
 ---
 
