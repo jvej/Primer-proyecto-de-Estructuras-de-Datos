@@ -1,100 +1,75 @@
-# Contrato de Viaje Automático "ir a": Controlador, Bitácora y Replay
+# Contrato C4: viaje IR_A, comentarios y reconstruccion
 
-**Identificador**: `CONTRATO-IR-A` (C4)  
-**Participantes**: Kim (Controlador / Navegación "ir a") y Axel (Registro / Replay / Bitácora)  
-**Módulos acordados**: `controlador/orden.py`, `controlador/controlador.py`, `modelo/datos/bitacora_partida.py`, `controlador/aplicacion.py`  
-**Estado**: Especificado para implementación conforme a FR-014..FR-023
+Participantes: Kim (002) y Axel (004). Estado: integrado en `75cc63e`;
+la interfaz HISTORIA y replay `hasta` de 004 no se declaran terminados.
 
----
+## Orden y planificacion
 
-## 1. Definición de la Orden en el Controlador
+`IR_A = "ir_a"` se define en `modelo/juego/orden.py` y se reexporta desde
+`controlador/orden.py`. `interpretar_ir_a` acepta `ir a <id>`; IR_A queda fuera
+de ORDENES_DE_PARTIDA y no admite a_texto como accion ordinaria.
+PlanificadorRutas valida destino explorado y calcula sobre salas exploradas y
+puertas recordadas abiertas. No consulta aperturas fisicas. Minimiza suma de
+costos y desempata por el menor ID de primer vecino. Cada instancia posee sus
+arreglos y tokens C3; sustituir Partida recrea el planificador.
 
-### 1.1 Orden Compuesta de Interfaz: `IR_A`
-En `controlador/orden.py`:
-```python
-IR_A = "ir_a"
-```
+Destino invalido/no explorado o ausencia de ruta inicial: rechazo sin tiempo.
+Destino actual: aviso sin accion. El viaje nunca abre puertas automaticamente.
 
-- **Regla fundamental de clasificación (C4)**:
-  `IR_A` es una **orden compuesta del controlador** y **NO pertenece a `ORDENES_DE_PARTIDA`**.
-  - `ORDENES_DE_PARTIDA` permanece restringida a las acciones atómicas del juego:
-    `(MOVER, ABRIR, ATACAR, ESPERAR, RECOGER, USAR, EQUIPAR, SOLTAR, PERGAMINO)`.
-  - `Orden(IR_A, id_destino).es_de_partida()` retorna `False`.
-  - No se invoca `a_texto()` sobre `IR_A`, impidiendo que se asiente directamente como acción ordinaria en el archivo de repetición.
-- **Sintaxis de entrada**: `ir a <id_sala>` (ej. `ir a 4`).
+## Secuencia y marcas exteriores
 
----
+Por cada iteracion efectiva:
 
-## 2. Registro de Comentarios en Bitácora (C4)
+1. Callbacks de viaje y comprobacion de token e identidad de partida.
+2. Si continua, emitir exactamente `# ir a X` mediante observadores de comentarios.
+3. Llamar una vez a Partida._observar_puertas fuera del grupo de accion.
+4. Recalcular con el conocimiento vigente.
+5. Si existe paso, ejecutar Orden(MOVER, direccion) ordinaria.
+6. Evaluar llegada, dano (incluso seguido de curacion), enemigos vivos,
+   fin de partida y bloqueo; informar el motivo especifico.
 
-### 2.1 Anotación de Comentarios en `BitacoraPartida`
-En el código base actual, `BitacoraPartida` solo dispone del método `anotar(self, orden)` para órdenes que implementan `a_texto()`. Para satisfacer el requisito `FR-022` y el contrato C4:
-- Se incorpora en `modelo/datos/bitacora_partida.py` el método específico:
-  ```python
-  def anotar_comentario(self, texto: str) -> None:
-      """Escribe una línea de comentario prefijada con '#' en el archivo de log."""
-      if self._archivo is None:
-          return
-      self._escribir("# " + _limpio(texto))
-  ```
-- En `Aplicacion` (`controlador/aplicacion.py`):
-  ```python
-  def registrar_comentario(self, texto: str) -> None:
-      if self.log is not None:
-          self.log.anotar_comentario(texto)
-  ```
-- El controlador notifica el inicio de la orden mediante un observador de comentarios o invocando el despachador de la aplicación.
+Cancelar antes de observar no emite marca ni consume tiempo. Observar y
+quedarse sin ruta conserva la marca sin inventar un movimiento. Pueden existir
+marcas repetidas legitimas: no deduplicarlas. Cada movimiento conserva tiempo,
+eventos y grupo reversible propios. El pergamino deshace solo el ultimo paso y
+no reanuda el viaje.
 
-### 2.2 Descarte de Comentarios en Replay
-En `modelo/datos/bitacora_partida.py`:
-- Al leer el archivo de repetición con `leer_log(ruta)`, toda línea cuyo contenido inicie con `#` (tras `strip()`) se descarta como comentario explicativo y no se envía a `Orden.desde_texto`.
-- **Garantía**: El reproductor (`--replay`) únicamente procesa los movimientos atómicos `mover <dir>` ejecutados paso a paso durante la partida original, garantizando determinismo de 100% sin recalcular rutas en tiempo de repetición.
+## Bitacora y lectores
 
----
+BitacoraPartida.anotar_comentario escribe el prefijo `# `; Aplicacion conserva
+ordenes y marcas en su orden de aparicion y main conecta el log activo.
+`leer_log` ordinario sigue ignorando comentarios: no es el lector que garantiza
+reconstruccion historica. El lector 004 iterar_lineas_reconstruccion conserva
+marcas IR_A; aplicar_linea_reconstruccion llama reproducir_observacion_ir_a
+sin planificar, mover, gastar tiempo ni crear un grupo. Los otros comentarios
+se ignoran. Ningun comentario se ejecuta como Orden.
 
-## 3. Protocolo de Ejecución en `Controlador`
+El callback entregado por Aplicacion.preparar_reconstruccion devuelve True
+para lineas validas y comentarios ignorados, False para ordenes rechazadas;
+formato invalido lanza ValueError. No confundirlo con el ayudante de bajo nivel,
+que tambien devuelve False para comentarios ignorados.
 
-El controlador gestiona `IR_A` dentro de `_ejecutar_de_interfaz` o mediante `_ejecutar_ir_a(orden)` siguiendo este protocolo determinista:
+## T045/T046 y FR-010 de 004
 
-1. **Validación Previa sin Costo de Tiempo** (FR-014, Edge Cases):
-   - Si `id_destino` no existe en la cripta o `partida.conocimiento.estado_por_id(id_destino) != ESTADO_EXPLORADA`:
-     - Rechazar con mensaje informativo: `"La sala destino no está explorada o no existe."`
-     - Retorna `False` sin consumir tiempo del reloj virtual ni turnos.
-   - Si `id_destino == partida.jugador.sala.id`:
-     - Mensaje informativo: `"Ya te encuentras en esa sala."`
-     - Retorna `True` sin consumir tiempo.
-   - Comprobación preliminar de ruta: si no existe camino alcanzable usando salas exploradas y puertas recordadas abiertas:
-     - Rechazar con mensaje: `"No hay ruta conocida disponible hacia el destino."`
-     - Retorna `False` sin consumir tiempo.
+Guardar usa Aplicacion.lineas_para_reconstruir(). Cargar entrega cada cadena,
+incluidas marcas repetidas, al callback de la candidata dentro del contexto
+transaccional. Compara fotografia y replay antes de publicar la nueva sesion.
+No reemplaza arreglos utilizados por inversos. No cambia formato binario.
 
-2. **Registro de la Intención**:
-   - Se escribe el comentario en la bitácora: `# ir a <id_destino>`.
+Una observacion permanente posterior invalida inversos anteriores de esa celda
+de memoria mediante generaciones privadas. Si el valor observado no cambia,
+tambien avanza la generacion. Solo memoria_puertas esta protegida. La captura C1
+historica ocurre antes de la escritura y el recorte conserva persistentes.
+Esto es FR-010 de 004, distinto del FR-010 de privacidad de 002.
 
-3. **Ejecución Paso a Paso como Acciones Ordinarias** (FR-017, FR-018):
-   - Se itera paso a paso:
-     a. Recalcular distancias desde `id_destino` hacia todas las salas con el conocimiento vigente.
-     b. Si el jugador ya se encuentra en `id_destino`: terminar con éxito (`"Has llegado a tu destino."`).
-     c. Evaluar las salidas transitables de la sala actual y seleccionar la vecina con menor costo acumulado total, desempatando por menor ID numérico entero (`FR-016`).
-     d. Determinar la dirección `dir_paso` hacia dicha vecina.
-     e. Registrar la vida antes del paso: `vida_antes = partida.jugador.vida`.
-     f. Despachar el paso individual como orden de partida estándar:
-        ```python
-        aceptada = self._ejecutar_de_partida(Orden(MOVER, dir_paso))
-        ```
-        Esto garantiza que:
-        - Se invoque `partida.mover(dir_paso)` cobrando el costo de terreno de la salida.
-        - Se registre `mover <dir_paso>` como orden regular en `partida.log`.
-        - Transcurran los turnos y eventos de la agenda (enemigos, trampas, veneno).
-     g. Evaluar condiciones de parada reactiva inmediata (FR-019, FR-020):
-        - **Muerte o fin de juego**: Si `partida.estado != "jugando"`, detener el viaje.
-        - **Daño recibido**: Si `partida.jugador.vida < vida_antes`, detener con mensaje:
-          `"Viaje automático interrumpido: has recibido daño."`
-        - **Enemigos presentes**: Si `len(partida.enemigos_en_sala()) > 0` (enemigos vivos, incluyendo dormidos que despertaron al entrar):
-          `"Viaje automático interrumpido: presencia de enemigos en la sala."`
-        - **Bloqueo o camino interrumpido**: Si `not aceptada` o el recálculo indica ausencia de ruta abierta viable:
-          `"Viaje automático interrumpido: ruta bloqueada por puerta cerrada o camino intransitable."`
+## Interfaz grafica y pruebas
 
----
+V abre el dialogo; Escape cancela sin SALIR; R cancela y deja un unico pergamino
+pendiente ligado a la partida, ejecutado fuera del callback. QUIT prevalece y
+lo descarta. Callback atender_viaje solo procesa eventos/presentacion.
 
-## 4. Reversión con Pergamino (FR-023)
-- Debido a que cada paso de movimiento se ejecutó mediante `_ejecutar_de_partida(Orden(MOVER, dir))` abriendo y cerrando su propio grupo en `Registro`, el uso de un pergamino de retroceso (`partida.usar_pergamino()`) invoca `registro.deshacer_ultimo()`, revirtiendo **única y exclusivamente el último paso individual de movimiento** y cancelando cualquier continuación automática del viaje.
+Evidencia: tests/test_planificador_rutas.py, test_ir_a_compuesto.py,
+test_comentarios_ir_a_002.py, test_integracion_comentarios_002.py,
+test_ir_a_grafico_002.py, test_carga_v4_002.py y casos FR010/FR014 de
+test_historia_persistencia.py. La prueba de eventos simultaneos de 004 y las
+interfaces historicas tienen pendientes separados; ver DECISIONES.md.

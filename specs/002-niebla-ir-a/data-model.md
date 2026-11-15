@@ -19,16 +19,16 @@
 - Observar una única puerta física permite recordar el mismo estado en sus dos
   posiciones. Esto no avista ni explora la sala del otro extremo, no descubre sus
   otras salidas y no autoriza revelar ID, nombre o contenido (FR-001..FR-005).
-  La integración posterior en Partida escribirá ambas posiciones exclusivamente
+  La integracion existente en Partida escribe ambas posiciones exclusivamente
   mediante `partida.cambiar`, si el jugador está en uno de los extremos (C2).
 - `puerta_recordada_abierta(salida)` consulta solo la memoria de los dos extremos;
   devuelve False si falta algún recuerdo o discrepan. Nunca consulta el estado
   físico. El consumidor comprueba además que ambas salas estén exploradas (C3).
 - El contenedor no realiza exploración, observación, conteo automático ni
-  notificaciones. Partida mantendrá estados y contadores en el mismo grupo
-  reversible. No se declara implementada la línea de tiempo de FR-013.
+  notificaciones. Partida mantiene estados y contadores en el mismo grupo
+  reversible. Captura historica C1 integrada; frontera de simultaneos pendiente.
 - Las pruebas unitarias están en `tests/test_conocimiento.py`; la aceptación de
-  FR-002..FR-005 con Partida y vistas sigue pendiente en T004/T009..T014.
+  FR-002..FR-005 con Partida y vistas esta implementada: test_conocimiento_partida y test_mapa_consola.
 
 ### 1.1 EstadoConocimiento (Constantes del dominio)
 Representa el grado de percepción y certeza que el jugador tiene sobre una sala de la cripta.
@@ -99,8 +99,8 @@ Contenedor del saber acumulado por el jugador sobre la topología y puertas de l
 Montículo binario de mínimos implementado en `modelo/estructuras/monticulo_min.py` sobre almacenamiento contiguo (`list`).
 
 - **Campos**:
-  - `_datos`: `list[tuple[int, int]]`. Elementos `(distancia, id_sala)`.
-  - `_tamano`: `int`. Cantidad de elementos activos.
+  - `_datos`: lista contigua de tuplas comparables lexicograficamente. La API admite pares `(distancia, id_sala)`; Dijkstra utiliza ternas `(distancia, id_sala, indice)` para acceso directo.
+  - Cantidad de elementos: `len(self._datos)`, usada por `__len__` y `es_vacio`; no hay atributo `_tamano`.
 
 - **Invariantes del Montículo**:
   - Para todo nodo $i > 0$, `_datos[(i - 1) // 2] <= _datos[i]`.
@@ -147,7 +147,7 @@ Componente de cálculo de caminos mínimos sobre grafos transitables con distanc
   - `n_salas`: `uint16` ($N$).
   - `estados_salas`: $N$ bytes (cada byte representa el estado de una sala en orden de índice).
   - `n_puertas_recordadas`: `uint16` ($K$).
-  - Por cada una de las $K$ puertas observadas:
+  - Por cada una de las $K$ posiciones de memoria observadas (ambos extremos cuentan):
     - `indice_sala`: `uint16`.
     - `direccion`: `uint8` ($0..3$).
     - `estado_recordado`: `uint8` ($1$: abierta, $2$: cerrada).
@@ -196,13 +196,32 @@ sequenceDiagram
         end
         Partida->>Partida: cambiar(memoria_puertas, pos_puerta, estado_puerta)
     end
-    Partida-->>ObservadoresAxel: notificar_conocimiento(resumen())
+    Partida-->>Registro: captura C1 previa a cada escritura; hooks de accion
     Partida->>Registro: cerrar_grupo()
 
     Note over Jugador, Partida: Retroceso temporal
     Jugador->>Controlador: Orden(PERGAMINO)
     Controlador->>Partida: usar_pergamino()
     Partida->>Registro: deshacer_ultimo()
-    Registro-->>Partida: Restaura estado_salas, memoria_puertas y contadores
+    Registro-->>Partida: Invierte grupo; memoria preserva permanentes posteriores
     Partida->>Partida: _notificar_invalidacion_rutas()
 ```
+
+## Modelo vivo y fotografia v4 integrados
+
+El DTO PartidaGuardada recibe n_salas_conocidas, estados_salas y memoria_puertas.
+N procede del mapa real; foto_de copia las listas y acepta cadenas intercaladas
+(o Orden en llamadas compatibles). P cuenta posiciones no desconocidas.
+El codec no reconstruye objetos vivos. Aplicacion.preparar_reconstruccion crea
+la candidata; T046 aplica lineas en orden y valida fotografia contra replay
+antes de publicar. Los contadores se mantienen por acciones y se contrastan por
+recuento O(N). No se reemplazan conocimiento, listas, Registro ni sus grupos.
+
+Registro mantiene un arreglo privado de generaciones ligado solo a
+memoria_puertas. Un inverso captura su generacion y restaura si sigue vigente;
+una observacion permanente la incrementa incluso si repite valor. Ambos extremos
+se actualizan sin descubrir salas. La captura C1 historica ocurre antes de la
+escritura. El mecanismo no protege otras listas ni contadores. El recorte de
+004 opera sobre proyecciones; el estado vivo conserva sus referencias.
+Evidencia: test_fr010_generaciones_002 y test_carga_v4_002. El caso de eventos
+simultaneos de 004 sigue pendiente de T025/Mariano, no se oculta con este modelo.

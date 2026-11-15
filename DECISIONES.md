@@ -11,6 +11,8 @@ Una sección por cada problema de §4 resuelto, más las decisiones de rendimien
   - [2. §5.2 Ciclo completo entre dos decisiones del jugador](#2-52-ciclo-completo-entre-dos-decisiones-del-jugador)
   - [3. §4.7 El rastro del jugador](#3-47-el-rastro-del-jugador)
   - [4. Efectos temporales y combate determinista (§2.6, §2.10)](#4-efectos-temporales-y-combate-determinista-26-210)
+  - [4b. Revisión de §5.6: Motor con cazadores, costos de terreno y eventos empatados](#4b-revisión-de-56-motor-con-cazadores-costos-de-terreno-y-eventos-empatados)
+  - [4c. Capacidad 001: Terreno, Cazador e Invalidación Reactiva de Rutas (§5.1, §5.2, SC-004..SC-006)](#4c-capacidad-001-terreno-cazador-e-invalidación-reactiva-de-rutas-51-52-sc-004sc-006)
 - **Jeferson** (red, precarga, catálogo y bitácora en pantalla)
   - [5. §4.2 Traer el contenido antes de que haga falta](#5-42-traer-el-contenido-antes-de-que-haga-falta)
   - [6. §4.3 Resolución de referencias del catálogo](#6-43-resolución-de-referencias-del-catálogo)
@@ -236,6 +238,112 @@ Un efecto activo cuesta O(log n) solo cuando le toca (sacar y reagendar su event
 - Las fichas del catálogo real no traen veneno en las trampas publicadas; el nombre exacto del campo no está confirmado. La lectura (`leer_veneno`) acepta varios formatos para no fallar con una cripta nueva.
 - Los comportamientos se comparan en minúscula y sin tildes solo para la imagen; en el Modelo se espera exactamente "errante" y "rastreador".
 - No hay bench de efectos por separado; su costo está dentro del ciclo de la sección 2.5.
+
+
+---
+
+## 4b. Revisión de §5.6: Motor con cazadores, costos de terreno y eventos empatados
+
+### 4b.1 Problema y contexto de la Parte II
+En la Parte II se introducen costos variables por salida (FR-001, FR-002), el enemigo cazador con búsqueda acotada por Dijkstra (FR-003..FR-007) y la garantía estricta de cierre del instante $t$ requerida para la integración con historia `<t>` (Axel). El objetivo es comprobar si el motor continúa resolviendo el ciclo completo entre dos decisiones del jugador en menos de 20 ms (§5.2) ante estas nuevas cargas dinámicas y empates de tiempo.
+
+### 4b.2 Alternativas y decisiones de diseño
+1. **Cierre del instante $t$**:
+   - *Alternativa rechazada*: Detener el bucle en cuanto `self.esperando = True`, dejando eventos empatados pendientes en la agenda. Esto provocaba que eventos con el mismo tiempo $t$ pero secuencia mayor al turno del jugador se ejecutaran tras aceptar la siguiente acción, rompiendo la coherencia de historia `<t>`.
+   - *Decisión adoptada*: Se incorporó `AgendaEventos.proximo_en_tiempo(tiempo)` y un segundo bucle en `Partida._avanzar()`: mientras la partida continúe en `"jugando"` y esperando al jugador, se extraen y ejecutan todos los eventos válidos con `tiempo_siguiente == self.reloj.tiempo_actual`. Si la raíz del heap tiene un tiempo estrictamente mayor, la función retorna `None` en $O(1)$ sin extraer eventos futuros ni alterar el determinismo.
+2. **Costos variables de terreno**:
+   - La duración de cada movimiento se calcula como `costo_accion(salida.costo, actor.velocidad) = max(1, salida.costo * 100 // velocidad)`. Los enemigos agendan sus turnos con este costo exacto, manteniendo la invariante de avance temporal no nulo.
+
+### 4b.3 Análisis de complejidad
+- Con $k$ eventos empatados en el instante $t$: la extracción y ejecución toma $O(k \log n)$, donde $n$ es la cantidad de eventos en la agenda.
+- Si no hay eventos empatados tras el turno del jugador: la verificación en `AgendaEventos.proximo_en_tiempo` inspecciona la raíz `self._heap[0]` en $O(1)$ y concluye inmediatamente.
+
+### 4b.4 Evidencia empírica (`bench_motor.py`)
+Medición repetida con 50 ciclos de esperar en Windows 11 con Python 3.13 (`python main.py --bench agenda`):
+
+| Carga | Tiempo Medio | Tiempo Máximo | Cumple < 20 ms |
+|---|---|---|---|
+| 300 eventos pendientes, ~15 actúan por ciclo | 0.51 ms | 13.51 ms | SÍ |
+| 300 enemigos en sala atacando a la vez (peor caso) | 19.24 ms | 121.79 ms | NO (caso extremo saturado) |
+| **50 cazadores activos en esqueleto de costos variables (§5.6 Parte II)** | **2.03 ms** | **7.31 ms** | **SÍ (cumple con holgura)** |
+
+### 4b.5 Límites conocidos
+- Si se satura artificialmente una sala con 300 enemigos atacando en el mismo ciclo, el registro masivo de operaciones inversas para el historial puede provocar picos que superen los 20 ms en equipos con fluctuaciones de CPU. Sin embargo, en escenarios tácticos reales con 50 cazadores y costos variables, el tiempo máximo es de 7.31 ms, garantizando fluidez.
+
+---
+
+## 4c. Capacidad 001: Terreno, Cazador e Invalidación Reactiva de Rutas (§5.1, §5.2, SC-004..SC-006)
+
+### 4c.1 Problema
+El enemigo cazador conoce la topología del esqueleto y persigue al jugador por el camino de costo mínimo acumulado de terreno, respetando las puertas abiertas y acotado por su campo de visión/rango ($d \le rango$). Calcular Dijkstra individualmente para cada cazador desde su posición hacia el jugador en cada decisión de juego tiene un costo prohibitivo $O(K \cdot (E' \log V'))$ que incumple el presupuesto de 20 ms con decenas de cazadores (`SC-004`, `SC-005`). Además, ante cambios de puertas o desplazamientos, el cálculo debe invalidarse reactivamente manteniendo equivalencia observable estricta (`SC-006`).
+
+### 4c.2 Alternativas consideradas
+1. **Dijkstra individual por cada cazador en cada paso**: Cada cazador ejecuta Dijkstra acotado hacia el jugador. Costo $O(K \cdot 	ext{Dijkstra})$. Descartado por no escalar con múltiples cazadores.
+2. **Cálculo compartido invertido desde el jugador**: Dado que el grafo de terreno es no dirigido y simétrico (`costo(u,v) = costo(v,u)`), un único Dijkstra acotado desde la sala del jugador calcula simultáneamente la distancia mínima hacia todas las salas dentro del rango máximo de interés.
+3. **Reinicio de marcas**:
+   - *Reiniciar arreglos contiguos en cada búsqueda*: $O(N)$ por búsqueda. Descartado.
+   - *Token de búsqueda persistente*: Arreglos de tamaño $N$ indexados por `Sala.indice`. Se incrementa `token_busqueda += 1`. Una sala está alcanzada si y solo si `marca[i] == token_busqueda`. El reinicio lógico es $O(1)$.
+4. **Reutilización selectiva e invalidación reactiva**:
+   - Se distinguen dos variables:
+     - $R_{\text{activo}}$: El rango del cazador específico que consulta su movimiento.
+     - $R_{\text{utilizado}}$: La cota de rango empleada en la última ejecución de Dijkstra acotado.
+   - El campo se conserva y reutiliza mientras:
+     1. El jugador permanezca en la misma sala (`_sala_jugador_id == partida.jugador.sala.id`).
+     2. Ningún cazador requiera un rango mayor que el calculado ($R_{\text{requerido}} \le R_{\text{utilizado}}$). Si $R_{\text{activo}} \le R_{\text{utilizado}}$, el campo se conserva.
+     3. Ninguna puerta con al menos un extremo a distancia $\le R_{\text{utilizado}}$ haya cambiado de estado (Contrato C2 con Axel y Kim).
+   - *Puertas lejanas*: Si una puerta cambia pero ambos extremos están a distancia $> R_{\text{utilizado}}$ (o no alcanzados con la marca vigente), no se invalida la caché.
+   - *Retroceso con pergamino*: Invalida incondicionalmente el campo derivado y revierte las mutaciones vía `deshacer_ultimo()`, suprimiendo avisos duplicados mediante verificación en `_notificar_invalidacion_rutas`.
+   - *Independencia cognitiva*: El cazador consulta el estado físico real (`salida.esta_abierta()`), mientras que la memoria de observación del jugador reside en `ConocimientoMapa`, garantizando total desacoplamiento.
+
+### 4c.3 Análisis de complejidad
+1. **Cálculo compartido**: Una ejecución de `dijkstra_acotado` desde el jugador explora el subgrafo $G' = (V', E')$ donde las distancias son $\le R_{\text{utilizado}}$. Costo: $O(E' \log V')$ usando el montículo binario propio de Kim (Contrato C3).
+2. **Reinicio lógico de marcas**: $O(1)$ mediante incremento del token entero `_token_busqueda`. (Nota: el reinicio lógico es $O(1)$, la búsqueda explora las aristas acotadas).
+3. **Consulta de cada cazador**:
+   - Obtener el rango máximo entre cazadores activos requiere recorrer la lista de enemigos de la partida: $O(E_{nemigos})$.
+   - Elegir la primera vecina: examina a lo sumo 4 salidas abiertas en $O(1)$, consultando `dist[vecino.indice]`.
+   - Desempate determinista por menor `vecino.id` entero: $O(1)$.
+4. **Costo total para $K$ cazadores**:
+   - Con recálculo necesario: $O(E' \log V' + K \cdot 	ext{salidas})$.
+   - Con reutilización selectiva válida: $O(K \cdot 	ext{salidas}) = O(K)$, sin tocar Dijkstra.
+5. **Espacio**: $O(N)$ arreglos fijos de distancias y marcas contiguas de tamaño $N = |Salas|$, reutilizados persistentemente sin alocaciones dinámicas.
+
+### 4c.4 Evidencia empírica (`bench/bench_cazador.py`)
+Medido en Windows 11 con `python main.py --bench cazador`:
+
+#### 1. SC-004: Medición de ciclos individuales entre decisiones del jugador
+- Configuración: 100 salas sintéticas, 30 cazadores activos simultáneos, rango = 600, 50 ciclos consecutivos de juego.
+- **Tiempo máximo por ciclo**: **0.075 ms**.
+- **Tiempo medio por ciclo**: **0.013 ms** (p50: 0.010 ms, p95: 0.021 ms, p99: 0.075 ms).
+- **Ciclos que exceden 20 ms**: **0 de 50 (0%)**. Cumple estrictamente con el requisito de $< 20	ext{ ms}$.
+
+#### 2. SC-005: Comparación sistemática Individual vs. Compartido
+Tiempo en milisegundos para resolver las decisiones de todos los cazadores activos en un turno:
+
+| Cazadores Activos | Rango | Individual | Compartido | Aceleración (Speedup) |
+|---|---|---|---|---|
+| 1 cazador | Pequeño (250) | 0.00 ms | 0.00 ms | ~1x |
+| 10 cazadores | Pequeño (250) | 0.00 ms | 0.00 ms | ~1x |
+| 30 cazadores | Pequeño (250) | 0.41 ms | 0.12 ms | **3.4x** |
+| 100 cazadores | Pequeño (250) | 1.18 ms | 0.10 ms | **11.3x** |
+| 30 cazadores | Grande (1500) | 5.23 ms | 1.15 ms | **4.6x** |
+| 100 cazadores | Grande (1500) | 10.97 ms | 0.42 ms | **26.3x** |
+
+*Conclusión SC-005*: Con 100 cazadores y rango amplio, el cálculo compartido es **26.3 veces más rápido** que el individual.
+
+#### 3. SC-006: Reutilización con Invalidación vs. Recálculo Continuo
+Medido a lo largo de 30 pasos con 20 cazadores activos en 100 salas sintéticas:
+
+| Escenario | Recálculo Continuo | Reutilización con Inv. | Speedup | Cálculos | Reutilizaciones | Equivalencia Observable |
+|---|---|---|---|---|---|---|
+| **Puertas Estables** | 16.35 ms | 1.83 ms | **8.91x** | 1 | 209 | **100% IDÉNTICAS** |
+| **Puertas Inestables** (mutación c/5 pasos) | 13.35 ms | 1.74 ms | **7.67x** | 6 | 204 | **100% IDÉNTICAS** |
+
+*Conclusión SC-006*: La reutilización selectiva logra una mejora de casi **9x**, manteniendo idénticas las decisiones de movimiento en cada ciclo.
+
+### 4c.5 Límites conocidos
+- La optimización de campo compartido asume simetría de costos de arista (`costo(u,v) == costo(v,u)`), lo cual se cumple por diseño en `Salida` (FR-001).
+- El escaneo lineal de `partida.mapa.enemigos` para determinar el rango máximo requerido toma $O(K)$ en cada consulta. Con cientos de enemigos, este escaneo toma menos de 0.05 ms, pero sigue siendo un costo lineal en la cantidad de enemigos.
+- Las mediciones fueron realizadas sobre topologías sintéticas deterministas y quedará abierta la validación sobre la cripta oficial definitiva que publique la cátedra para la defensa final (§9).
 
 ---
 
@@ -926,6 +1034,153 @@ Registrar es O(1) (una línea al final). Mostrar es O(m) para leer más el costo
 
 - Con miles de partidas, ordenar en cada consulta sería más costoso que mantener el archivo ordenado.
 - El nombre del jugador no puede contener tabulaciones.
+
+---
+
+## 16. Línea de tiempo (004, Parte II)
+
+**Responsable:** Axel. **Referencias:** [especificación](specs/004-linea-de-tiempo/spec.md) y [plan](specs/004-linea-de-tiempo/plan.md). Decisiones de FR-001..014, FR-019/020 y evidencia de SC-001..005; T064.
+
+### 16.1 Problema
+
+Consultar el estado desde el inicio por tiempo (`historia <t>`) o antes de una acción (`historia #k`), sin cambiar la partida ni gastar el pergamino, que conserva su límite de cinco acciones. La historia debe representar la rama vigente tras retroceder, incluidos los cambios no reversibles. SC-001 exige una consulta máxima menor de 50 ms con al menos 5000 acciones.
+
+### 16.2 Alternativas consideradas
+
+| Decisión elegida | Alternativa descartada | Motivo |
+|---|---|---|
+| **C1:** capturar deltas en `Registro.cambiar`, `_lista_*` y `_inv_*`, leyendo el reloj al anotar | Copiar el estado completo en cada acción o comparar todo el mundo para descubrir cambios | El trabajo sigue a los cambios reales y conserva anterior/nuevo, instante y reversibilidad; copiar todo cuesta según el tamaño del mundo aun cuando cambia poco |
+| Checkpoint de proyección cada K acciones; selección O(1) por `#k` y binaria propia por t | Reconstruir siempre desde cero sin checkpoints o hacia atrás desde una copia actual | Ambas alternativas recorren un tramo que crece con la historia; los checkpoints limitan la aplicación a un máximo de K acciones |
+| Proyección copiada por valor, con bases inmutables compartidas, sin agenda, funciones ni azar | Copiar `Partida` o conservar referencias a sus datos dinámicos vivos | Las referencias modificarían el pasado; copiar el motor arrastraría infraestructura y funciones innecesarias. Consultar solo reconstruye datos, sin ejecutar eventos ni consumir azar |
+| Recortar el sufijo al usar el pergamino y reubicar sus no reversibles al reloj restaurado | Borrar todo el sufijo, registrar el retroceso como otra acción o reconstruir recorriendo el prefijo | Borrar todo perdería consumo y observaciones persistentes; conservar la rama revertida mostraría acciones inexistentes. El recorte solo toca el sufijo y libera sus checkpoints |
+| Reconstruir mediante órdenes y marcas existentes `# ir a X` | Nuevo formato de log/binario, persistir deltas o volver a ejecutar el viaje IR_A | Cada marca reproduce una observación exterior sin tiempo ni grupo; se conserva la secuencia real sin rediseñar formatos ni adivinar viajes/cancelaciones |
+| `Orden` en `modelo/juego/orden.py`, con reexportación desde `controlador/orden.py` | Mantener el import de controlador desde datos o exigir un parser inyectado a cada lector | Cumple MVC conservando la misma clase por ambas rutas y las llamadas ordinarias `leer_log(ruta)` y `listar_logs`, sin romper sus consumidores |
+| HISTORIA fuera del log, de la bitácora y del grupo; tecla L | Tratarla como acción o asignarle H/F1 | Es una consulta sin efectos ni cancelación de IR_A; H y F1 ya abren ayuda |
+
+### 16.3 Decisión
+
+El checkpoint 0 se toma después de iniciar la partida y antes de reconstruir órdenes. Después se copia la proyección exactamente cada K acciones aceptadas. `#k` selecciona el bloque con `(k-1)//K`; t usa búsqueda binaria propia y el corte anterior a la decisión de ese instante. La consulta copia ese checkpoint, aplica los deltas necesarios y genera el resumen con datos históricos.
+
+Al retroceder se eliminan reversibles y checkpoints del sufijo. Los cambios no reversibles posteriores al reloj restaurado pasan a ese instante, después de sus eventos y antes de la siguiente decisión; los anteriores o simultáneos conservan su tiempo. Esta operación solo reconstruye la proyección: no reaplica persistentes sobre el motor ni cambia los inversos del pergamino.
+
+Replay reconstruye todas las órdenes, marcas y pergaminos antes de resolver `--hasta`, para no consultar una rama eliminada después. K es configuración del proceso (`--checkpoint-cada`), no un campo persistido. La fidelidad de carga v4 depende de las entregas indicadas en 16.6.
+
+**K elegido = 10**, fijado en T063 (`7a7c435`). Es el único de los tres valores que cumple el máximo estricto de 50 ms tanto en la carga de 5000 acciones como en los peores casos medidos, en las dos corridas históricas. Con D=1000 retiene 180557.5 KiB frente a 172607.7 KiB con K=50: aproximadamente un **5 % más de memoria** (4.6 %). Se acepta ese costo para reducir el tramo reconstruido. El tiempo de consulta crece con **K × deltas por acción**, además de copiar la proyección y construir la salida; las pausas del proceso pueden alterar los máximos.
+
+### 16.4 Análisis de complejidad
+
+A = acciones vigentes; D = deltas totales; S = tamaño de proyección; B = `1+floor(A/K)` checkpoints; E_K = deltas de hasta K acciones; U = deltas exteriores; L = operaciones sobre secuencias/inventario; R = tamaño del resumen.
+
+| Operación | Costo |
+|---|---|
+| Captura C1 | O(1) amortizado más normalización/ubicación real; memoria según el cambio |
+| Crear checkpoint | O(S), una vez cada K acciones |
+| Consultar por `#k` | O(S + E_K + U + L + R); selección de checkpoint O(1) |
+| Consultar por t | O(log B + S + E_K + U + L + R) |
+| Historia retenida | O(D + A + B·S), incluida la capacidad reservada |
+| Sin checkpoints / desde actual | O(S + deltas hasta el destino / posteriores al destino + L + R) |
+| Foto por acción (referencia) | O(S + R) por consulta; fotos O(A·S) |
+| Recorte | Proporcional a los deltas/persistentes del sufijo y al tamaño de las fotos liberadas; sin recorrer el prefijo |
+
+K limita acciones, no la cantidad de eventos/deltas de cada acción ni el tamaño del resumen. Los arreglos conservan capacidad reservada al recortar y limpian las referencias retiradas.
+
+### 16.5 Evidencia empírica
+
+**Equipo:** Intel Core i7-8665U a 1.90 GHz (4 núcleos, 8 hilos), 31.78 GiB de RAM, Windows 11 Pro de 64 bits (compilación 26300), Python 3.13.9 del entorno virtual. **Semilla de línea de tiempo:** 20261113. Estas mediciones de Parte II tienen su propio equipo y no sustituyen las de las secciones anteriores.
+
+Comandos desde la raíz: `venv\Scripts\python.exe main.py --bench linea_tiempo` y `venv\Scripts\python.exe main.py --bench historial inventario`. Sin HTTP ni vista; no se modificaron los benches. Se excluye preparación y se valida equivalencia antes de medir. Los tiempos de consulta incluyen copia, aplicación y construcción del resumen; las fases instrumentadas se miden en otra pasada. `tracemalloc` se usa para memoria, fuera del cronometraje; incluye bases compartidas, deltas, directorios y reserva real.
+
+**5000 acciones, ejecución adicional durante T064 (2026-11-14).** Carga mixta de 16 salas: 21884 deltas, 5000 exteriores y 18 bases; recoger/soltar, movimientos, esperas, evento interior y cambios exteriores. Tres repeticiones sobre 17 objetivos, alternando `#k` y t: 51 muestras por alternativa. La carga segura adicional tiene 5000 acciones y 10000 deltas, con las seis variantes equivalentes antes de medir.
+
+| Variante | Máximo (ms) | Mediana (ms) | Retenida (KiB) | Checkpoints |
+|---|---:|---:|---:|---:|
+| K=10 | 0.0677 | 0.0271 | 8462.2 | 501 |
+| K=50 | 0.1960 | 0.0276 | 7075.6 | 101 |
+| K=200 | 0.5791 | 0.0678 | 6815.4 | 26 |
+| Sin checkpoints periódicos | 18.2527 | 0.2076 | 6728.7 | 1 |
+| Desde la copia actual | 315.4758 | 134.0021 | 6728.7 | 1 |
+| Foto por acción | 0.0244 | 0.0191 | 23485.6 | 1 + 5001 fotos |
+
+El conteo del bench incluye el checkpoint 0; la referencia por acción conserva además 5001 fotos y la traza común. La memoria incluye la proyección actual de trabajo. Los máximos de K=10/50/200 en la carga de 5000 de la corrida 1 de T063 fueron 0.0617/0.2157/0.6686 ms. Ambas ejecuciones quedan muy por debajo de 50 ms en esta carga; la densidad de deltas decide entre los K.
+
+**Peor caso real, N=600.** Dos salas con D−2 cazadores activos en la inicial y vida ampliada antes del checkpoint 0 para sostener las esperas; D exacto se comprueba por C1 en todas las acciones. Se consultan ambas APIs en cada objetivo, incluidos los finales de bloque con K−1 acciones por reconstruir. Corrida 1: salida de T063 suministrada por Axel; corrida 2: repetición manual suministrada por Axel. No se sustituyen por la ejecución adicional de T064.
+
+| D por acción | K | Corrida 1 máx/mediana (ms) | Corrida 2 máx/mediana (ms) | Retenida/pico, corrida 1 (KiB) | Máx. grupos/deltas | Checkpoints |
+|---:|---:|---:|---:|---:|---:|---:|
+| 100 | 10 | 3.5785 / 1.2071 | 1.1959 / 0.9223 | 17872.2 / 17905.6 | 9 / 900 | 61 |
+| 100 | 50 | 19.7613 / 2.6252 | 7.0223 / 1.9460 | 17044.4 / 17077.8 | 49 / 4900 | 13 |
+| 100 | 200 | 105.8679 / 10.9830 | 16.9835 / 6.2279 | 16889.2 / 17035.5 | 199 / 19900 | 4 |
+| 1000 | 10 | 45.1258 / 24.3986 | 36.0871 / 24.8103 | 180557.5 / 180872.1 | 9 / 9000 | 61 |
+| 1000 | 50 | 343.3691 / 36.8403 | 355.1113 / 36.3436 | 172607.7 / 172922.4 | 49 / 49000 | 13 |
+| 1000 | 200 | 242.3210 / 87.1505 | 223.2240 / 85.6998 | 171117.1 / 171431.8 | 199 / 199000 | 4 |
+
+**Recorte de 1 a 5 grupos (T064).** K=50, siete muestras por caso y mismo sufijo con prefijos crecientes. Cada celda temporal muestra máximo/mediana en ms. Los conteos incluyen persistentes reubicados y liberación de un checkpoint por caso.
+
+| Grupos | N=200 | N=2000 | N=5000 | Visitas al sufijo/prefijo | Persistentes | Bytes liberados |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 0.0672 / 0.0506 | 0.0732 / 0.0647 | 0.0805 / 0.0744 | 7 / 0 | 1 | 3400 |
+| 2 | 0.1104 / 0.0949 | 0.1814 / 0.1212 | 0.2235 / 0.1406 | 17 / 0 | 2 | 3344 |
+| 3 | 0.1657 / 0.1523 | 0.1991 / 0.1803 | 0.1996 / 0.1907 | 30 / 0 | 3 | 3288 |
+| 4 | 0.2887 / 0.2427 | 0.3001 / 0.2777 | 0.2984 / 0.2882 | 54 / 0 | 4 | 3232 |
+| 5 | 0.4267 / 0.3331 | 0.4794 / 0.3583 | 0.3986 / 0.3730 | 75 / 0 | 5 | 3176 |
+
+Siempre hubo **0 visitas al prefijo**. La reserva antes/después permaneció en 1544/1544, 20544/20544 y 49280/49280 casillas para N=200, 2000 y 5000 respectivamente: liberar las fotos no copia ni reduce los directorios.
+
+**Sobrecosto C1 integrado (T064).** Mediana de cinco repeticiones de 100 ciclos con `_inv_al_frente`, `_inv_quitar` y `_inv_agregar` dentro de `_accion`; incluye normalización y fronteras, excluye inicio y checkpoints periódicos. Cada caso produjo 500 deltas y se comprobó igualdad del resultado vivo e inventario histórico.
+
+| Objetos | Sin C1 (µs/ciclo) | Con C1 (µs/ciclo) | Extra (µs) | Extra (%) |
+|---:|---:|---:|---:|---:|
+| 10 | 16.854 | 67.979 | 51.125 | 303.3 |
+| 100 | 21.629 | 79.591 | 57.962 | 268.0 |
+| 1000 | 76.604 | 228.435 | 151.831 | 198.2 |
+
+**Repetición de historial (§5.6, T064).** A = inversos; B = copia completa. Tiempos en ms y memoria en KiB (el bench la rotula KB y divide entre 1024). Se conservaron las cargas y el procedimiento del bench existente.
+
+| Caso | Salas | Activos | Eventos | A ciclo | A deshacer | A historial (inversos) | B 1 copia | B 1 copia (KiB) | B 5 copias (KiB) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Típico | 20 | 10 | 18 | 0.095 | 0.056 | 83.7 (265) | 1.96 | 53.6 | 268.0 |
+| Típico | 200 | 10 | 18 | 0.101 | 0.059 | 83.7 (265) | 14.07 | 442.7 | 2213.7 |
+| Típico | 1000 | 10 | 18 | 0.110 | 0.059 | 81.5 (265) | 77.50 | 1991.5 | 9957.3 |
+| Peor caso | 200 | 200 | 398 | 3.441 | 1.756 | 1657.1 (5205) | 19.73 | 512.0 | 2560.2 |
+| Peor caso | 1000 | 1000 | 1998 | 20.937 | 10.810 | 9160.7 (26005) | 91.12 | 2362.6 | 11813.1 |
+
+Con diez activos, A mantiene aproximadamente 0.1 ms por ciclo al crecer de 20 a 1000 salas; B pasa de 1.96 a 77.50 ms por copia. Con 1000 activos A también crece, hasta 20.937 ms por ciclo. Este bench deshace directamente `Registro` y el de inventario usa la estructura sin `Partida`: **ninguno mide el sobrecosto C1**, que corresponde a la tabla integrada anterior.
+
+**Repetición de inventario (§5.6, T064).** `main.py --bench historial inventario` ejecuta primero inventario según el orden del despachador. Mejor de cinco corridas, µs por operación; mismas alternativas del bench existente, sin instrumentación añadida.
+
+| Soltar el objeto visto y deshacer | Lista con cursor | Lista sin cursor | Arreglo | Pila |
+|---|---:|---:|---:|---:|
+| n=10, medio | 1.19 | 1.67 | 0.13 | 1.77 |
+| n=100, último | 1.19 | 7.37 | 0.12 | 24.91 |
+| n=1000, medio | 1.19 | 35.49 | 0.65 | 100.42 |
+| n=10000, primero | 1.16 | 1.26 | 10.59 | 0.53 |
+| n=10000, medio | 1.17 | 343.69 | 5.35 | 961.41 |
+| n=10000, último | 1.19 | 688.22 | 0.12 | 1908.42 |
+
+Equipar y deshacer con cursor quedó entre 2.61 y 3.11 µs en todos los tamaños/posiciones. Recorrer n=10/100/1000/10000 tomó 1.11/7.21/67.55/677.33 µs con lista y 0.18/0.99/9.14/90.26 µs con arreglo. Se repite la tendencia de costo independiente de la posición con cursor, a cambio de un recorrido más lento.
+
+### 16.6 Límites conocidos y entregas externas
+
+Con D=1000 se repitió la anomalía: el máximo de K=50 fue **343.3691 y 355.1113 ms**, peor que K=200 (**242.3210 y 223.2240 ms**), aunque las medianas sí siguen el orden esperado. Los máximos observados no son una cota universal; la elección de K se apoya en ambas corridas y no solo en medianas.
+
+**Diagnóstico desde consola, sin crear archivos ni modificar el bench.** Se importaron sus funciones con `venv\Scripts\python.exe -B -` y se registraron pausas mediante `gc.callbacks`, con D=1000, N=600, los tres K y equivalencia validada. Es una exploración adicional: se agregó una consulta cronometrada antes de `medir_consulta`, por lo que cambió la presión de asignaciones y no reproduce exactamente la secuencia del bench original.
+
+| K | Consulta del máximo diagnóstico | Repetición | Total (ms) | GC dentro de la consulta |
+|---:|---|---:|---:|---|
+| 10 | `historia #420` (419 acciones completadas) | 1 | 48.9791 | Generación 0: 0.5533 ms |
+| 50 | `historia 21900` (219 acciones completadas) | 3 | 303.8953 | Generación 2: 271.0896 ms |
+| 200 | `historia #290` (289 acciones completadas) | 1 | 346.5908 | Generación 2: 277.5270 ms |
+
+Se confirmó que una recolección de generación 2 explica la mayor parte de esos dos picos diagnósticos. No se reprodujo el orden K=50 peor que K=200 en esta exploración, ni se instrumentaron las corridas históricas: **la causa y el objetivo exactos de sus máximos de 343/355 ms siguen sin confirmar**. La recolección de basura dependiente de la secuencia de asignaciones sigue siendo una explicación posible para la anomalía repetida, no una conclusión probada sobre aquellas dos corridas.
+
+| Entrega | Estado de verificación | Prueba que lo demuestra |
+|---|---|---|
+| T025, Mariano: eventos simultáneos | Verificado en 617f666 | `tests.test_linea_tiempo`: `test_FR002_eventos_simultaneos_y_predecision` |
+| T043, Kim: marcas `# ir a` | Entregado en `69dbc30`; verificado en 617f666 | `tests.test_historia_persistencia`: `test_FR010_comentario_ir_a_observa_sin_accion`, `test_FR014_ir_a_bloqueo_posterior_sin_paso` y `test_FR014_cancelacion_sin_observacion_fantasma`; `tests.test_ir_a_compuesto` completo |
+| T046, Kim: carga v4 e import de `persistencia_partida.py` | Verificado en 617f666 | `tests.test_historia_persistencia`: `test_FR014_guardar_cargar_historia_completa`, `test_FR014_cargar_con_K_distinta`, `test_FR014_ir_a_bloqueo_posterior_sin_paso`, `test_FR014_fallo_carga_conserva_sesion` y `test_FR014_modelo_datos_sin_imports_controlador`; `tests.test_guardado_binario` completo |
+| FR-010: inverso y persistente sobre destino compartido | Corrección con generaciones integrada; verificado en 617f666 | `tests.test_linea_tiempo`: `test_FR010_destino_compartido_inverso_y_persistente` y `test_FR010_no_reversibles_reubicados_y_estado_actual` |
+
+Las cuatro entregas quedan verificadas en 617f666 mediante el cierre T050/T065: los 14 módulos solicitados pasan con `venv\Scripts\python.exe -m tests.<modulo>`, incluidas las regresiones de resolubilidad, integración, replay, guardado y GUI. La revisión de solo lectura confirma la condición original de `_armar`, los contratos de resolubilidad y CLI, el inverso manual del reloj y la ausencia de cambios de Axel en `_avanzar`, así como las restricciones de estructuras y MVC. Archivos antiguos con marcas incompletas no permiten inventar las observaciones faltantes. K=10 cumple los casos medidos, pero K no limita los deltas por acción ni elimina pausas del sistema.
 
 ---
 

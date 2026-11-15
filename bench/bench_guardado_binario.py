@@ -10,6 +10,11 @@ RUTA_JSON = "bench_partida.json"
 
 def armar_partida(n):
     p = PartidaGuardada(1250, 42, 27, 3, "cripta-bench", "v1", "cat-bench-1", "Jugador")
+    # Mapa sintético explícito: n salas exploradas, sin puertas recordadas.
+    # La memoria no se deduce de las puertas físicas de los bloques.
+    p.n_salas_conocidas = n
+    p.estados_salas = [2] * n
+    p.memoria_puertas = [0] * (4 * n)
     p.inventario = ["itm_daga", "itm_llave_negra"]
     p.solicitudes = 7
     tipos = ("mover N", "recoger 0", "atacar 0", "esperar", "equipar 1", "pergamino")
@@ -32,7 +37,8 @@ def a_json(p):
     for s in p.salas:
         salas.append([s.id, s.rastro, s.enemigos, s.objetos, s.puertas])
     return [p.reloj, p.semilla, p.vida, p.sala_actual, p.inventario, p.id_cripta,
-            p.version_cripta, p.version_catalogo, p.nombre, p.ordenes, p.solicitudes, salas]
+            p.version_cripta, p.version_catalogo, p.nombre, p.ordenes, p.solicitudes, salas,
+            p.n_salas_conocidas, p.estados_salas, p.memoria_puertas]
 
 
 def mediana(valores):

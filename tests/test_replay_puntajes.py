@@ -10,7 +10,7 @@ from tests.cripta_de_prueba import armar, entrada, esqueleto_linea
 from modelo.datos.fabrica_fuentes import crear_fuente_datos
 from modelo.datos.guardado_binario import cargar_general
 from main import main as main_programa
-from controlador.orden import ATACAR, EQUIPAR, ESPERAR, MOVER, Orden, PERGAMINO, RECOGER
+from controlador.orden import ATACAR, EQUIPAR, ESPERAR, MOVER, Orden, PERGAMINO, RECOGER, USAR
 from modelo.datos.persistencia_partida import ErrorCarga, PersistenciaPartida
 from modelo.datos.puntajes import TablaPuntajes
 from modelo.juego.registro import PilaAcotada, Registro
@@ -196,7 +196,11 @@ def test_puntajes_se_registran_y_se_ordenan():
 
 def test_ganar_registra_puntaje_y_cierra_el_log():
     entorno = Entorno()
-    llegar = JUGADAS[:8] + [Orden(RECOGER, 0)] + [Orden(MOVER, "N")] * 4 + \
+    llegar = JUGADAS[:8] + [
+        Orden(RECOGER, 0),  # Cota existente.
+        Orden(RECOGER, 0),  # Pocion de la rata.
+        Orden(USAR, 2),     # Recuperar vida mediante una accion ordinaria.
+    ] + [Orden(MOVER, "N")] * 4 + \
         [Orden(RECOGER, 0), Orden(MOVER, "N"), Orden("abrir", "N"), Orden(MOVER, "N")]
     app, controlador = entorno.jugar(llegar, semilla=7)
     partida = controlador.partida

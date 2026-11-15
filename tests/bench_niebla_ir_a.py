@@ -129,12 +129,13 @@ def medir_consultas(mapa, c, repeticiones, consultas):
         reportar(nombre, len(mapa.salas), mapa.aristas, tiempos, consultas)
 
 
-def medir_actualizacion(mapa, repeticiones, ejecuciones):
+def medir_actualizacion(mapa, repeticiones, ejecuciones, antorcha=False):
     # Solo los tres campos que utilizan los helpers reales de Partida.
     p = object.__new__(Partida)
     p.mapa = mapa
     p.conocimiento = ConocimientoMapa(len(mapa.salas), mapa.salas, mapa)
     p.registro = Registro()
+    p.registro._proteger_memoria_puertas(p.conocimiento.memoria_puertas)
     sala = mapa.salas[len(mapa.salas) // 2]
     grado = sum(1 for salida in sala.salidas if salida is not None)
     actualizar, revertir = [], []
@@ -142,12 +143,19 @@ def medir_actualizacion(mapa, repeticiones, ejecuciones):
         p.registro.abrir_grupo()
         inicio = perf_counter_ns()
         p._explorar_sala(sala)
+        if antorcha:
+            for salida in sala.salidas:
+                if salida is not None:
+                    p._explorar_sala(salida.otro_lado(sala))
         for salida in sala.salidas:
             if salida is not None:
                 p._recordar_puerta(salida)
         duracion = perf_counter_ns() - inicio
         p.registro.cerrar_grupo()
-        assert p.conocimiento.resumen() == (1, grado)
+        if antorcha:
+            assert p.conocimiento.num_exploradas == 1 + grado
+        else:
+            assert p.conocimiento.resumen() == (1, grado)
         cambios = p.registro.cambios_registrados()
         inicio = perf_counter_ns()
         p.registro.deshacer_ultimo()
@@ -159,8 +167,63 @@ def medir_actualizacion(mapa, repeticiones, ejecuciones):
             actualizar.append(duracion)
             revertir.append(duracion_reversa)
     detalle = "grado=%d cambios_C1=%d; helpers, no acción completa" % (grado, cambios)
-    reportar("explorar_y_observar", len(mapa.salas), mapa.aristas, actualizar, detalle=detalle)
-    reportar("revertir_conocimiento", len(mapa.salas), mapa.aristas, revertir, detalle=detalle)
+    reportar("explorar_antorcha" if antorcha else "explorar_y_observar", len(mapa.salas), mapa.aristas, actualizar, detalle=detalle)
+    reportar("revertir_antorcha" if antorcha else "revertir_conocimiento", len(mapa.salas), mapa.aristas, revertir, detalle=detalle)
+
+
+def medir_pergamino(n, repeticiones):
+    tiempos = []
+    por_cambio = []
+    for vuelta in range(repeticiones + 1):
+        esc = armar(esqueleto_linea(n), semilla=17)
+        try:
+            p = esc.partida
+            esc.dar("itm_pergamino")
+            estados = list(p.conocimiento.estado_salas)
+            memoria = list(p.conocimiento.memoria_puertas)
+            identidad = p.conocimiento.memoria_puertas
+            assert p.mover("N")
+            cambios = p.registro.cambios_registrados()
+            assert cambios > 0
+            inicio = perf_counter_ns()
+            aceptado = p.usar_pergamino()
+            duracion = perf_counter_ns() - inicio
+            assert aceptado and p.acciones == 0 and p.reloj.tiempo_actual == 0
+            assert p.conocimiento.estado_salas == estados
+            assert p.conocimiento.memoria_puertas == memoria
+            assert p.conocimiento.memoria_puertas is identidad
+            if vuelta:
+                tiempos.append(duracion)
+                por_cambio.append(duracion / cambios)
+        finally:
+            esc.cerrar()
+    reportar("pergamino_real", n, n - 1, tiempos,
+             detalle="movimiento ordinario, cambios_totales=%d; incluye consumo e invalidacion" % cambios)
+    reportar("pergamino_por_cambio", n, n - 1, por_cambio,
+             detalle="promedio amortizado por cambio del grupo, no latencia individual")
+
+
+def medir_registro(mapa, repeticiones, ejecuciones):
+    memoria = [0] * len(mapa.salas)
+    registro = Registro()
+    registro._proteger_memoria_puertas(memoria)
+    escrituras, inversos = [], []
+    for vuelta in range(repeticiones * ejecuciones + 1):
+        registro.abrir_grupo()
+        inicio = perf_counter_ns()
+        registro.cambiar(memoria, 0, 1)
+        escritura = perf_counter_ns() - inicio
+        registro.cerrar_grupo()
+        inicio = perf_counter_ns()
+        registro.deshacer_ultimo()
+        inverso = perf_counter_ns() - inicio
+        assert memoria[0] == 0
+        if vuelta:
+            escrituras.append(escritura)
+            inversos.append(inverso)
+    reportar("registrar_celda", len(mapa.salas), mapa.aristas, escrituras)
+    reportar("invertir_celda", len(mapa.salas), mapa.aristas, inversos,
+             detalle="grupo con un cambio protegido")
 
 
 def medir_rutas(mapa, c, repeticiones, ejecuciones):
@@ -273,10 +336,13 @@ def main(argv=None):
         c = conocimiento_completo(mapa)
         medir_consultas(mapa, c, opciones.repeticiones, opciones.consultas)
         medir_actualizacion(mapa, opciones.repeticiones, opciones.ejecuciones)
+        medir_actualizacion(mapa, opciones.repeticiones, opciones.ejecuciones, antorcha=True)
+        medir_registro(mapa, opciones.repeticiones, opciones.ejecuciones)
+        medir_pergamino(n, opciones.repeticiones)
         resultados.append(medir_rutas(mapa, c, opciones.repeticiones, opciones.ejecuciones))
         medir_recalculo_viaje(n, opciones.repeticiones, opciones.pasos_viaje)
     print("\nFinalizado. Comparaciones sintéticas orientativas; referencia oficial pendiente.")
-    print("Integración en main.py --bench pendiente: se conserva intacto por alcance autorizado.")
+    print("Disponible mediante main.py --bench mapa_conocido y como modulo independiente.")
     return resultados
 
 

@@ -1,4 +1,4 @@
-﻿# Implementation Plan: Terreno, cazador e invalidación de rutas
+# Implementation Plan: Terreno, cazador e invalidación de rutas
 
 **Branch**: `001-terreno-cazador` | **Date**: 2026-11-07 | **Spec**: [specs/001-terreno-cazador/spec.md](spec.md)  
 **Author**: Mariano (Motor del juego)
@@ -71,7 +71,8 @@ modelo/juego/
 main.py                  # Integración del comando --bench cazador
 
 modelo/estructuras/
-└── monticulo_min.py     # Montículo binario propio provisto por Kim (Contrato C3 - PENDIENTE)
+├── dijkstra.py          # Búsqueda dijkstra_acotado compartida (Contrato C3 - DISPONIBLE)
+└── monticulo_min.py     # Montículo binario propio provisto por Kim (Contrato C3 - DISPONIBLE)
 
 tests/
 ├── test_terreno_cazador.py  # Pruebas de aceptación automatizadas vinculadas a FR-001..FR-008
@@ -121,9 +122,9 @@ bench/
    - Agregar parámetro opcional `rango: int = 0` al final del constructor de `Enemigo` (`modelo/juego/actor.py`), compatible con todos los enemigos de P1.
    - En `mapa.incorporar`: leer `ficha.get("rango", 0)` y validar entero $\ge 0$.
    - **Coordinación con Kim**: En el guardado binario v4 (`guardado_binario.py`), coordinar si los enemigos cazadores persisten `rango` o si la carga v4 lo reconstruye desde el catálogo (Contrato C7).
-2. **Dependencia de Kim (Contrato C3 - PENDIENTE)**:
-   - Kim provee `modelo/estructuras/monticulo_min.py` y `dijkstra_acotado`.
-   - Se acordó la firma con filtro de salidas (`filtro_salida(salida) -> bool`), cota máxima de rango y arreglos reutilizables con marcas de búsqueda.
+2. **Dependencia de Kim (Contrato C3 - DISPONIBLE)**:
+   - Kim entregó `modelo/estructuras/monticulo_min.py` y `modelo/estructuras/dijkstra.py` con `dijkstra_acotado(origen, mapa, filtro_salida, cota_rango=None, token_busqueda=1, arreglo_dist=None, arreglo_marca=None)`.
+   - Se reutiliza la firma sin modificarla: cada consumidor (el cazador de Mariano y el viaje «ir a» de Kim) administra de forma independiente sus propios arreglos de distancia y marca y sus tokens de búsqueda para evitar interferencias.
 3. **Cálculo Compartido desde el Jugador**:
    - Realizar una única búsqueda Dijkstra desde la sala del jugador acotada a $R_{\text{utilizado}} = \max(\{c.rango \text{ activos}\})$.
    - Cada cazador en sala $u$ consulta localmente sus salidas abiertas:
@@ -135,6 +136,8 @@ bench/
    - Incrementar `token_busqueda += 1` en cada ejecución; solo los nodos con `marca[i] == token_busqueda` se consideran alcanzados.
 
 ### Bloque 4: Invalidación Reactiva y Mediciones (SC-001..SC-006)
+
+**Estado**: **IMPLEMENTADO (T021-T023)**. Verificado mediante 28 pruebas automatizadas de aceptacin y regresin en `tests/test_terreno_cazador.py`. La invalidacin reactiva distingue $R_{\text{activo}}$ de $R_{\text{utilizado}}$, suscribe `PlanificadorCazador.notificar_cambio_puerta` al contrato C2 ignorando puertas exteriores ($d > R_{\text{utilizado}}$), y descarta incondicionalmente las rutas tras retroceso con pergamino, eliminando redundancias en `_notificar_invalidacion_rutas`.
 1. **Criterios de Invalidación del Campo Compartido**:
    - Se diferencian **$R_{\text{activo}}$** (el rango del cazador que necesita actuar) y **$R_{\text{utilizado}}$** (la cota máxima usada en el cálculo previo).
    - El campo compartido sigue siendo válido si:
@@ -150,3 +153,16 @@ bench/
    - **SC-005**: Comparar individual vs. compartido para 1, 10, 30 y 100 cazadores con rangos pequeño y grande.
    - **SC-006**: Comparar reutilización vs. recálculo continuo en escenarios con puertas estables e inestables.
    - **Revisión §5.6**: Repetir `bench_motor` con cazadores y documentar el análisis en `DECISIONES.md`.
+
+
+### Bloque 5: Cierre de Capacidad y Benchmarks Oficiales (SC-004..SC-006, §5.6)
+**Estado**: **COMPLETADO (T024-T029)**.
+- Integrado `--bench cazador` en `main.py` (`SUBSISTEMAS_BENCH`).
+- `bench/bench_cazador.py` implementado y verificado:
+  - **SC-004**: Tiempo máximo 0.075 ms, 0 de 50 ciclos > 20 ms (cumple límite estricto < 20 ms con 30 cazadores en 100 salas).
+  - **SC-005**: 1, 10, 30 y 100 cazadores con rangos 250 y 1500; speedup de hasta 26.3x con cálculo compartido.
+  - **SC-006**: Reutilización selectiva con invalidación reactiva alcanza 8.91x de aceleración frente a recálculo continuo en puertas estables y 7.67x en puertas inestables, con 100% de equivalencia observable en decisiones.
+- `bench/bench_motor.py` ampliado con escenario de 50 cazadores activos en Parte II (2.03 ms medio, 7.31 ms máximo < 20 ms).
+- Documentación redactada en `DECISIONES.md` (§5.1, §5.2, §5.6 y capacidad 001).
+- Garantía de cierre del instante $t$ integrada en `agenda_eventos.py` y `partida.py`, validada con `tests/test_cierre_instante_t.py`.
+- Persistencia real del cazador verificada con `tests/test_persistencia_cazador.py`.
