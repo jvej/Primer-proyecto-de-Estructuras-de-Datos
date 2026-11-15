@@ -272,7 +272,7 @@ class PruebasViaje(unittest.TestCase):
         self.assertEqual(p.registro.acciones_deshacibles(), 0)
         self.assertEqual(c._planificador._token_navegacion, 1)  # Solo validación preliminar C4.
         self.assertEqual((p.conocimiento.estado_salas, p.conocimiento.memoria_puertas, p.conocimiento.resumen()), estado_antes)
-        self.assertEqual(comentarios, ["ir a 4"])
+        self.assertEqual(comentarios, [])
         self.assertFalse(c._viaje_activo)
 
     def test_C4_cancelacion_despues_de_varios_pasos_y_retroceso_individual(self):

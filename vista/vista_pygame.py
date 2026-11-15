@@ -82,6 +82,7 @@ from controlador.orden import (ABRIR, ATACAR, CARGAR, EQUIPAR, ESPERAR, MOVER, O
                                RECOGER, SALIR, SOLTAR, USAR, VER_REPETICIONES, es_clave)
 from vista.vista_base import Vista, lineas_mapa_conocido
 from controlador.orden import IR_A, interpretar_ir_a
+from controlador.orden import HISTORIA, interpretar_historia
 from modelo.juego.conocimiento import ESTADO_EXPLORADA
 
 ANCHO, ALTO = 1280, 720
@@ -462,7 +463,8 @@ class VistaPygame(Vista):
 
     def pedir_orden(self, partida):
         self.partida = partida
-        self.fin = None
+        if partida.estado == "jugando":
+            self.fin = None
         pendiente = getattr(self, "_orden_pendiente", None)
         dueña = getattr(self, "_partida_orden_pendiente", None)
         self._descartar_pendiente()
@@ -478,6 +480,11 @@ class VistaPygame(Vista):
             for evento in self._eventos():
                 resultado = None
                 if evento.type == pygame.KEYDOWN:
+                    if evento.key == pygame.K_l:
+                        orden = self._pedir_historia(partida)
+                        if orden is not None:
+                            return orden
+                        break
                     if evento.key == pygame.K_v:
                         orden = self._pedir_ir_a(partida)
                         if orden is not None:
@@ -490,6 +497,11 @@ class VistaPygame(Vista):
                 elif evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
                     resultado = self._clic_en_partida(evento.pos)
                 orden = self._aplicar_seleccion(resultado, partida)
+                if orden is not None and orden.tipo == HISTORIA:
+                    orden = self._pedir_historia(partida)
+                    if orden is not None:
+                        return orden
+                    break
                 if orden is not None:
                     return self._entregar(orden)
             self._dibujar_partida(partida)
@@ -528,6 +540,8 @@ class VistaPygame(Vista):
         return None
 
     def _entregar(self, orden):
+        if orden.tipo == HISTORIA:
+            return orden
         if orden.tipo == IR_A:
             self._viaje_partida = self.partida
             self._viaje_foto = (self.partida.acciones, self.partida.jugador.sala)
@@ -676,6 +690,7 @@ class VistaPygame(Vista):
         self.partida = partida
         self.enemigo_elegido = ajustar_posicion(self.enemigo_elegido, len(partida.enemigos_en_sala()))
         self.objeto_elegido = ajustar_posicion(self.objeto_elegido, len(partida.objetos_en_sala()))
+        self._mostrar_reporte_inicio()
 
     def mostrar_inventario(self, partida):
         self.partida = partida
@@ -707,6 +722,9 @@ class VistaPygame(Vista):
         self._modal("Tabla de puntajes", lineas)
 
     def mostrar_aviso(self, texto):
+        if str(texto).startswith("ESTADO:"):
+            self._mostrar_panel_texto("Resolubilidad", str(texto))
+            return
         print(texto)
         fin = pygame.time.get_ticks() + DURACION_AVISO_MS
         for linea in str(texto).splitlines():
@@ -741,6 +759,13 @@ class VistaPygame(Vista):
         continuar = True
         for evento in eventos:
             if evento.type == pygame.KEYDOWN:
+                if evento.key == pygame.K_l:
+                    orden = self._pedir_historia(partida)
+                    if self.cerrada:
+                        return False
+                    if orden is not None:
+                        self._historia_pendiente = (partida, orden)
+                    break
                 if evento.key == pygame.K_ESCAPE:
                     continuar = False
                     break
@@ -753,6 +778,93 @@ class VistaPygame(Vista):
         self._dibujar_partida(partida)
         self._mostrar_cuadro()
         return continuar
+
+    def retirar_historia_pendiente(self, partida):
+        pendiente = getattr(self, "_historia_pendiente", None)
+        self._historia_pendiente = None
+        if pendiente is not None and pendiente[0] is partida and not self.cerrada:
+            return pendiente[1]
+        return None
+
+    def mostrar_historia(self, texto):
+        self._mostrar_panel_texto("Historia", texto)
+
+    def mostrar_reporte_resolubilidad(self, reporte):
+        self._mostrar_panel_texto("Resolubilidad", reporte.formatear_reporte())
+
+    def _mostrar_panel_texto(self, titulo, texto):
+        """Panel completo: ajusta renglones, permite desplazamiento y cierra con Esc."""
+        lineas = []
+        for linea in texto.splitlines():
+            restante = linea
+            while restante:
+                limite = 1
+                while limite < len(restante):
+                    candidato = restante[:limite + 1]
+                    ancho = (self.fuente.size(candidato)[0] if self.fuente is not None
+                             else len(candidato) * 10)
+                    if ancho > 940:
+                        break
+                    limite += 1
+                lineas.append(restante[:limite])
+                restante = restante[limite:]
+            if not linea:
+                lineas.append("")
+        inicio, visibles = 0, 20
+        while not self.cerrada:
+            for evento in self._eventos():
+                if evento.type == pygame.QUIT:
+                    return
+                if evento.type == pygame.KEYDOWN:
+                    if evento.key == pygame.K_ESCAPE:
+                        return
+                    if evento.key == pygame.K_DOWN:
+                        inicio += 1
+                    elif evento.key == pygame.K_UP:
+                        inicio -= 1
+                    elif evento.key == pygame.K_PAGEDOWN:
+                        inicio += visibles
+                    elif evento.key == pygame.K_PAGEUP:
+                        inicio -= visibles
+                    elif evento.key == pygame.K_HOME:
+                        inicio = 0
+                    elif evento.key == pygame.K_END:
+                        inicio = len(lineas) - visibles
+                elif evento.type == pygame.MOUSEWHEEL:
+                    inicio -= evento.y * 3
+            inicio = max(0, min(inicio, max(0, len(lineas) - visibles)))
+            self._dibujar_fondo_de_dialogo()
+            caja = self._caja_centrada(1000, 580, ALTO // 2)
+            self._texto(self.fuente_media, titulo, DORADO, caja.centerx, caja.y + 18, centro=True)
+            for i, linea in enumerate(lineas[inicio:inicio + visibles]):
+                self._texto(self.fuente, linea, TEXTO, caja.x + 28, caja.y + 58 + i * 22)
+            self._texto(self.fuente_chica, "Flechas / rueda / RePag / AvPag / Inicio / Fin: recorrer. Esc: cerrar.",
+                        TEXTO_TENUE, caja.centerx, caja.bottom - 26, centro=True)
+            self._mostrar_cuadro()
+
+    def pedir_orden_final(self, partida):
+        """Conserva fin y devuelve únicamente consultas o la continuación del flujo."""
+        self.partida = partida
+        while not self.cerrada:
+            for evento in self._eventos():
+                if evento.type == pygame.QUIT:
+                    return None
+                if evento.type == pygame.KEYDOWN:
+                    if evento.key in (pygame.K_ESCAPE, pygame.K_RETURN):
+                        return None
+                    if evento.key == pygame.K_l:
+                        orden = self._pedir_historia(partida)
+                        if orden is not None:
+                            return orden
+                        break
+                    if evento.key in (pygame.K_h, pygame.K_F1):
+                        self.mostrar_ayuda()
+                        break
+            self._dibujar_fondo_de_dialogo()
+            self._texto(self.fuente, "L: historia · Enter / Esc: continuar", DORADO,
+                        ANCHO // 2, ALTO - 30, centro=True)
+            self._mostrar_cuadro()
+        return None
 
     def mostrar_mapa(self, mapa):
         """El controlador suministra exclusivamente Partida.mapa_conocido()."""
@@ -824,6 +936,39 @@ class VistaPygame(Vista):
             self._texto(self.fuente_media, "Viaje a una sala explorada", DORADO, caja.centerx, caja.y + 18, centro=True)
             self._texto(self.fuente, texto + "_", TEXTO, caja.x + 28, caja.y + 65, ancho_max=caja.w - 56)
             self._texto(self.fuente_chica, aviso, TEXTO_TENUE, caja.x + 28, caja.y + 115, ancho_max=caja.w - 56)
+            self._mostrar_cuadro()
+        return None
+
+    def _pedir_historia(self, partida):
+        """L: entrada local sin ejecutar órdenes ni consultar el modelo histórico."""
+        texto = ""
+        aviso = "Escribe t o #k. Enter: consultar. Esc: cerrar."
+        while not self.cerrada:
+            for evento in self._eventos():
+                if evento.type == pygame.QUIT:
+                    return None
+                if evento.type != pygame.KEYDOWN:
+                    continue
+                if evento.key == pygame.K_ESCAPE:
+                    return None
+                if evento.key == pygame.K_RETURN:
+                    try:
+                        return interpretar_historia("historia " + texto,
+                                                    partida.reloj.tiempo_actual, partida.acciones)
+                    except ValueError as error:
+                        aviso = str(error)
+                elif evento.key == pygame.K_BACKSPACE:
+                    texto = texto[:-1]
+                else:
+                    caracter = getattr(evento, "unicode", "")
+                    if caracter and caracter.isprintable() and len(texto) < 64:
+                        texto += caracter
+            self._dibujar_fondo_de_dialogo()
+            caja = self._caja_centrada(1000, 180, ALTO // 2)
+            self._texto(self.fuente_media, "Historia", DORADO, caja.centerx, caja.y + 18, centro=True)
+            self._texto(self.fuente, texto + "_", TEXTO, caja.x + 28, caja.y + 65, ancho_max=caja.w - 56)
+            self._texto(self.fuente_chica, aviso, TEXTO_TENUE, caja.x + 28, caja.y + 115,
+                        ancho_max=caja.w - 56)
             self._mostrar_cuadro()
         return None
 
@@ -1210,8 +1355,11 @@ class VistaPygame(Vista):
             centro = (SALA.x + 330 + columna * 112 + fila * 56, SUELO_Y - fila * 70)
             tipo = _tipo_de_enemigo(enemigo.comportamiento)
             color = self._color_de(tipo)
+            etiqueta = _acortar_ids(enemigo.etiqueta())
+            if tipo == "cazador":
+                etiqueta += " [CAZADOR]"
             rect = self._dibujar_actor(enemigo, tipo, color, centro,
-                                       _acortar_ids(enemigo.etiqueta()), i == self.enemigo_elegido, -1)
+                                       etiqueta, i == self.enemigo_elegido, -1)
             self.zonas.append((rect, ("enemigo", i)))
         if len(enemigos) > MAX_ENEMIGOS_DIBUJADOS:
             self._texto(self.fuente_chica, "+%d enemigos más" % (len(enemigos) - MAX_ENEMIGOS_DIBUJADOS),
@@ -1233,6 +1381,13 @@ class VistaPygame(Vista):
         if elegido:
             pygame.draw.rect(self.pantalla, SELECCION, rect.inflate(12, 12), 3)
             self._texto(self.fuente_chica, "objetivo", SELECCION, rect.centerx, rect.y - 34, centro=True)
+        if nombre_sprite == "cazador":
+            # El distintivo tiene forma propia y texto sin el recorte de la etiqueta.
+            x, y = rect.right + 10, rect.y + 6
+            pygame.draw.polygon(self.pantalla, TEXTO,
+                                ((x, y - 7), (x + 6, y), (x, y + 7), (x - 6, y)), 2)
+            self._texto(self.fuente_chica, "[CAZADOR]", TEXTO, centro[0], rect.y - 18, centro=True)
+            etiqueta = etiqueta.removesuffix(" [CAZADOR]")
         self._texto(self.fuente_chica, etiqueta, TEXTO, centro[0], rect.bottom + 6,
                     centro=True, ancho_max=116)
         self._barra_vida(pygame.Rect(centro[0] - 40, rect.bottom + 24, 80, 7), actor.vida, actor.vida_max)
@@ -1451,11 +1606,13 @@ class VistaPygame(Vista):
     def _dibujar_botonera(self):
         x = SALA.x
         y = BOTONERA_Y
+        columnas = (len(BOTONES) + 1) // 2
+        ancho = (SALA.w - 8 * (columnas - 1)) // columnas
         for i in range(len(BOTONES)):
             tecla, etiqueta = BOTONES[i]
-            self._boton(pygame.Rect(x, y, 130, 36), etiqueta, tecla)
-            x += 138
-            if i == 5:
+            self._boton(pygame.Rect(x, y, ancho, 36), etiqueta, tecla)
+            x += ancho + 8
+            if i == columnas - 1:
                 x = SALA.x
                 y += 42
 
