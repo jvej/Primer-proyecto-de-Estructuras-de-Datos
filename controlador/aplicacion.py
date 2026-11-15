@@ -260,6 +260,10 @@ class Aplicacion:
         if self.log is not None:
             self.log.anotar(orden)
 
+    def registrar_comentario(self, texto: str) -> None:
+        if self.log is not None:
+            self.log.anotar_comentario(texto)
+
     def al_terminar(self, partida):
         lineas = []
         if self.registrar_puntajes and partida.estado != "jugando":

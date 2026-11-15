@@ -18,6 +18,8 @@ CARGAR = "cargar"
 AYUDA = "ayuda"
 PUNTAJES = "puntajes"
 SALIR = "salir"
+IR_A = "ir_a"
+MAPA = "mapa"
 
 VER_REPETICIONES = "__repeticiones__"
 
@@ -92,3 +94,16 @@ def clave_de_argumento(argumento):
 SIN_ARGUMENTO = (ESPERAR, PERGAMINO)
 CON_DIRECCION = (MOVER, ABRIR)
 CON_OBJETO = (USAR, EQUIPAR, SOLTAR)
+
+
+def interpretar_ir_a(linea: str) -> Orden:
+    """Parser independiente para la futura conexión de consola/Pygame.
+
+    No es el parser del log: IR_A nunca es una orden atómica de replay.
+    """
+    partes = linea.strip().lower().split()
+    if (len(partes) != 3 or partes[:2] != ["ir", "a"]
+            or not partes[2].isascii() or not partes[2].isdigit()
+            or int(partes[2]) <= 0):
+        raise ValueError("Uso: ir a <id de sala positivo>")
+    return Orden(IR_A, int(partes[2]))

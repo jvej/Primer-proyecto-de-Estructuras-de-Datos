@@ -1,6 +1,20 @@
 from abc import ABC, abstractmethod
 
 
+def lineas_mapa_conocido(mapa):
+    """Formato común de datos ya filtrados; no recibe acceso a Partida."""
+    lineas = ["Mapa conocido:"]
+    for id_sala, nombre, salidas in mapa:
+        lineas.append("Sala %s: %s" % (id_sala, nombre or "sin nombre"))
+        for direccion, estado, id_vecino, llave, costo in salidas:
+            destino = "desconocida" if id_vecino is None else "sala %s" % id_vecino
+            detalle = estado + (", llave %s" % llave if llave is not None else "")
+            lineas.append("  %s -> %s (costo %s, %s)" % (direccion, destino, costo, detalle))
+    if not mapa:
+        lineas.append("  Ninguna sala explorada.")
+    return lineas
+
+
 class Vista(ABC):
     @abstractmethod
     def elegir_cripta(self, criptas):
@@ -50,6 +64,10 @@ class Vista(ABC):
     def soporta_repeticion(self):
         """True si esta vista puede mostrar una repetición paso a paso."""
         return False
+
+    def mostrar_mapa(self, mapa):
+        """Presentación textual compatible; recibe datos ya filtrados por Partida."""
+        self.mostrar_aviso("\n".join(lineas_mapa_conocido(mapa)))
 
     def elegir_repeticion(self, entradas):
         """entradas: bitacora_partida.EntradaLog, de la más nueva a la más vieja.

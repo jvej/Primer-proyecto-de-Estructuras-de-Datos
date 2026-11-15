@@ -177,6 +177,13 @@ def correr_interactivo(argumentos):
                               puntajes=aplicacion.puntajes, al_terminar=aplicacion.al_terminar,
                               repeticiones=repeticiones)
     controlador.agregar_observador(aplicacion.registrar_orden)      
+    controlador.agregar_observador_comentarios(
+        aplicacion.registrar_comentario
+    )
+    if argumentos.gui:
+        controlador.agregar_observador_viaje(
+            vista.atender_viaje
+        )
     try:
         controlador.correr_sesion(aplicacion.listar_criptas, aplicacion.crear_partida)
     except KeyboardInterrupt:

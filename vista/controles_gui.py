@@ -26,6 +26,7 @@ Teclas:
 from controlador.orden import (ABRIR, AYUDA, ATACAR, CARGAR, EQUIPAR, ESPERAR, GUARDAR, INV_ANTERIOR,
                    INV_INICIO, INV_ORDENAR, INV_SIGUIENTE, INVENTARIO, MOVER, Orden,
                    PERGAMINO, PUNTAJES, RECOGER, SALIR, SOLTAR, USAR)
+from controlador.orden import MAPA
 
 SIG_ENEMIGO = "sig_enemigo"
 SIG_SUELO = "sig_suelo"
@@ -37,6 +38,7 @@ BOTONES = (
 )
 
 AYUDA_LINEAS = (
+    "M: mapa conocido (flechas/rueda para recorrer; Esc para cerrar)",
     "Flechas: moverse          Shift + flecha: abrir puerta",
     "Clic en una puerta: moverse (o abrirla si está cerrada)",
     "Tab o clic: elegir enemigo          Espacio: atacar",
@@ -65,6 +67,8 @@ def direccion_de_tecla(tecla):
 def orden_para_tecla(tecla, shift, enemigo_elegido, objeto_elegido):
     """enemigo_elegido / objeto_elegido: posición (desde 0) seleccionada en la sala."""
     direccion = direccion_de_tecla(tecla)
+    if tecla == "m":
+        return Orden(MAPA)
     if direccion is not None:
         return Orden(ABRIR if shift else MOVER, direccion)
     if tecla == "tab":

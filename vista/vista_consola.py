@@ -23,6 +23,7 @@ from controlador.orden import (ABRIR, AYUDA, ATACAR, CARGAR, EQUIPAR, ESPERAR, G
                    INV_INICIO, INV_ORDENAR, INV_SIGUIENTE, INVENTARIO, MOVER, Orden,
                    PERGAMINO, PUNTAJES, RECOGER, SALIR, SOLTAR, USAR)
 from vista.vista_base import Vista
+from controlador.orden import MAPA, interpretar_ir_a
 
 CRITERIOS = ("peso", "valor", "nombre")
 
@@ -52,6 +53,14 @@ def interpretar(linea, partida):
         return "Escribe un comando (o 'ayuda')."
     comando = partes[0]
     argumentos = partes[1:]
+
+    if comando == "ir" and argumentos[:1] == ["a"]:
+        try:
+            return interpretar_ir_a(linea)
+        except ValueError as error:
+            return str(error)
+    if comando == "mapa":
+        return Orden(MAPA) if not argumentos else "Uso: mapa"
 
     if _direccion(comando) is not None and len(argumentos) == 0:
         return Orden(MOVER, _direccion(comando))
@@ -122,6 +131,8 @@ def _con_posicion(tipo, argumentos, cantidad, que):
 
 
 AYUDA_TEXTO = """Comandos (los números se cuentan desde 1, como se ven en pantalla):
+  ir a <sala>        viajar a una sala explorada, paso a paso
+  mapa               ver el mapa conocido y las puertas recordadas
   n s e o            moverse (también: ir n)
   abrir n|s|e|o      abrir una puerta con la llave
   atacar [N]         atacar al enemigo N de la sala
@@ -274,12 +285,13 @@ class VistaConsola(Vista):
 
     def _texto_salidas(self, partida):
         textos = []
-        for direccion, estado, id_vecino, llave in partida.salidas_visibles():
+        for direccion, estado, id_vecino, llave, costo in partida.salidas_visibles():
             if estado == "cerrada":
                 detalle = "cerrada" + (", llave %s" % llave if llave else "")
             else:
-                detalle = "abierta"
-            textos.append("%s -> sala %s (%s)" % (direccion, id_vecino, detalle))
+                detalle = estado
+            destino = "desconocida" if id_vecino is None else "sala %s" % id_vecino
+            textos.append("%s -> %s (costo %s, %s)" % (direccion, destino, costo, detalle))
         return " | ".join(textos) if len(textos) > 0 else "ninguna"
 
     def _lista_numerada(self, titulo, elementos, formato):

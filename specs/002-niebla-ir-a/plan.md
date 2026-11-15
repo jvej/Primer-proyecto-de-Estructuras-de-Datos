@@ -108,6 +108,16 @@ tests/
 ## Plan de Trabajo por Bloques Técnicos
 
 ### Bloque 1: Conocimiento en Arreglos Indexados por `Sala.indice`, Mutaciones C1 y Resumen C6
+
+**Aclaración confirmada T003/T004**: constructor
+`ConocimientoMapa(n, salas_por_indice, mapa)`, conservando referencias. Consultas
+por Sala e índices O(1); por ID O(log N) usando Mapa. El módulo solo almacena y
+consulta; la integración posterior en Partida actualizará ambos extremos de una
+puerta observada mediante `partida.cambiar`, sin modificar el conocimiento de las
+salas conectadas. Véanse las decisiones y límites de visibilidad en `data-model.md`.
+Pruebas unitarias: `python -m tests.test_conocimiento`. La aceptación integral de
+T004 requiere pasos posteriores; sus casillas se mantienen pendientes.
+
 1. **Entidad `ConocimientoMapa` (`modelo/juego/conocimiento.py`)**:
    - Arreglos contiguos preasignados: `self.estado_salas = [ESTADO_DESCONOCIDA] * N` y `self.memoria_puertas = [PUERTA_DESCONOCIDA] * (4 * N)`.
    - Contadores $O(1)$ para la línea de tiempo de Axel (C6): `self.num_exploradas: int = 0` y `self.num_avistadas: int = 0`.

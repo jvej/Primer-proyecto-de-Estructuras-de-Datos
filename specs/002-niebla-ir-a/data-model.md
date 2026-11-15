@@ -8,6 +8,28 @@
 
 ## 1. Entidades del Dominio
 
+### Decisiones confirmadas para T003/T004
+
+- Constructor: `ConocimientoMapa(n, salas_por_indice, mapa)`. Conserva ambas
+  referencias, exige `salas_por_indice is mapa.salas` e índices contiguos.
+- La construcción deja todas las salas y puertas desconocidas y los contadores
+  en cero. FR-002 describe el inicio de Partida, no el constructor del contenedor.
+- Consultas por Sala/índice y `resumen()` son O(1). `estado_por_id` delega en
+  `mapa.sala`, cuya búsqueda binaria existente es O(log N).
+- Observar una única puerta física permite recordar el mismo estado en sus dos
+  posiciones. Esto no avista ni explora la sala del otro extremo, no descubre sus
+  otras salidas y no autoriza revelar ID, nombre o contenido (FR-001..FR-005).
+  La integración posterior en Partida escribirá ambas posiciones exclusivamente
+  mediante `partida.cambiar`, si el jugador está en uno de los extremos (C2).
+- `puerta_recordada_abierta(salida)` consulta solo la memoria de los dos extremos;
+  devuelve False si falta algún recuerdo o discrepan. Nunca consulta el estado
+  físico. El consumidor comprueba además que ambas salas estén exploradas (C3).
+- El contenedor no realiza exploración, observación, conteo automático ni
+  notificaciones. Partida mantendrá estados y contadores en el mismo grupo
+  reversible. No se declara implementada la línea de tiempo de FR-013.
+- Las pruebas unitarias están en `tests/test_conocimiento.py`; la aceptación de
+  FR-002..FR-005 con Partida y vistas sigue pendiente en T004/T009..T014.
+
 ### 1.1 EstadoConocimiento (Constantes del dominio)
 Representa el grado de percepción y certeza que el jugador tiene sobre una sala de la cripta.
 

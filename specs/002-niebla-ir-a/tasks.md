@@ -37,6 +37,14 @@
 
 ### ConocimientoMapa (bloquea US1, US2, US3, US4)
 
+**Aclaración confirmada que precisa T003/T004**: la firma del constructor es
+`ConocimientoMapa(n, salas_por_indice, mapa)`, sin copias. La consulta por ID es
+O(log N); las consultas por Sala/índice y resumen son O(1). Las decisiones sobre
+memoria simétrica y límites de visibilidad están en `data-model.md`. Las pruebas
+unitarias se ejecutan con `python -m tests.test_conocimiento`; los escenarios de
+aceptación con Partida/vistas permanecen pendientes. Esta nota prevalece sobre
+el ejemplo incompleto del constructor en T003.
+
 - [ ] T003 [P] Implementar `ConocimientoMapa` en `modelo/juego/conocimiento.py` con: arreglos contiguos preasignados `self.estado_salas = [ESTADO_DESCONOCIDA] * N` y `self.memoria_puertas = [PUERTA_DESCONOCIDA] * (4 * N)` (donde `ESTADO_DESCONOCIDA = 0`, `ESTADO_AVISTADA = 1`, `ESTADO_EXPLORADA = 2`, `PUERTA_DESCONOCIDA = 0`, `PUERTA_ABIERTA = 1`, `PUERTA_CERRADA = 2`); contadores reversibles `self.num_exploradas: int = 0` y `self.num_avistadas: int = 0`; `self.salas_por_indice: list[Sala]` asignado como **referencia directa a `mapa.salas`** (no copia — cero memoria adicional), pasado en el constructor como `ConocimientoMapa(n, salas_por_indice=mapa.salas)`; mapeo de puertas `pos = sala.indice * 4 + dir_idx`; métodos de consulta O(1) `es_explorada(sala)`, `es_avistada(sala)`, `estado_sala(sala)`, `puerta_recordada(sala, dir_idx)` (todos reciben instancia de `Sala`, no ID); método `estado_por_id(id_sala)` que resuelve la sala via `mapa.sala(id_sala)` usando el `Mapa` recibido en el constructor (sin dict ni O(N) — `mapa.sala` usa `esqueleto.posicion` internamente), retornando `estado_salas[sala.indice]` o `ESTADO_DESCONOCIDA` si la sala no existe; y método `resumen() -> tuple[int, int]` que retorna `(self.num_exploradas, self.num_avistadas)` (C6, FR-001..FR-005, SC-002, SC-003). -> `python -m tests.test_niebla_ir_a`
 - [ ] T004 Escribir pruebas test-first en `tests/test_niebla_ir_a.py` para `ConocimientoMapa`: `test_FR001_clasificacion_tres_estados`, `test_FR002_estado_inicial_instante_cero`, `test_FR003_sala_explorada_revela_nombre_y_conexiones`, `test_FR004_sala_avistada_no_revela_id_ni_nombre`, `test_FR005_sala_desconocida_oculta_sin_ruteo`; verificar que `num_avistadas` NO se duplica cuando una sala tiene múltiples accesos; verificar `resumen()` O(1) (C6, SC-002, SC-004). -> `python -m tests.test_niebla_ir_a`
 
