@@ -24,6 +24,7 @@ Este documento reúne los registros de uso de modelos de lenguaje (LLM) de cada 
 3. [Motor del juego — Mariano](#3-motor-del-juego--mariano)
 4. [Inventario, retroceso, replay, controlador y vista — Axel](#4-inventario-retroceso-replay-controlador-y-vista--axel)
 5. [Recursos visuales, sonido y repeticiones — Jeferson](#5-recursos-visuales-sonido-y-repeticiones--jeferson)
+6. [Parte II — Línea de tiempo (004) — Axel](#parte-ii--línea-de-tiempo-004--axel)
 
 ---
 
@@ -1432,3 +1433,591 @@ esearch.md, data-model.md, 	asks.md) y el reporte de análisis de consistencia p
 > Revisa si mi solución respeta [MVC / restricciones del enunciado] y justifica con el apartado.
 
 > Hazme preguntas para comprobar que entendí [concepto] antes de continuar.
+
+
+---
+
+## Parte II — Línea de tiempo (004) — Axel
+
+Los prompts los redacté con ayuda de Claude (Anthropic) y los revisé yo. Todas las aprobaciones de comandos en Codex fueron manuales («Permitir una vez»), sin modo automático ni acceso total. Los commits los hice yo con GitHub Desktop. La autorización de Jeferson para editar `controlador/aplicacion.py` quedó registrada el **2026-11-13**, a las **15:20:23 (Costa Rica, UTC−06:00)**, en `440cbdc`, primer commit de plan/tasks que incorpora «autorizado por Jeferson».
+
+**Fuentes y transcripción:** sesiones originales de Codex cuyo directorio de trabajo es este repositorio, mensajes de usuario que comienzan con `$speckit-…` (también como enlace de skill) o «Soy Axel», desde la especificación hasta la verificación final; se excluyen las copias heredadas por subagentes y esta solicitud de consolidación. Se conserva el texto completo del prompt en bloques literales, sin el contexto automático del IDE ni el contenido de las skills adjuntas. Las intensidades `medium`/`high` proceden del contexto de cada turno; las fechas y horas usan Costa Rica (UTC−06:00). Los resultados se contrastaron con las sesiones, el historial de `origin/004-linea-de-tiempo` y `tasks.md`; las correcciones posteriores solicitadas por Axel se resumen en la entrada correspondiente, sin atribuirle escritura manual de código que los registros no demuestran.
+
+### 2026-11-13 · Axel · Codex en VS Code (modelo gpt-6.1-sol, intensidad medium)
+
+**Prompt:**
+
+```text
+$speckit-specify Usa el número de feature 004 y el nombre corto linea-de-tiempo: pasa -Number 4 y -ShortName linea-de-tiempo al script de creación, porque 001, 002 y 003 ya existen. Antes de empezar, lee .specify/memory/constitution.md y AGENTS.md. Solo puedes crear archivos dentro de specs/004-linea-de-tiempo/ y la rama que crea el script. No toques código ni specs de otros. No hagas commits.\
+\
+Línea de tiempo de CRIPTA. Describe solo el comportamiento, sin nombres de estructuras, clases ni módulos.\
+\
+El pergamino de retroceso sigue limitado a 5 acciones. La línea de tiempo es independiente: permite consultar, sin modificar la partida, el estado en cualquier instante desde el inicio. El estado en el instante t es el que queda después de ejecutar todos los eventos con tiempo menor o igual que t; si a t le corresponde una decisión del jugador, es el estado justo antes de tomarla.\
+\
+El jugador consulta con historia \<t> o historia #k (estado justo antes de su acción número k). La consulta muestra como mínimo: el reloj, la sala del jugador, su vida y sus estadísticas, el inventario en orden, los efectos activos, los enemigos de esa sala con su vida, y el mapa conocido en ese momento (salas exploradas, salas avistadas y el estado recordado de las puertas). No consume tiempo virtual, no cuenta como acción, no se escribe en partida.log y no modifica ni el estado ni lo que el pergamino puede deshacer. --replay partida.log --hasta \<t> reproduce la partida hasta t e imprime el mismo resumen sin interfaz; si t es posterior al final, muestra el estado final e indica que la partida terminó antes.\
+\
+Las acciones revertidas con un pergamino dejan de existir en la línea de tiempo. Los cambios que ocurren fuera de una acción del jugador (por ejemplo, actualizar la memoria de una puerta observada durante un viaje automático sin consumir tiempo) también forman parte de la línea de tiempo en su instante, y como el pergamino no los revierte, tampoco desaparecen de ella. Consultar un instante posterior al reloj actual se rechaza con un mensaje.\
+\
+Memoria: se permiten copias completas del estado (puntos de control) a lo sumo cada K acciones del jugador. K se configura con --checkpoint-cada K y su valor por defecto se justifica con mediciones. Una consulta no puede aplicar ni deshacer cambios de más de K acciones. Fuera de los puntos de control solo se guarda lo necesario para reconstruir los cambios. La memoria total crece con los cambios ocurridos más un punto de control cada K acciones, nunca con acciones por tamaño del estado. Al usar un pergamino, la línea se recorta sin recorrer toda la historia. Guardar y cargar la partida conserva la línea completa.\
+\
+Rendimiento: historia responde en menos de 50 ms en una partida de al menos 5000 acciones con el K por defecto. --bench mide memoria y tiempo de consulta para al menos tres valores de K y la alternativa sin puntos de control.\
+\
+Escenarios de aceptación obligatorios: historia \<t> con t mayor que el reloj actual se rechaza; historia después de usar un pergamino no muestra las acciones revertidas; con varios eventos en el mismo instante t, historia \<t> muestra el estado después de todos ellos; historia no consume tiempo, no se registra en partida.log y no modifica el historial de retroceso; --replay partida.log --hasta t con t posterior al final muestra el estado final e indica que la partida terminó antes; una consulta nunca aplica cambios de más de K acciones; guardar y cargar conserva la línea de tiempo; historia después de un pergamino que revirtió una entrada con antorcha no muestra las salas reveladas por esa antorcha.\
+\
+También me corresponde esta interfaz: mostrar el reporte de resolubilidad al iniciar una partida con la plantilla de specs/003-resolubilidad (FR-015 y FR-018), mostrar el costo de cada salida de la sala actual, distinguir visualmente a los cazadores del resto de enemigos, y que el número de una sala se muestre bien aunque su id no termine en número.\
+\
+Numera los requisitos funcionales FR-001… y los de rendimiento SC-001… Al terminar, muéstrame la rama creada, la ruta del spec.md y la lista de FR y SC.
+
+No agregues requisitos que no estén en este texto ni detalles de implementación; si algo es ambiguo, márcalo como [NEEDS CLARIFICATION] para resolverlo en la fase de clarify.
+```
+
+**Para qué:** Especificación (`speckit-specify`): requisitos FR/SC y escenarios de 004, previos a T001–T065.
+
+**Resultado / qué se corrigió a mano:** Se creó la especificación con requisitos y escenarios; las ambigüedades se reservaron para aclaración. Commit `85fe30b`.
+
+<!-- Fuente: rollout-2026-11-13T01-17-40-01a1d3c4-ebb6-7100-b094-3259dbfb1b40.jsonl; turno 2026-11-13 01:17:42 UTC-06:00. -->
+
+### 2026-11-13 · Axel · Codex en VS Code (modelo gpt-6.1-sol, intensidad medium)
+
+**Prompt:**
+
+```text
+$speckit-clarify Responde las preguntas pendientes y registra estas aclaraciones en specs/004-linea-de-tiempo/spec.md (sección de aclaraciones y en los FR afectados). Solo puedes modificar ese spec.md y su checklist. No hagas commits.\
+\
+1\. FR-003: después de un pergamino, las acciones se numeran por su posición en la historia vigente: las revertidas desaparecen y la siguiente acción toma su número, igual que el contador de acciones de la partida.\
+2\. FR-012: hay un punto de control en el instante 0 y luego uno exactamente cada K acciones del jugador; nunca más de una copia completa por cada K acciones ni más de K acciones entre dos puntos de control.\
+3\. FR-018: elimínalo, junto con su escenario y su caso límite. Los ids de sala son enteros en el contrato de datos; el problema de la primera parte era de las etiquetas de enemigos y ya está resuelto. No renumeres los demás FR.\
+4\. Cuenta como acción número k solo una acción aceptada del jugador (la que avanza el contador de acciones); las órdenes rechazadas, historia, ayuda, inventario y mapa no cuentan; cada paso de un viaje "ir a" sí cuenta.\
+5\. historia #1 es el estado inicial. historia #k con k igual a las acciones realizadas más uno muestra el estado actual, justo antes de la próxima acción. historia #k con k menor que 1 o mayor que eso se rechaza con un mensaje. historia \<t> con t negativo o no entero se rechaza con un mensaje; historia 0 es el estado en el instante 0.\
+6\. Si en el instante consultado el jugador ya había sido derrotado o había ganado, el resumen lo indica.\
+7\. historia se puede usar durante la partida y en la pantalla final, y nunca cambia el resultado.\
+8\. En Pygame, historia se abre con la tecla H: un cuadro donde se escribe t o #k y un panel con el resumen que se cierra con Escape sin afectar la partida. En consola: "historia \<t>" e "historia #k".\
+\
+Si después de esto queda alguna ambigüedad importante, hazme como máximo 3 preguntas, una por una. Al final muéstrame la sección de aclaraciones y la lista de FR actualizada.
+```
+
+**Para qué:** Aclaración (`speckit-clarify`): numeración vigente, checkpoints, selectores y consulta final; base de T001–T008 y T032–T041.
+
+**Resultado / qué se corrigió a mano:** Se fijaron selectores y numeración, se retiró FR-018 sin renumerar y se conservó la consulta final. H se sustituyó después por L al comprobar que H/F1 ya abrían ayuda; commit `526509f`.
+
+<!-- Fuente: rollout-2026-11-13T01-17-40-01a1d3c4-ebb6-7100-b094-3259dbfb1b40.jsonl; turno 2026-11-13 01:28:59 UTC-06:00. -->
+
+### 2026-11-13 · Axel · Codex en VS Code (modelo gpt-6.1-sol, intensidad high)
+
+**Prompt:**
+
+```text
+$speckit-plan Plan técnico de specs/004-linea-de-tiempo/spec.md. Lee antes .specify/memory/constitution.md, AGENTS.md, specs/001-terreno-cazador/plan.md, specs/002-niebla-ir-a/plan.md y specs/003-resolubilidad/spec.md (FR-015 y FR-018). Solo puedes crear o modificar archivos dentro de specs/004-linea-de-tiempo/ (plan.md, research.md, data-model.md, quickstart.md, contracts/). No modifiques código. No hagas commits. Prohibido proponer dict o set como índice o caché, heapq, bisect, collections, sorted() o list.sort().\
+\
+Basa el plan en el código real; cita archivo y función:\
+\- modelo/juego/registro.py: Registro.cambiar(objeto, campo, valor) acepta atributos y posiciones de listas (lo usa Kim para el conocimiento); abrir_grupo, cerrar_grupo, inverso, deshacer_ultimo; PilaAcotada de 5 grupos.\
+\- modelo/juego/partida.py: cambiar, \_lista_agregar, \_lista_quitar, \_inv_agregar, \_inv_quitar, \_inv_al_frente (los pergaminos no registran inverso), \_accion (abre y cierra el grupo, registra el reloj y el contador de acciones), \_avanzar (mueve reloj.tiempo_actual directamente), usar_pergamino (\_en_retroceso, deshacer_ultimo, sin avisar a observadores), cambiar_estado_puerta (C2 de Mariano), el conocimiento de Kim (estado_salas y memoria_puertas mediante cambiar) y la observación de puertas fuera de una acción durante IR_A.\
+\- controlador/reproductor.py, controlador/controlador.py, controlador/orden.py, controlador/aplicacion.py, main.py, vista/vista_consola.py, vista/vista_pygame.py, vista/controles_gui.py (la tecla H está libre).\
+\- modelo/datos/bitacora_partida.py y persistencia_partida.py: la carga de una partida re-ejecuta las órdenes guardadas.\
+\- bench/generador_criptas.py (generar_cripta) y la lista de subsistemas de --bench en main.py.\
+\
+Propuesta a evaluar contra alternativas, con complejidad y memoria:\
+1\. C1: los mismos puntos únicos que hoy alimentan al pergamino anotan además un delta para la línea de tiempo: instante del reloj, objeto, campo o posición, valor anterior y valor nuevo; y para listas e inventario, la operación, el elemento y la posición. Cada delta se marca como reversible (registró inverso para el pergamino) o no reversible (pergaminos del inventario, cambios con el grupo cerrado como las observaciones de IR_A). Incluye una auditoría de las mutaciones de datos del resumen que hoy no pasan por los puntos únicos (por ejemplo mover_a, marcar_visita_jugador, efectos activos, estado de la partida) y cómo se canalizan, coordinando con los dueños de esos archivos.\
+2\. Resumen consultable: reloj, sala del jugador, vida y estadísticas, inventario en orden, efectos activos, enemigos de la sala con vida, conocimiento (salas exploradas y avistadas, puertas recordadas) y estado de la partida. No se copia la partida entera, porque la agenda contiene funciones.\
+3\. Puntos de control: una copia del resumen en el instante 0 y cada K acciones, en \_accion. Consulta: #k se ubica en O(1) con (k-1)//K; t con búsqueda binaria propia sobre los instantes crecientes de los puntos de control; se copia el punto anterior y se aplican hacia adelante los deltas con instante ≤ t (o hasta antes de la acción k), como máximo K acciones. Sin re-simulación ni estado de random.\
+4\. Pergamino: se descartan los deltas reversibles del último grupo y los puntos de control posteriores; los no reversibles se conservan en su instante. Costo proporcional a lo revertido.\
+5\. Alternativas obligatorias a comparar: sin puntos de control (aplicar todo desde 0), reconstrucción hacia atrás desde el estado actual, y copias completas por acción (solo como referencia).\
+6\. FR-014: demostrar que re-ejecutar las órdenes al cargar reconstruye la misma línea de tiempo, incluidas las observaciones fuera de acción de IR_A y los pergaminos. Si hay casos que no se reproducen, decir qué haría falta guardar.\
+7\. HISTORIA en consola y Pygame (H, Escape), --replay ... --hasta t y --checkpoint-cada K (main.py es compartido con Jeferson: lista los cambios exactos). HISTORIA no va al log ni abre grupo.\
+8\. Interfaz: reporte de resolubilidad con app.reporte_resolubilidad y la plantilla FR-018 de 003, costo de salidas, marca de cazador.\
+9\. Mediciones en bench/bench_linea_tiempo.py: partida sintética determinista de al menos 5000 acciones con generar_cripta y semilla fija; memoria y tiempo de consulta con K = 10, 50, 200 y sin puntos de control; hacia adelante frente a hacia atrás; costo del recorte. Más la repetición de bench_historial y bench_inventario (§5.6), porque C1 añade trabajo a cada cambio.\
+\
+Incluye: Constitution Check, archivos afectados con su dueño (míos: registro.py, controlador, reproductor, vistas, bitacora_partida.py; compartidos: partida.py, main.py, aplicacion.py), riesgos, y los puntos que debo coordinar con Kim, Mariano y Jeferson. Al final dame un resumen de las decisiones y la lista de archivos generados.
+```
+
+**Para qué:** Planificación (`speckit-plan`): diseño y contratos para T010–T065, con revisión posterior del alcance.
+
+**Resultado / qué se corrigió a mano:** El primer plan abarcó demasiado: Axel pidió reducirlo, conservar `_avanzar` y el inverso del reloj, y reutilizar las marcas `# ir a` sin formato nuevo. La revisión también fijó L y la reubicación de persistentes; commits `526509f` y `a7a764f`.
+
+<!-- Fuente: rollout-2026-11-13T01-17-40-01a1d3c4-ebb6-7100-b094-3259dbfb1b40.jsonl; turno 2026-11-13 01:45:00 UTC-06:00. -->
+
+### 2026-11-13 · Axel · Codex en VS Code (modelo gpt-6.1-sol, intensidad medium)
+
+**Prompt:**
+
+```text
+$speckit-tasks Genera specs/004-linea-de-tiempo/tasks.md a partir de spec.md, plan.md, data-model.md y contracts/. Solo puedes crear o modificar tasks.md dentro de specs/004-linea-de-tiempo/. No modifiques código ni otros archivos. No hagas commits.\
+\
+Reglas:\
+\- Tareas pequeñas y verificables, con id (T001…), los FR/SC que atienden y el archivo exacto que tocan. Solo archivos de la lista final del plan; lo que dependa de otros integrantes va como tarea "Coordinar con \<nombre>" sin editar sus archivos.\
+\- Orden: (1) pruebas de aceptación primero, que deben fallar: tests/test_linea_tiempo.py, tests/test_historia_interfaces.py y tests/test_historia_persistencia.py, con nombres test_FR###\_ o test_SC###\_; (2) retirar el import de controlador.orden en modelo/datos/bitacora_partida.py; (3) C1 en registro.py y en los puntos únicos de partida.py; (4) linea_tiempo.py y resumen_historico.py: deltas, checkpoint 0 después de iniciar(), checkpoints cada K, consulta por #k y por t, recorte y reubicación tras pergamino; (5) HISTORIA en orden.py, controlador.py y resumen_historia.py, consola, Pygame (L/Escape, H/F1 sigue siendo ayuda) y pantalla final; (6) reproductor.py: --hasta, comentarios # ir a como observación sin tiempo; main.py en las líneas acordadas; (7) interfaz: reporte de resolubilidad, marca de cazador y conservar costos; (8) bench_linea_tiempo.py y tests/test_bench_linea_tiempo.py, más la repetición de bench_historial y bench_inventario; (9) DECISIONES.md, sección de la línea de tiempo.\
+\- Marca con [P] las tareas que pueden hacerse en paralelo y señala las dependencias.\
+\- Cada tarea de código indica qué pruebas correr con venv\Scripts\python.exe -m tests.\<modulo>.\
+\
+Al final muéstrame un resumen: número de tareas por fase, las tareas que dependen de Kim, Jeferson o Mariano, y la primera tarea que puedo empezar.
+```
+
+**Para qué:** Desglose (`speckit-tasks`): generar T001–T065 en nueve fases.
+
+**Resultado / qué se corrigió a mano:** Se generaron 65 tareas con archivos, requisitos, pruebas y dependencias. La generación y el análisis quedaron reunidos en `bc578c2`.
+
+<!-- Fuente: rollout-2026-11-13T01-17-40-01a1d3c4-ebb6-7100-b094-3259dbfb1b40.jsonl; turno 2026-11-13 02:34:22 UTC-06:00. -->
+
+### 2026-11-13 · Axel · Codex en VS Code (modelo gpt-6.1-sol, intensidad high)
+
+**Prompt:**
+
+```text
+$speckit-analyze Analiza la consistencia entre spec.md, plan.md, data-model.md, contracts/ y tasks.md de specs/004-linea-de-tiempo, y contra .specify/memory/constitution.md. Reporta: FR/SC sin tarea, tareas sin FR/SC, contradicciones entre documentos, dependencias prohibidas, archivos fuera de la lista final del plan y dependencias que bloqueen innecesariamente.\
+\
+Después aplica solo estas correcciones en tasks.md (no toques otros archivos ni hagas commits):\
+1\. T012 debe depender de T010, no de T011. Las coordinaciones (T011, T024, T025, T043, T045, T046, T048) nunca bloquean el inicio de mis tareas de código; solo bloquean la verificación de integración que corresponda (T050, T065 y las pruebas que dependan de la entrega).\
+2\. Revisa el resto de dependencias con el mismo criterio y corrige las que encadenen sin necesidad (por ejemplo, T042 no debería depender de T041).\
+3\. Si encuentras otros problemas críticos o altos, corrígelos en tasks.md y explícame cada cambio.\
+\
+Al final muéstrame la tabla de hallazgos (severidad, ubicación, problema, corrección) y la lista de cambios aplicados.
+```
+
+**Para qué:** Análisis (`speckit-analyze`): consistencia y corrección de dependencias de T001–T065.
+
+**Resultado / qué se corrigió a mano:** Se ajustaron dependencias para que las coordinaciones externas bloquearan su verificación, sin frenar trabajo propio independiente; commit `bc578c2`. La autorización posterior de aplicación quedó en `440cbdc`.
+
+<!-- Fuente: rollout-2026-11-13T01-17-40-01a1d3c4-ebb6-7100-b094-3259dbfb1b40.jsonl; turno 2026-11-13 02:47:46 UTC-06:00. -->
+
+### 2026-11-13 · Axel · Codex en VS Code (modelo gpt-6.1-sol, intensidad high)
+
+**Prompt:**
+
+```text
+$speckit-implement Ejecuta solo las tareas T001 a T009 de specs/004-linea-de-tiempo/tasks.md. Lee antes .specify/memory/constitution.md, AGENTS.md, spec.md, plan.md, data-model.md y contracts/.\
+\
+Solo puedes crear tests/test_linea_tiempo.py, tests/test_historia_interfaces.py y tests/test_historia_persistencia.py, y marcar [X] en tasks.md las tareas que completes. No modifiques código de producción, tests existentes ni archivos de otros. No hagas commits.\
+\
+Reglas:\
+\- Sigue el estilo de los tests existentes (por ejemplo tests/test_partida.py y tests/test_conocimiento_partida.py): misma forma de armar una partida de prueba con tests/cripta_de_prueba.py o las fixtures que ya usan, y misma forma de ejecutarse con venv\Scripts\python.exe -m tests.\<modulo>.\
+\- Cada prueba debe fallar por la capacidad ausente, con un mensaje claro, y no por un error de sintaxis o de fixtures. Importa los módulos nuevos que todavía no existen (linea_tiempo, resumen_historico, resumen_historia) dentro de cada prueba, no al inicio del archivo, para que el resto del módulo se ejecute y cada caso falle por separado.\
+\- No uses skip ni expectedFailure ni implementaciones falsas.\
+\- No pygame en las pruebas de controles puros; donde haga falta ventana, usa los dobles que ya usan los tests de interfaz existentes.\
+\
+Al terminar (T009): ejecuta los tres módulos y también tests.test_partida, tests.test_conocimiento_partida, tests.test_inventario_partida y tests.test_replay_puntajes para confirmar que las regresiones siguen en verde. Muéstrame una tabla con cada prueba nueva, su FR/SC y la razón por la que falla, y la lista de archivos creados.
+```
+
+**Para qué:** Implementación (`speckit-implement`): aceptación primero, T001–T009.
+
+**Resultado / qué se corrigió a mano:** Se registraron 38 pruebas nuevas en rojo por capacidades ausentes y 43 comprobaciones de regresión en verde; commit `71c2a65`.
+
+<!-- Fuente: rollout-2026-11-13T01-17-40-01a1d3c4-ebb6-7100-b094-3259dbfb1b40.jsonl; turno 2026-11-13 03:06:16 UTC-06:00. -->
+
+### 2026-11-13 · Axel · Codex en VS Code (modelo gpt-6.1-sol, intensidad high)
+
+**Prompt:**
+
+```text
+$speckit-implement Soy Axel, rama 004-linea-de-tiempo de CRIPTA Parte II. Lee .specify/memory/constitution.md, AGENTS.md y specs/004-linea-de-tiempo/ (spec.md, plan.md, data-model.md, contracts/c1-captura.md, tasks.md). T001–T009 ya están hechas.\
+\
+Ejecuta solo T010, T011 y T012 a T018 de tasks.md, en orden, respetando sus dependencias.\
+\
+Solo puedes modificar: modelo/datos/bitacora_partida.py (T010, solo retirar el import de controlador.orden con parser inyectado), controlador/aplicacion.py y controlador/reproductor.py (T011, solo inyectar ese parser en sus llamadores), modelo/juego/registro.py (T012, T013) y modelo/juego/partida.py únicamente en cambiar, \_lista_agregar, \_lista_quitar, \_inv_agregar, \_inv_quitar, \_inv_al_frente, \_accion y usar_pergamino (T014–T018). Y marcar [X] en tasks.md las tareas completas. No modifiques tests existentes, tests nuevos ya confirmados, archivos de otros integrantes ni \_avanzar, iniciar, cambiar_estado_puerta o el inverso manual del reloj. No hagas commits.\
+\
+Reglas:\
+\- La captura C1 debe ser opcional: si no hay consumidor conectado, el juego se comporta exactamente igual que antes.\
+\- No uses dict ni set como índice o caché, heapq, bisect, collections, sorted() ni list.sort().\
+\- En aplicacion.py respeta las restricciones de Jeferson del plan: no tocar la condición de verificación de resolubilidad en \_armar, verificar(), ErrorNoResoluble ni reporte_resolubilidad.\
+\
+Después de cada tarea ejecuta las pruebas que indica tasks.md. Al final ejecuta también: tests.test_partida, tests.test_motor_base, tests.test_conocimiento_partida, tests.test_inventario_partida, tests.test_ir_a_compuesto, tests.test_replay_puntajes, tests.test_resolubilidad, tests.test_resolubilidad_integracion, tests.test_terreno_cazador y tests.test_historia_persistencia, todas con venv\Scripts\python.exe -m tests.\<modulo>.\
+\
+Muéstrame: tareas completadas, archivos modificados, resultado de cada módulo de pruebas, y en particular si test_FR014_ir_a_bloqueo_posterior_sin_paso y test_FR014_cancelacion_sin_observacion_fantasma ya pasan con el commit 69dbc30 de Kim.
+```
+
+**Para qué:** Implementación (`speckit-implement`): compatibilidad MVC T010–T011 y captura C1 T012–T018.
+
+**Resultado / qué se corrigió a mano:** La primera T010 inyectó un parser y rompió `leer_log(ruta)`; Axel exigió corregir el plan y, tras «sigue», mover Orden al modelo con reexportación compatible. Commits `703000a` y `d439494`; C1 se conservó en `fd46b33`.
+
+<!-- Fuente: rollout-2026-11-13T15-22-21-01a1d6ca-3e96-7882-903e-0b41b1864445.jsonl; turno 2026-11-13 15:22:53 UTC-06:00. -->
+
+### 2026-11-13 · Axel · Codex en VS Code (modelo gpt-6.1-sol, intensidad high)
+
+**Prompt:**
+
+```text
+$speckit-implement Soy Axel, rama 004-linea-de-tiempo de CRIPTA Parte II. Lee .specify/memory/constitution.md, AGENTS.md y specs/004-linea-de-tiempo/ (plan.md, data-model.md, contracts/persistencia.md, tasks.md). T001–T018 ya están hechas y confirmadas, incluido modelo/juego/orden.py.\
+\
+Kim necesita hoy el aplicador de líneas para su guardado v4. Haz esto en orden:\
+\
+1\. En specs/004-linea-de-tiempo/tasks.md, cambia solo las dependencias de T044 a "T011, T042": la observación sin tiempo y la aplicación de órdenes no necesitan la línea de tiempo. Agrega en T044 la nota "la integración con la línea de tiempo (T023/T031) se verifica en T050". No cambies nada más de tasks.md.\
+\
+2\. Implementa T042 y T044 en controlador/reproductor.py con estas firmas exactas, que ya le di a Kim:\
+\- iterar_lineas_reconstruccion(lineas): recibe cadenas y devuelve en el mismo orden las órdenes y los comentarios "# ir a X"; ignora líneas vacías y otros comentarios. Usa Orden.desde_texto de modelo.juego.orden.\
+\- aplicar_linea_reconstruccion(controlador, linea) -> bool: si es una orden, controlador.ejecutar(Orden.desde_texto(linea)); si es "# ir a X", llama a reproducir_observacion_ir_a(controlador.partida, X). Devuelve True si aplicó algo y False si la ignoró. Los comentarios no pasan por ejecutar ni cuentan como rechazos.\
+\- reproducir_observacion_ir_a(partida, destino: int) -> None: una sola llamada a partida.\_observar_puertas() con el grupo del registro cerrado, sin planificar, viajar ni consumir tiempo.\
+Si para leer las líneas originales del log (con comentarios) hace falta tocar un archivo fuera de reproductor.py, detente y dime cuál y por qué antes de hacerlo.\
+\
+Solo puedes modificar controlador/reproductor.py y tasks.md (las dependencias de T044 y marcar [X] T042 y T044). No toques persistencia_partida.py, guardado_binario.py, aplicacion.py, tests ni archivos de otros. No hagas commits.\
+\
+Pruebas con venv\Scripts\python.exe -m tests.\<modulo>: test_historia_persistencia (dime cuáles pasan ahora, en especial test_FR010_comentario_ir_a_observa_sin_accion y test_FR014_ir_a_bloqueo_posterior_sin_paso), test_ir_a_compuesto, test_replay_puntajes, test_integracion_comentarios_002, test_controlador y test_partida.\
+\
+Al final dame: archivos modificados, resultado de cada módulo y un ejemplo mínimo de uso de las tres funciones para pasárselo a Kim.
+```
+
+**Para qué:** Implementación (`speckit-implement`): adelantar el aplicador para Kim, T042 y T044.
+
+**Resultado / qué se corrigió a mano:** Se retiró la dependencia innecesaria del núcleo y se entregaron las tres funciones de reconstrucción, con observación sin viaje ni tiempo. Commits `e5d1ff9` y `2d9dcef`.
+
+<!-- Fuente: rollout-2026-11-13T16-17-12-01a1d6fc-77fa-7c00-85a8-255471da43c0.jsonl; turno 2026-11-13 16:17:14 UTC-06:00. -->
+
+### 2026-11-13 · Axel · Codex en VS Code (modelo gpt-6.1-sol, intensidad high)
+
+**Prompt:**
+
+```text
+$speckit-implement Soy Axel, rama 004-linea-de-tiempo de CRIPTA Parte II. Lee .specify/memory/constitution.md, AGENTS.md y specs/004-linea-de-tiempo/ (spec.md, plan.md, data-model.md, contracts/c1-captura.md, tasks.md). Ya están hechas y confirmadas T001–T018, T042 y T044: C1 captura los cambios en modelo/juego/registro.py y en los puntos únicos de modelo/juego/partida.py, y existen modelo/juego/orden.py y el aplicador del reproductor.\
+\
+Ejecuta solo T019, T020, T021, T022 y T023 de tasks.md, en orden y respetando sus dependencias.\
+\
+Solo puedes crear o modificar modelo/juego/resumen_historico.py y modelo/juego/linea_tiempo.py (nuevos), y marcar [X] en tasks.md las tareas completas. No modifiques partida.py, registro.py, aplicacion.py, tests ni archivos de otros integrantes. No hagas commits.\
+\
+Reglas:\
+\- Usa la captura C1 que ya existe en registro.py y partida.py; no la cambies. Si necesitas algo que C1 no entrega, detente y dime qué falta antes de tocar esos archivos.\
+\- La proyección y los checkpoints se copian por valor: nada de agenda, funciones, random.Random, nodos del inventario ni referencias vivas a la partida.\
+\- Prohibido dict o set como índice o caché, heapq, bisect, collections, sorted() y list.sort(). Listas solo como almacenamiento contiguo.\
+\- K_DEFECTO = 50 como candidato; se mide y se ajusta más adelante en T063.\
+\- inicializar_historia(partida, checkpoint_cada) se llama después de partida.iniciar() y toma el checkpoint 0.\
+\
+Después de cada tarea ejecuta venv\Scripts\python.exe -m tests.test_linea_tiempo. Al final ejecuta también tests.test_partida, tests.test_conocimiento_partida, tests.test_inventario_partida, tests.test_motor_base, tests.test_terreno_cazador y tests.test_historia_persistencia.\
+\
+Muéstrame: tareas completadas, archivos creados, qué pruebas de test_linea_tiempo pasan ahora y cuáles siguen en rojo, y por qué (cuáles esperan T026–T031).
+```
+
+**Para qué:** Implementación (`speckit-implement`): proyección, deltas e inicialización, T019–T023.
+
+**Resultado / qué se corrigió a mano:** Se crearon la proyección copiada por valor, los deltas y el checkpoint inicial; K=50 quedó como candidato. Las consultas y el recorte seguían pendientes; commit `1652896`.
+
+<!-- Fuente: rollout-2026-11-13T16-28-21-01a1d706-ad76-7863-8a70-34caa7f9154e.jsonl; turno 2026-11-13 16:28:58 UTC-06:00. -->
+
+### 2026-11-13 · Axel · Codex en VS Code (modelo gpt-6.1-sol, intensidad high)
+
+**Prompt:**
+
+```text
+$speckit-implement Soy Axel, rama 004-linea-de-tiempo de CRIPTA Parte II. Lee .specify/memory/constitution.md, AGENTS.md y specs/004-linea-de-tiempo/ (plan.md, contracts/persistencia.md, tasks.md). Ya están hechas T001–T023, T042 y T044 (iterar_lineas_reconstruccion, aplicar_linea_reconstruccion y reproducir_observacion_ir_a en controlador/reproductor.py; inicializar_historia en modelo/juego/resumen_historico.py).\
+\
+Ejecuta solo T024 y T045 de tasks.md, en ese orden, sobre controlador/aplicacion.py (autorizado por Jeferson).\
+\
+T024: en \_armar, llama a inicializar_historia(partida, K) justo después de partida.iniciar() y antes del bucle de órdenes previas, y propaga K desde el constructor de Aplicacion (parámetro opcional checkpoint_cada, por defecto K_DEFECTO de linea_tiempo).\
+\
+T045: conserva en memoria las líneas intercaladas tal como van al log (órdenes y comentarios "# ir a X") en el orden real, ofrece lineas_para_reconstruir() -> list[str], y al reconstruir usa iterar_lineas_reconstruccion y aplicar_linea_reconstruccion. Además, Kim necesita esto para cargar su guardado v4: Aplicacion debe poder crear primero la partida y el controlador candidatos (sin reemplazar la sesión actual) y entregar a persistencia un callback aplicar_linea(linea) -> bool ligado a ese controlador candidato; si la reconstrucción o la validación fallan, la sesión anterior queda intacta. Expón ese punto de conexión con un nombre claro y documenta su firma en el docstring.\
+\
+Restricciones obligatorias de Jeferson: conserva exactamente la condición partida_nueva and ordenes_previas is None and exigir_versiones is None para verificar resolubilidad (también al cargar v4); los comentarios no pasan por Controlador.ejecutar ni cuentan como órdenes ni como rechazos; no toques verificar(), ErrorNoResoluble, reporte_resolubilidad ni main.py.\
+\
+Solo puedes modificar controlador/aplicacion.py y marcar [X] T024 y T045 en tasks.md. No toques persistencia_partida.py ni guardado_binario.py (son de Kim), tests ni otros archivos. No hagas commits.\
+\
+Pruebas con venv\Scripts\python.exe -m tests.\<modulo>: test_historia_persistencia, test_resolubilidad, test_resolubilidad_integracion, test_replay_puntajes, test_ir_a_compuesto, test_integracion_comentarios_002, test_controlador, test_partida y test_guardado_binario.\
+\
+Al final dame: cambios, resultado de cada módulo, y un ejemplo mínimo para Kim de cómo su carga obtiene el callback del controlador candidato y qué hacer si la validación falla.
+```
+
+**Para qué:** Implementación (`speckit-implement`): ensamblado de historia y reconstrucción candidata, T024 y T045.
+
+**Resultado / qué se corrigió a mano:** T024/T045 se habían marcado [X] con regresiones rojas; Axel rechazó ese cierre y pidió desmarcarlas. Se corrigieron tokens/adopción de entidades, doble inicialización y motor simulado sin interrumpir el juego; las cuatro regresiones volvieron a verde antes de remarcarlas, en `647a0fc`.
+
+<!-- Fuente: rollout-2026-11-13T16-44-44-01a1d715-ab37-7c31-98df-1ee5ae4fd193.jsonl; turno 2026-11-13 16:45:16 UTC-06:00. -->
+
+### 2026-11-13 · Axel · Codex en VS Code (modelo gpt-6.1-sol, intensidad high)
+
+**Prompt:**
+
+```text
+$speckit-implement Soy Axel, rama 004-linea-de-tiempo de CRIPTA Parte II. Lee .specify/memory/constitution.md, AGENTS.md y specs/004-linea-de-tiempo/ (spec.md, plan.md, data-model.md, contracts/c1-captura.md, tasks.md). Ya están hechas y confirmadas T001–T024, T042, T044 y T045 (commit 647a0fc). Hoy, tras un pergamino la historia queda marcada como no disponible hasta implementar el recorte; este bloque lo resuelve.\
+\
+Ejecuta solo T026, T027, T028, T029, T030 y T031 de tasks.md, en orden y respetando sus dependencias.\
+\
+Solo puedes modificar modelo/juego/linea_tiempo.py, modelo/juego/resumen_historico.py y, para T031, modelo/juego/partida.py únicamente en \_accion y usar_pergamino (conectar los hooks que ya existen, sin cambiar su comportamiento de juego). Y marcar [X] en tasks.md las tareas completas. No toques registro.py, aplicacion.py, tests ni archivos de otros. No hagas commits.\
+\
+Reglas:\
+\- Checkpoint 0 y luego uno exactamente cada K acciones aceptadas. #k: (k-1)//K en O(1). t: búsqueda binaria propia sobre los instantes de los checkpoints. Una consulta copia el checkpoint y aplica como máximo K acciones de deltas sobre la copia; nunca re-simula ni toca la partida viva.\
+\- historia #1 = estado inicial; #(N+1) = estado actual; k fuera de 1..N+1, t negativo, no entero o mayor que el reloj se rechazan con mensaje. Si t corresponde a una decisión del jugador, es el estado justo antes de tomarla.\
+\- Pergamino: se quitan los deltas reversibles del grupo revertido y los checkpoints posteriores; los cambios no reversibles con instante mayor que el reloj restaurado pasan al reloj restaurado, y los demás conservan su instante. Costo proporcional a lo revertido, sin recorrer el prefijo. Después del recorte, la historia vuelve a estar disponible y historia \<reloj actual> e historia #(N+1) coinciden con el estado real.\
+\- Registrar la historia nunca puede cambiar ni interrumpir el juego (mantén el mecanismo de "no disponible" solo para fallos reales).\
+\- Prohibido dict o set como índice o caché, heapq, bisect, collections, sorted() y list.sort().\
+\
+Después de cada tarea ejecuta venv\Scripts\python.exe -m tests.test_linea_tiempo. Al final ejecuta también, con venv\Scripts\python.exe -m tests.\<modulo>: test_partida, test_motor_base, test_conocimiento_partida, test_inventario_partida, test_terreno_cazador, test_ir_a_compuesto, test_controlador, test_resolubilidad, test_resolubilidad_integracion, test_replay_puntajes, test_integracion_comentarios_002 y test_historia_persistencia. Las regresiones que hoy están en verde deben seguir en verde.\
+\
+Muéstrame: tareas completadas, qué pruebas de test_linea_tiempo pasan y cuáles no (con causa; test_FR002_eventos_simultaneos puede depender de Mariano, T025) y la tabla de regresiones.
+```
+
+**Para qué:** Implementación (`speckit-implement`): checkpoints, consultas y recorte, T026–T031.
+
+**Resultado / qué se corrigió a mano:** Se implementaron consultas sobre copias, checkpoints exactos y recorte con reubicación de persistentes sin recorrer el prefijo. Quedaron dos fallos de integración FR-002/FR-010; commit `84fcdd8`.
+
+<!-- Fuente: rollout-2026-11-13T17-23-15-01a1d738-f17b-7d11-bf3d-3ea244723ae4.jsonl; turno 2026-11-13 17:23:46 UTC-06:00. -->
+
+### 2026-11-13 · Axel · Codex en VS Code (modelo gpt-6.1-sol, intensidad high)
+
+**Prompt:**
+
+```text
+$speckit-implement Soy Axel, rama 004-linea-de-tiempo de CRIPTA Parte II. Lee .specify/memory/constitution.md, AGENTS.md y specs/004-linea-de-tiempo/ (spec.md, plan.md, data-model.md, contracts/comandos-interfaz.md, tasks.md). Ya están hechas y confirmadas T001–T024, T026–T031, T042, T044 y T045 (último commit en la rama).\
+\
+Ejecuta solo T032 a T041 de tasks.md, en orden y respetando sus dependencias. Detente al terminar T041.\
+\
+Archivos que puedes modificar:\
+\- modelo/juego/orden.py: orden HISTORIA y parser compartido de "historia \<t>" y "historia #k". HISTORIA queda fuera de ORDENES_DE_PARTIDA y de a_texto. Si agregas nombres públicos, reexpórtalos en controlador/orden.py con la misma identidad.\
+\- controlador/resumen_historia.py (nuevo): un solo formateador del resumen histórico. No importa vista/ ni lee la Partida actual.\
+\- vista/vista_base.py: adaptadores mínimos de entrada y presentación histórica y modo final, compatibles con las vistas y dobles existentes.\
+\- controlador/controlador.py: SOLO el despacho de HISTORIA (T035) y el acceso a HISTORIA en el flujo final (T040). No toques \_ejecutar_ir_a, la emisión de comentarios "# ir a" ni nada más de Kim.\
+\- vista/vista_consola.py, vista/controles_gui.py y vista/vista_pygame.py: solo agregados para HISTORIA. No cambies el dibujo del mapa ni las funciones que ya existen, salvo para enganchar la tecla L y el panel.\
+\- specs/004-linea-de-tiempo/tasks.md: marcar [X] las tareas completadas.\
+\
+No toques partida.py, linea_tiempo.py, resumen_historico.py, registro.py, aplicacion.py, main.py, reproductor.py, los tests ni archivos de otros integrantes. No hagas commits.\
+\
+Reglas:\
+\- HISTORIA no pasa por \_accion: no abre grupo, no avanza el reloj, no escribe en la bitácora ni en el log, no avisa a los observadores de órdenes ni de comentarios, no usa \_rechazar del modelo y no cuenta como orden ni como rechazo. Se despacha antes de la lógica que cancela un IR_A en curso, así que consultar no cancela el viaje.\
+\- Selectores: #1 es el estado inicial vigente y #(N+1) el actual. Se rechazan k fuera de 1..N+1 y t negativo, no entero o futuro, siempre con un mensaje claro. "historia 0" es el instante 0. Si la historia no está disponible, se muestra el motivo y el juego sigue.\
+\- Pygame: L abre un cuadro para escribir t o #k, Enter consulta y Escape cierra sin SALIR ni ninguna acción. H y F1 siguen siendo la ayuda: actualiza BOTONES y AYUDA_LINEAS. El panel es desplazable y muestra el resumen completo sin recortarlo con \_modal. No borra "fin", no cancela el viaje y no ejecuta acciones desde callbacks. La orden se devuelve al controlador en una frontera estable.\
+\- Pantalla final: se puede consultar HISTORIA sin cambiar el resultado ni las confirmaciones. al_terminar y los puntajes se llaman exactamente una vez.\
+\- Constitución: nada de dict ni set como índice o caché; nada de heapq, bisect, collections, sorted() ni list.sort(). MVC: modelo/ no importa controlador/ ni vista/. Sin paquetes ni recursos nuevos.\
+\
+Pruebas después de cada tarea, siempre con venv\Scripts\python.exe -m tests.\<modulo>:\
+test_historia_interfaces, test_controlador, test_ir_a_compuesto, test_gui, test_ir_a_grafico_002, test_replay_puntajes, test_mapa_consola, test_linea_tiempo.\
+Al final corre también estas regresiones: test_partida, test_motor_base, test_conocimiento_partida, test_inventario_partida, test_terreno_cazador, test_resolubilidad, test_resolubilidad_integracion, test_integracion_comentarios_002, test_historia_persistencia.\
+\
+En test_historia_interfaces pueden seguir en rojo FR015, FR016 y FR017 (son de T051–T055). Ninguna regresión que hoy esté en verde puede pasar a rojo. Si alguna pasa, corrígelo solo dentro de los archivos permitidos. Si no se puede, detente y explícalo.\
+\
+Al final dame: las tareas marcadas, los archivos tocados, una tabla con el resultado de cada módulo y los fallos esperados con su causa.
+```
+
+**Para qué:** Implementación (`speckit-implement`): comando HISTORIA, consola, Pygame y pantalla final, T032–T041.
+
+**Resultado / qué se corrigió a mano:** Se añadió HISTORIA sin efectos sobre log, tiempo, viaje o resultado final, con L/Enter/Escape y H/F1 para ayuda. El cierre de la interfaz quedó en `d9d75e7`; la regresión de imports de la prueba se corrigió aparte en `5ba2702`.
+
+<!-- Fuente: rollout-2026-11-13T17-42-41-01a1d74a-ba04-7770-bf83-47c4b142ad80.jsonl; turno 2026-11-13 17:43:13 UTC-06:00. -->
+
+### 2026-11-13 · Axel · Codex en VS Code (modelo gpt-6.1-sol, intensidad medium)
+
+**Prompt:**
+
+```text
+$speckit-implement test_gui no es un fallo ajeno: lo causa tests/test_historia_interfaces.py, que creamos en T005 e importa pygame a nivel de módulo. T065 exige test_gui en verde, y además la interrupción impide saber si vista_pygame.py rompió otros casos de test_gui.\
+\
+1\. Lee tests/test_gui.py y explícame exactamente qué comprueba la revisión de imports y por qué se interrumpe la ejecución.\
+2\. Corrige solo tests/test_historia_interfaces.py con el mismo patrón que ya usan las pruebas existentes para no depender de pygame (import local dentro del caso que lo necesite, o probar contra controles_gui y los adaptadores puros). No cambies ninguna aserción, ningún nombre de prueba ni lo que verifica cada caso. Sin skip ni expectedFailure.\
+3\. No toques tests/test_gui.py ni ningún otro test, ni código de producción. Si la única solución es cambiar test_gui.py o el código, detente y explícamelo.\
+4\. Ejecuta con venv\Scripts\python.exe -m: test_gui (completo, que llegue al final), test_historia_interfaces, test_ir_a_grafico_002 y test_controlador. Dame una tabla con los resultados y el diff de test_historia_interfaces.py. Sin commits.
+```
+
+**Para qué:** Corrección durante `speckit-implement`: prueba de interfaz de T005 y regresión GUI requerida por T065.
+
+**Resultado / qué se corrigió a mano:** La revisión de `test_gui` buscaba imports textuales en los tests y abortaba al encontrar pygame en la prueba propia, incluso dentro del caso. Se usó `import_module("pygame")` sin cambiar aserciones ni `test_gui`; commit `5ba2702`.
+
+<!-- Fuente: rollout-2026-11-13T17-42-41-01a1d74a-ba04-7770-bf83-47c4b142ad80.jsonl; turno 2026-11-13 19:39:19 UTC-06:00. -->
+
+### 2026-11-13 · Axel · Codex en VS Code (modelo gpt-6.1-sol, intensidad high)
+
+**Prompt:**
+
+```text
+$speckit-implement Soy Axel, rama 004-linea-de-tiempo de CRIPTA Parte II. Lee .specify/memory/constitution.md, AGENTS.md y specs/004-linea-de-tiempo/ (spec.md, plan.md, contracts/comandos-interfaz.md, contracts/persistencia.md, quickstart.md, tasks.md). Ya están hechas y confirmadas T001–T024, T026–T042, T044 y T045.\
+\
+Ejecuta solo T047, T048 y T049 de tasks.md, en ese orden. Detente al terminar T049.\
+\
+Archivos que puedes modificar:\
+\- controlador/reproductor.py (T047): agregar \`hasta\` y K por nombre a preparar_reproduccion, reproducir y anotar_final, tanto para la fuente actual como para FuenteAlmacen. Primero se reconstruyen todas las líneas, incluidos pergaminos y marcas "# ir a", y después se consulta con consultar_t. El resumen se presenta con el formateador común de controlador/resumen_historia.py. Si t es mayor que el final de una partida terminada, se muestra el estado final con un aviso. Si el log está interrumpido y t está fuera de rango, se da un error claro. Sin vista.\
+\- controlador/aplicacion.py (T048, autorizado por Jeferson): ensamblar K y los callbacks, y dar acceso de solo lectura al reporte de resolubilidad que ya existe, sin calcular otra verificación.\
+\- main.py (T048/T049): solo correr_interactivo para la conexión de T048, y el parser y despacho de --hasta y --checkpoint-cada. --hasta es un entero no negativo y solo se acepta con --replay; --checkpoint-cada K es un entero positivo. Se propagan por nombre. No toques BENCHES (eso es T061).\
+\- specs/004-linea-de-tiempo/tasks.md: marcar [X] lo completado.\
+\
+Restricciones obligatorias de Jeferson:\
+\- En \_armar se conserva exactamente \`partida_nueva and ordenes_previas is None and exigir_versiones is None\`, también al cargar v4.\
+\- No toques verificar(), ErrorNoResoluble, reporte_resolubilidad ni --verificar/--forzar de main.py.\
+\- Los comentarios no pasan a Controlador.ejecutar ni cuentan como órdenes rechazadas.\
+\- --replay, --bench y --verificar siguen sin crear la vista. K no se persiste en ningún archivo, log ni guardado. No hay formatos, versiones ni campos nuevos.\
+\
+No toques partida.py, linea_tiempo.py, resumen_historico.py, registro.py, orden.py, controlador.py, las vistas, los tests ni archivos de otros integrantes (persistencia_partida.py y guardado_binario.py son de Kim). No hagas commits. Constitución: nada de dict ni set como índice o caché; nada de heapq, bisect, collections, sorted() ni list.sort(). MVC estricto.\
+\
+Pruebas después de cada tarea, siempre con venv\Scripts\python.exe -m tests.\<modulo>:\
+test_historia_persistencia, test_historia_interfaces, test_replay_puntajes, test_resolubilidad, test_resolubilidad_integracion.\
+Al final corre también: test_linea_tiempo, test_controlador, test_ir_a_compuesto, test_integracion_comentarios_002, test_partida, test_motor_base, test_conocimiento_partida, test_inventario_partida, test_terreno_cazador, test_mapa_consola, test_gui, test_ir_a_grafico_002, test_guardado_binario.\
+\
+Se espera que ahora pasen FR007 y FR008 de test_historia_persistencia. Pueden seguir en rojo: FR014 MVC (import de Kim, T046), FR015 y FR017 de interfaces (T051–T055), y FR002 y FR010 de línea de tiempo (Mariano y Kim). Ninguna regresión que hoy esté en verde puede pasar a rojo. Si alguna pasa, corrígelo solo dentro de los archivos permitidos. Si no se puede, detente y explícalo.\
+\
+Al final dame: las tareas marcadas, los archivos tocados, una tabla por módulo, los fallos esperados con su causa, y dos comandos de ejemplo de --replay --hasta y --checkpoint-cada para probarlos a mano.
+```
+
+**Para qué:** Implementación (`speckit-implement`): replay y opciones CLI, T047–T049.
+
+**Resultado / qué se corrigió a mano:** El replay reconstruye toda la rama vigente antes de consultar `hasta`; K se propaga sin persistirse y el modo sigue sin vista. FR-007/FR-008 pasaron; commit `dcd7e23`.
+
+<!-- Fuente: rollout-2026-11-13T20-21-14-01a1d7db-e110-7232-9627-abb3dd597323.jsonl; turno 2026-11-13 20:21:36 UTC-06:00. -->
+
+### 2026-11-13 · Axel · Codex en VS Code (modelo gpt-6.1-sol, intensidad high)
+
+**Prompt:**
+
+```text
+$speckit-implement Soy Axel, rama 004-linea-de-tiempo de CRIPTA Parte II. Lee .specify/memory/constitution.md, AGENTS.md, specs/004-linea-de-tiempo/ (spec.md, plan.md, contracts/comandos-interfaz.md, tasks.md) y, solo para leer las reglas del reporte, specs/003-\*/spec.md (FR-015 y FR-018). Ya están hechas y confirmadas T001–T024, T026–T042, T044, T045 y T047–T049.\
+\
+Ejecuta solo T051 a T055 de tasks.md, en orden. Detente al terminar T055.\
+\
+Archivos que puedes modificar:\
+\- vista/vista_base.py (T051): adaptador mínimo para presentar el reporte canónico. No calcula resolubilidad ni tiene lógica de juego.\
+\- vista/vista_consola.py (T052, T054): presentar el texto de app.reporte_resolubilidad.formatear_reporte(), obtenido con app.obtener_reporte_resolubilidad() (T048), con las secciones y el orden exactos de 003/FR-018. Se muestra al iniciar y también cuando el inicio se impide según 003/FR-015, incluso con --forzar. Conservar los costos que ya imprime \_texto_salidas. En \_texto_enemigo, agregar la marca "[CAZADOR]" a partir del comportamiento normalizado, conservando la etiqueta, la vida y los costos.\
+\- vista/vista_pygame.py (T053, T055): el mismo reporte completo en un panel desplazable. Si la partida no puede iniciar, se vuelve a la selección. Se conservan los costos y la ocultación de \_dibujar_puerta. Marca de cazador gráfica y textual que se distinga sin depender solo del color, sin recursos ni paquetes nuevos. No cambies el resto del dibujo del mapa.\
+\- main.py: solo si la conexión de T048 en correr_interactivo todavía no le entrega el reporte a la vista. En ese caso son las líneas mínimas para pasarlo, sin tocar --verificar, --forzar ni BENCHES.\
+\- specs/004-linea-de-tiempo/tasks.md: marcar [X] lo completado.\
+\
+Restricciones:\
+\- La vista nunca verifica ni recalcula la resolubilidad: solo presenta el reporte ya calculado. No toques verificar(), ErrorNoResoluble, reporte_resolubilidad, la condición de \_armar ni aplicacion.py.\
+\- No modifiques Actor, el comportamiento del cazador ni archivos del modelo. No toques controlador.py, los tests ni archivos de otros integrantes. No hagas commits.\
+\- Constitución: nada de dict ni set como índice o caché; nada de heapq, bisect, collections, sorted() ni list.sort(). Ningún dato de una cripta concreta en el código. Los tests no deben abrir una ventana real (usa los dobles existentes, como \_vista_dialogo_prueba).\
+\
+Pruebas después de cada tarea, siempre con venv\Scripts\python.exe -m tests.\<modulo>:\
+test_historia_interfaces, test_gui, test_mapa_consola, test_controlador, test_ir_a_grafico_002.\
+Al final corre también: test_resolubilidad, test_resolubilidad_integracion, test_replay_puntajes, test_historia_persistencia, test_linea_tiempo, test_ir_a_compuesto, test_integracion_comentarios_002, test_partida, test_motor_base, test_conocimiento_partida, test_inventario_partida, test_terreno_cazador, test_guardado_binario.\
+\
+Se espera que ahora pasen FR015 y FR017 de test_historia_interfaces. Pueden seguir en rojo: FR014 MVC (Kim, T046), y FR002 y FR010 de línea de tiempo (Mariano y Kim). Ninguna regresión que hoy esté en verde puede pasar a rojo. Si alguna pasa, corrígelo solo dentro de los archivos permitidos. Si no se puede, detente y explícalo.\
+\
+Al final dame: las tareas marcadas, los archivos tocados, una tabla por módulo, los fallos esperados con su causa, y si tocaste main.py, por qué.
+```
+
+**Para qué:** Implementación (`speckit-implement`): reporte existente, costos y marca de cazador, T051–T055.
+
+**Resultado / qué se corrigió a mano:** Se presentó el reporte canónico y se distinguieron cazadores sin recalcular resolubilidad ni alterar costos/ocultación; FR-015/FR-017 pasaron. No hizo falta editar main.py; commit `f77e629`.
+
+<!-- Fuente: rollout-2026-11-13T20-40-41-01a1d7ed-b2b7-70c3-a7b4-7aa448e670b2.jsonl; turno 2026-11-13 20:41:12 UTC-06:00. -->
+
+### 2026-11-13 · Axel · Codex en VS Code (modelo gpt-6.1-sol, intensidad high)
+
+**Prompt:**
+
+```text
+$speckit-implement Soy Axel, rama 004-linea-de-tiempo de CRIPTA Parte II. Lee .specify/memory/constitution.md, AGENTS.md, specs/004-linea-de-tiempo/ (spec.md, plan.md, research.md, tasks.md) y, como referencia de estilo, bench/bench_historial.py y bench/bench_inventario.py. Están hechas y confirmadas todas las tareas de Axel hasta T055 (salvo T050, que es la verificación de integración).\
+\
+Ejecuta solo T056 a T062 de tasks.md, en orden. Detente al terminar T062: NO hagas T063 (elegir K). Primero quiero revisar los números.\
+\
+Archivos que puedes modificar:\
+\- tests/test_bench_linea_tiempo.py (T056, nuevo): se escribe antes del bench y debe fallar porque el bench todavía no existe. No conviertas un temporizador simulado en una prueba de <50 ms.\
+\- bench/bench_linea_tiempo.py (T057–T060, nuevo):\
+&#x20; \- carga sintética con generar_cripta y su catálogo real, semilla fija 20261113 y al menos 5000 acciones aceptadas, sin red, sin vista y sin datos de cripta escritos en el código;\
+&#x20; \- comparación equivalente entre K=10, 50, 200 y sin checkpoints (consulta desde el inicio), consulta hacia atrás desde la copia actual, y como referencia una copia completa de la proyección por acción. Antes de medir, valida que todas las variantes den el mismo resumen. No uses los inversos del juego ni deepcopy de Partida;\
+&#x20; \- medición del tiempo total de cada consulta y de sus fases (muestras, máximo y mediana), memoria retenida y pico separada por deltas, checkpoints, directorios y bases (tracemalloc de la biblioteca estándar), tamaños, y conteo de grupos aplicados y de externos. Separa la preparación de la consulta;\
+&#x20; \- recorte de 1 a 5 grupos con longitud total creciente y sufijo fijo, incluyendo persistentes y liberación de checkpoints, y casos integrados por \_inv\_\* con la captura C1 activada y desactivada para medir su sobrecosto.\
+&#x20; \- No modifiques los otros benches.\
+\- main.py (T061): agregar EXCLUSIVAMENTE ("linea_tiempo", "bench_linea_tiempo.py") a BENCHES, sin tocar las demás líneas.\
+\- specs/004-linea-de-tiempo/tasks.md: marcar [X] lo completado.\
+\
+Reglas de la constitución, también dentro del bench: nada de dict ni set como índice o caché; nada de heapq, bisect, collections, sorted() ni list.sort(). Para la mediana y el máximo usa un ordenamiento propio o el que ya exista en modelo/estructuras. MVC estricto. No toques archivos del modelo, del controlador ni de las vistas, ni los tests existentes, ni archivos de otros integrantes. No hagas commits.\
+\
+Pruebas, siempre con venv\Scripts\python.exe -m tests.\<modulo>: test_bench_linea_tiempo, test_linea_tiempo, test_generador_criptas, test_inventario_partida y test_historia_interfaces.\
+\
+T062: ejecuta sin editar nada\
+venv\Scripts\python.exe main.py --bench linea_tiempo\
+venv\Scripts\python.exe main.py --bench historial inventario\
+\
+Al final dame:\
+1\) las tareas marcadas y los archivos tocados;\
+2\) la salida completa de los dos benches;\
+3\) una tabla resumen por K (10, 50, 200, sin checkpoints): consulta máxima y mediana en ms, memoria retenida y pico, cantidad de checkpoints y máximo de grupos aplicados;\
+4\) el sobrecosto de C1 y los tiempos de recorte;\
+5\) los datos del equipo: procesador, RAM, versión de Python y Windows;\
+6\) tu recomendación de K con su justificación (sin aplicarla todavía).
+```
+
+**Para qué:** Implementación y medición (`speckit-implement`): prueba del bench, comparación y repetición §5.6, T056–T062.
+
+**Resultado / qué se corrigió a mano:** Se midieron variantes equivalentes con 5000 acciones, recorte, memoria y C1, y se repitieron historial/inventario. La recomendación inicial de K=200 quedó sin aplicar y se revisó después con el peor caso; commit `f301978`.
+
+<!-- Fuente: rollout-2026-11-13T20-55-46-01a1d7fb-7ec8-7593-b486-eade1fe26764.jsonl; turno 2026-11-13 20:55:59 UTC-06:00. -->
+
+### 2026-11-13 · Axel · Codex en VS Code (modelo gpt-6.1-sol, intensidad high)
+
+**Prompt:**
+
+```text
+$speckit-implement Soy Axel, rama 004-linea-de-tiempo de CRIPTA Parte II. Lee .specify/memory/constitution.md, AGENTS.md, specs/004-linea-de-tiempo/ (spec.md, plan.md, research.md, tasks.md), bench/bench_linea_tiempo.py y bench/bench_historial.py. T056–T062 ya están confirmadas (último commit).\
+\
+Ejecuta solo T063. Detente al terminarla.\
+\
+Contexto: en la carga actual cada acción tiene unos 4 deltas, y K=10, 50 y 200 quedan todos por debajo de 1 ms. La diferencia de memoria entre K=50 y K=200 es solo 3.7 %, porque domina el tamaño de los deltas. Pero el peor tiempo de consulta es proporcional a K × (deltas por acción), y el peor caso del bench de historial tiene unos 1000 enemigos activos. Quiero elegir K con un peor caso MEDIDO, no estimado.\
+\
+1\. Agrega a bench/bench_linea_tiempo.py un caso de "peor caso de deltas por acción" con D = 100 y D = 1000 deltas por acción aceptada, y K = 10, 50 y 200. Usa N = 600 acciones aceptadas, que alcanzan para tener al menos dos checkpoints con K=200 (el peor tiempo depende de K×D, no de N). Prefiere el camino real: generar_cripta con muchos enemigos activos, como el peor caso de bench_historial. Si eso no logra D deltas por acción, genera los deltas por la API real de C1 (Registro, Partida y LineaTiempo), sin simular la consulta. Dime cuál de los dos caminos usaste. Antes de medir, valida que las variantes den el mismo resumen. Reporta la consulta máxima y la mediana en ms, la memoria retenida y el pico, y el máximo de grupos y de deltas aplicados. Las mismas reglas de antes: sin sorted(), list.sort(), dict ni set como índice, heapq ni collections; usa modelo.estructuras.ordenamiento.\
+2\. Si hace falta, actualiza tests/test_bench_linea_tiempo.py para que verifique que el nuevo caso existe y es equivalente, sin convertir un temporizador en prueba de <50 ms.\
+3\. Repite T062: venv\Scripts\python.exe main.py --bench linea_tiempo.\
+4\. Elige K_DEFECTO con este criterio: el máximo de consulta debe ser < 50 ms en la carga de 5000 acciones Y en el peor caso D=1000. Entre los que cumplan, el de menor memoria. Si K=50 cumple, se queda en 50. Cambia solo el valor y el comentario de K_DEFECTO en modelo/juego/linea_tiempo.py: el comentario debe explicar en una o dos líneas por qué se eligió, con las cifras medidas. Es la única constante: inicialización y CLI ya la usan.\
+5\. Marca [X] T063 en tasks.md.\
+\
+Archivos permitidos: bench/bench_linea_tiempo.py, tests/test_bench_linea_tiempo.py, modelo/juego/linea_tiempo.py (solo K_DEFECTO y su comentario) y specs/004-linea-de-tiempo/tasks.md. No toques nada más ni hagas commits.\
+\
+Pruebas, siempre con venv\Scripts\python.exe -m tests.\<modulo>: test_linea_tiempo, test_bench_linea_tiempo, test_historia_persistencia, test_historia_interfaces y test_replay_puntajes. Los fallos esperados siguen siendo FR002, FR010 y FR014.\
+\
+Al final dame: la tabla del peor caso (D, K, máx/mediana ms, memoria, grupos y deltas aplicados), el K elegido con su justificación, el diff de K_DEFECTO, la tabla de pruebas y la salida nueva del bench (solo la sección del peor caso y el resumen por K).
+```
+
+**Para qué:** Medición y selección (`speckit-implement`): peor caso real y K definitivo, T063, con repetición de T062.
+
+**Resultado / qué se corrigió a mano:** El peor caso real con 600 acciones y D=100/1000 mostró que solo K=10 cumplía el máximo <50 ms en ambas cargas: 0.0617/45.1258 ms. Axel pidió medir antes de decidir; K pasó de 50 a 10 en `7a7c435`.
+
+<!-- Fuente: rollout-2026-11-13T21-27-56-01a1d818-f28b-72c0-b122-bf8199e74f6d.jsonl; turno 2026-11-13 21:28:28 UTC-06:00. -->
+
+### 2026-11-14 · Axel · Codex en VS Code (modelo gpt-6.1-sol, intensidad medium)
+
+**Prompt:**
+
+```text
+$speckit-implement Soy Axel, rama 004-linea-de-tiempo de CRIPTA Parte II. Lee .specify/memory/constitution.md, AGENTS.md, specs/004-linea-de-tiempo/ (spec.md, plan.md, research.md, data-model.md, contracts/, tasks.md), DECISIONES.md completo, bench/bench_linea_tiempo.py y el git log de esta rama. Todas mis tareas hasta T063 están confirmadas.\
+\
+Ejecuta solo T064: completar ÚNICAMENTE la sección de la línea de tiempo (004) en DECISIONES.md. Si ya existe un encabezado o un hueco para ella, úsalo. Si no, agrégala siguiendo el formato de las secciones de los demás. No modifiques ninguna otra sección, ni código, ni tests. No hagas commits.\
+\
+Contenido, en español, claro y sin relleno:\
+1\. Enlaces a specs/004-linea-de-tiempo/spec.md y plan.md.\
+2\. Decisiones con la alternativa descartada y el porqué:\
+&#x20;  \- C1: deltas capturados en los puntos únicos de cambio (Registro.cambiar, \_lista\_\*, \_inv\_\*), con la hora del reloj, frente a copiar el estado completo en cada acción;\
+&#x20;  \- checkpoints de proyección cada K acciones con búsqueda en O(1) por #k y binaria propia por t, frente a no tener checkpoints o reconstruir hacia atrás desde el estado actual;\
+&#x20;  \- proyección copiada por valor, sin agenda, funciones ni azar;\
+&#x20;  \- recorte del sufijo al usar el pergamino, con reubicación de los cambios no reversibles al instante restaurado, sin recorrer el prefijo;\
+&#x20;  \- persistencia sin formatos nuevos: replay de las órdenes más las marcas "# ir a X", que observan sin consumir tiempo;\
+&#x20;  \- Orden movido a modelo/juego/orden.py con reexportación, para cumplir MVC sin romper leer_log;\
+&#x20;  \- HISTORIA fuera del log, de la bitácora y del grupo; tecla L porque H y F1 ya eran la ayuda.\
+3\. Mediciones reales. Toma las cifras de la salida del bench, sin inventar nada. Equipo: Intel Core i7-8665U a 1.90 GHz (4 núcleos, 8 hilos), 31.78 GiB de RAM, Windows 11 Pro 64 bits (compilación 26300), Python 3.13.9. Semilla 20261113.\
+&#x20;  \- Tabla de la carga de 5000 acciones: K=10, 50, 200, sin checkpoints, desde la copia actual y foto por acción, con consulta máxima y mediana en ms, memoria retenida y número de checkpoints.\
+&#x20;  \- Tabla del peor caso (N=600; D=100 y 1000 deltas por acción) con dos corridas. Corrida 1: la de T063. Corrida 2, que hice yo a mano: D=100 → K=10 1.1959/0.9223, K=50 7.0223/1.9460, K=200 16.9835/6.2279; D=1000 → K=10 36.0871/24.8103, K=50 355.1113/36.3436, K=200 223.2240/85.6998 (máx/mediana ms).\
+&#x20;  \- Recorte de 1 a 5 grupos (siempre 0 visitas al prefijo), sobrecosto de C1 y la repetición de los benches de historial e inventario (§5.6).\
+4\. K elegido = 10. Justificación: el requisito es una consulta máxima < 50 ms. K=10 es el único que lo cumple en las dos cargas y en las dos corridas, a cambio de un 5 % más de memoria con D=1000. El tiempo de consulta crece con K × deltas por acción.\
+5\. Anomalía observada: con D=1000, el máximo de K=50 (343 y 355 ms) es peor que el de K=200 (242 y 223 ms) en las dos corridas, aunque sus medianas sí siguen el orden esperado. Si puedes identificar qué objetivo o consulta produce ese máximo ejecutando código de diagnóstico desde la línea de comandos SIN crear archivos ni modificar el bench, hazlo y anota la causa. Si no, déjalo escrito como observado y repetido, con la causa sin confirmar (posible recolección de basura determinista).\
+6\. Estado de las entregas externas, sin afirmar nada pendiente como hecho:\
+&#x20;  \- T025, Mariano, eventos simultáneos: pendiente (test_FR002 en rojo);\
+&#x20;  \- T043, Kim, marcas "# ir a": entregado en 69dbc30, pendiente de verificar en T050;\
+&#x20;  \- T046, Kim, carga v4 y el import de persistencia_partida.py: pendiente (test_FR014 en rojo);\
+&#x20;  \- FR-010 destino compartido: Kim informó una corrección en su rama, todavía no integrada (test_FR010 en rojo en esta rama).\
+7\. Marca [X] T064 en tasks.md.\
+\
+Al final dame el diff de DECISIONES.md, confirma que no cambió ninguna otra sección y dime si identificaste la causa de la anomalía.
+```
+
+**Para qué:** Documentación (`speckit-implement`): decisiones y evidencia empírica en §16, T064.
+
+**Resultado / qué se corrigió a mano:** Se documentaron alternativas, equipo, tablas y dos corridas, manteniendo las entregas externas pendientes. El diagnóstico detectó pausas de GC, sin confirmar la causa de los máximos históricos; commit `d32d575`.
+
+<!-- Fuente: rollout-2026-11-14T00-30-29-01a1d8c0-15f7-7821-bcbd-6ef248f491e7.jsonl; turno 2026-11-14 00:31:16 UTC-06:00. -->
+
+### 2026-11-14 · Axel · Codex en VS Code (modelo gpt-6.1-sol, intensidad medium)
+
+**Prompt:**
+
+```text
+$speckit-implement Soy Axel, rama 004-linea-de-tiempo de CRIPTA Parte II, en el commit 617f666, que ya integra las entregas de Kim (T043, T046 y la corrección FR-010 con generaciones) y de Mariano (T025). Lee .specify/memory/constitution.md, AGENTS.md, specs/004-linea-de-tiempo/tasks.md y la sección 16 de DECISIONES.md.\
+\
+Ejecuta solo la verificación T050 y T065, más el cierre de las coordinaciones T025, T043 y T046. No cambies código ni tests.\
+\
+1\. Corre, siempre con venv\Scripts\python.exe -m tests.\<modulo>, todos los módulos de T050 y T065: test_linea_tiempo, test_historia_interfaces, test_historia_persistencia, test_bench_linea_tiempo, test_resolubilidad, test_resolubilidad_integracion, test_partida, test_motor_base, test_conocimiento_partida, test_inventario_partida, test_ir_a_compuesto, test_replay_puntajes, test_guardado_binario y test_gui. test_bench_linea_tiempo tarda unos 3 minutos.\
+2\. Comprueba, solo leyendo (git diff contra origin/main y búsquedas):\
+&#x20;  \- en controlador/aplicacion.py, \_armar conserva exactamente \`partida_nueva and ordenes_previas is None and exigir_versiones is None\`;\
+&#x20;  \- verificar(), ErrorNoResoluble, reporte_resolubilidad y --verificar/--forzar de main.py no tienen cambios míos;\
+&#x20;  \- \_avanzar y el inverso manual del reloj de partida.py no tienen cambios míos;\
+&#x20;  \- en mis archivos (modelo/juego/linea_tiempo.py, resumen_historico.py, orden.py, registro.py, controlador/reproductor.py, resumen_historia.py y bench/bench_linea_tiempo.py) no se usan dict ni set como índice o caché, heapq, bisect, collections, sorted() ni .sort();\
+&#x20;  \- modelo/ no importa controlador/ ni vista/.\
+3\. Si todo pasa: marca [X] T025, T043, T046, T050 y T065 en tasks.md, anotando en cada coordinación "verificado en 617f666". En DECISIONES.md, sección 16.6, actualiza SOLO la tabla de entregas externas y el párrafo que la sigue: las cuatro quedan verificadas en 617f666, con la prueba que lo demuestra. No cambies las mediciones ni otras secciones.\
+4\. Si algo falla, no marques nada: detente y explícamelo.\
+\
+Al final dame: una tabla por módulo, el resultado de cada comprobación del punto 2 y el diff de tasks.md y de DECISIONES.md. Sin commits.
+```
+
+**Para qué:** Verificación final (`speckit-implement`): T050/T065 y cierre de coordinaciones T025, T043 y T046.
+
+**Resultado / qué se corrigió a mano:** La sesión registró 14 módulos y 168 comprobaciones aprobadas sobre `617f666`, con las entregas reales integradas. Se cerraron las cinco tareas y solo la tabla/párrafo de §16.6; publicación de ese cierre en `6e52674`.
+
+<!-- Fuente: rollout-2026-11-14T21-43-02-01a1dd4d-222d-7571-b6e4-15aa85424646.jsonl; turno 2026-11-14 21:43:32 UTC-06:00. -->
