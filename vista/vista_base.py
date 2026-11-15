@@ -65,6 +65,35 @@ class Vista(ABC):
         """True si esta vista puede mostrar una repetición paso a paso."""
         return False
 
+    def mostrar_historia(self, texto):
+        """Recibe el resumen ya formateado, sin leer el estado actual."""
+        self.mostrar_aviso(texto)
+
+    def mostrar_reporte_resolubilidad(self, reporte):
+        """Presenta el resultado existente con su formato canónico."""
+        self.mostrar_aviso(reporte.formatear_reporte())
+
+    def _mostrar_reporte_inicio(self):
+        """Consume el proveedor de la aplicación una vez por reporte nuevo."""
+        proveedor = getattr(self, "proveedor_reporte_resolubilidad", None)
+        if not callable(proveedor):
+            return
+        reporte = proveedor()
+        if reporte is not None and reporte is not getattr(self, "_reporte_presentado", None):
+            self.mostrar_reporte_resolubilidad(reporte)
+            self._reporte_presentado = reporte
+
+    def pedir_orden_final(self, partida):
+        """HISTORIA o SALIR para consultar/cerrar el final; None continúa la sesión.
+
+        Las vistas anteriores conservan su flujo sin una entrada adicional.
+        """
+        return None
+
+    def retirar_historia_pendiente(self, partida):
+        """Orden recogida entre pasos; el controlador la atiende fuera del callback."""
+        return None
+
     def mostrar_mapa(self, mapa):
         """Presentación textual compatible; recibe datos ya filtrados por Partida."""
         self.mostrar_aviso("\n".join(lineas_mapa_conocido(mapa)))

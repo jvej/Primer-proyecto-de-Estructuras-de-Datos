@@ -1,6 +1,7 @@
 """Aceptación 004 de consola/controles; Pygame solo en casos gráficos locales."""
 
 from pathlib import Path
+from importlib import import_module
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
@@ -120,7 +121,7 @@ class PruebasHistoriaInterfaces(BaseHistoria):
         self.assertTrue(callable(getattr(Vista, "mostrar_historia", None)),
                         "FR-020: falta el adaptador de panel histórico en Vista")
         # El doble existente evita abrir ventana o cargar sprites/sonidos.
-        import pygame
+        pygame = import_module("pygame")
         from tests.test_gui import _vista_dialogo_prueba
         p = esc.partida
         lotes = [[pygame.event.Event(pygame.KEYDOWN, key=pygame.K_h)],
@@ -179,7 +180,7 @@ class PruebasHistoriaInterfaces(BaseHistoria):
         cazador = next(e for e in esc.partida.enemigos_en_sala() if e.comportamiento == "cazador")
         self.assertIn("[CAZADOR]", vista._texto_enemigo(cazador),
                       "FR-017: falta una marca explícita, independiente del nombre del enemigo")
-        import pygame
+        pygame = import_module("pygame")
         from tests.test_gui import _vista_dialogo_prueba
         grafica, _, _ = _vista_dialogo_prueba([])
         grafica.enemigo_elegido = -1

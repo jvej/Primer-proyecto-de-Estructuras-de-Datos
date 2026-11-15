@@ -20,6 +20,7 @@ PUNTAJES = "puntajes"
 SALIR = "salir"
 IR_A = "ir_a"
 MAPA = "mapa"
+HISTORIA = "historia"
 
 VER_REPETICIONES = "__repeticiones__"
 
@@ -107,3 +108,30 @@ def interpretar_ir_a(linea: str) -> Orden:
             or int(partes[2]) <= 0):
         raise ValueError("Uso: ir a <id de sala positivo>")
     return Orden(IR_A, int(partes[2]))
+
+
+def interpretar_historia(linea, reloj_actual=None, acciones=None):
+    """Entrada común de consola/GUI; valida rango si se proporcionan límites.
+
+    El selector se conserva como texto para distinguir el instante 0 de #1.
+    No consulta ni modifica una partida y no pertenece al parser del log.
+    """
+    partes = linea.strip().lower().split()
+    if len(partes) != 2 or partes[0] != HISTORIA:
+        raise ValueError("Uso: historia <instante entero> o historia #<acción>")
+    selector = partes[1]
+    por_accion = selector.startswith("#")
+    numero = selector[1:] if por_accion else selector
+    if not numero or not numero.isascii() or not numero.isdigit():
+        raise ValueError("Historia: indica un instante entero no negativo o #<acción positiva>.")
+    try:
+        valor = int(numero)
+    except ValueError:
+        raise ValueError("Historia: el selector es demasiado largo.") from None
+    if por_accion:
+        if valor < 1 or (acciones is not None and valor > acciones + 1):
+            limite = "N+1" if acciones is None else str(acciones + 1)
+            raise ValueError("Historia: la acción debe estar entre 1 y %s." % limite)
+    elif reloj_actual is not None and valor > reloj_actual:
+        raise ValueError("Historia: el instante es futuro; el reloj actual es %s." % reloj_actual)
+    return Orden(HISTORIA, ("#" if por_accion else "") + str(valor))

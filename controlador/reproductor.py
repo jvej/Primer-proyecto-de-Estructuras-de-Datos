@@ -1,10 +1,12 @@
 from controlador.aplicacion import Aplicacion
 from controlador.controlador import Controlador
+from controlador.resumen_historia import formatear_resumen
 from modelo.datos.almacen_cripta import AlmacenCripta
 from modelo.datos.almacen_fichas import AlmacenFichas
 from modelo.datos.bitacora_partida import ErrorLog, SEPARADOR, leer_log
 from modelo.datos.fuente_almacen import FuenteAlmacen
 from modelo.juego.errores import ErrorCripta
+from modelo.juego.linea_tiempo import ErrorHistoriaNoDisponible, K_DEFECTO
 from modelo.juego.orden import Orden
 
 
@@ -107,11 +109,20 @@ class Reproduccion:
             self.aplicacion = None
 
 
-def preparar_reproduccion(ruta_log, fuente, presupuesto, carpeta, cache_size=25):
+def _validar_consulta(hasta, checkpoint_cada):
+    if hasta is not None and (type(hasta) is not int or hasta < 0):
+        raise ValueError("hasta debe ser un entero no negativo")
+    if type(checkpoint_cada) is not int or checkpoint_cada <= 0:
+        raise ValueError("checkpoint_cada debe ser un entero positivo")
+
+
+def preparar_reproduccion(ruta_log, fuente, presupuesto, carpeta, cache_size=25, *,
+                         hasta=None, checkpoint_cada=K_DEFECTO):
     resultado = ResultadoReplay()
     try:
+        _validar_consulta(hasta, checkpoint_cada)
         encabezado, ordenes, lineas = _leer_log_reconstruccion(ruta_log)
-    except ErrorLog as error:
+    except (ErrorLog, ValueError) as error:
         resultado.anotar("No se puede reproducir: %s" % error)
         return None, resultado
     resultado.anotar("Reproduciendo %s: cripta %s (versión %s), catálogo %s, semilla %d, jugador %s"
@@ -119,7 +130,8 @@ def preparar_reproduccion(ruta_log, fuente, presupuesto, carpeta, cache_size=25)
                         encabezado.version_catalogo, encabezado.semilla, encabezado.jugador or "-"))
 
     aplicacion = Aplicacion(fuente, presupuesto, carpeta, cache_size, nombre=encabezado.jugador,
-                            registrar_log=False, registrar_puntajes=False)
+                            registrar_log=False, registrar_puntajes=False,
+                            checkpoint_cada=checkpoint_cada)
     try:
         version_cripta, version_catalogo = aplicacion.versiones_actuales(encabezado.id_cripta)
     except ErrorCripta as error:
@@ -140,9 +152,10 @@ def preparar_reproduccion(ruta_log, fuente, presupuesto, carpeta, cache_size=25)
             AlmacenFichas(aplicacion.ruta_catalogo(encabezado.version_catalogo),
                           encabezado.version_catalogo),
             encabezado.version_catalogo)
+        aplicacion.cerrar()
         aplicacion = Aplicacion(fuente_local, fuente_local.presupuesto, carpeta, cache_size,
                                 nombre=encabezado.jugador, registrar_log=False,
-                                registrar_puntajes=False)
+                                registrar_puntajes=False, checkpoint_cada=checkpoint_cada)
     else:
         resultado.anotar("NO SE PUEDE GARANTIZAR UNA REPRODUCCIÓN FIEL: el log es de la versión "
                          "de cripta %s y catálogo %s; lo disponible es %s / %s y no hay una copia "
@@ -165,9 +178,31 @@ def preparar_reproduccion(ruta_log, fuente, presupuesto, carpeta, cache_size=25)
     return Reproduccion(encabezado, partida, ordenes, aplicacion, lineas), resultado
 
 
-def anotar_final(resultado, partida, aplicacion=None):
+def anotar_final(resultado, partida, aplicacion=None, *, hasta=None, checkpoint_cada=K_DEFECTO):
     """Paso 3: el informe con el estado en que quedó la partida."""
+    _validar_consulta(hasta, checkpoint_cada)
     resultado.anotar("Órdenes reproducidas: %d" % resultado.ordenes)
+    if hasta is not None:
+        instante = hasta
+        final = partida.reloj.tiempo_actual
+        if hasta > final:
+            if partida.estado not in ("victoria", "derrota"):
+                resultado.anotar("No se puede consultar el instante %d: fuera de rango (0 a %d). "
+                                 "El log está interrumpido y la partida sigue jugando."
+                                 % (hasta, final))
+                resultado.reproducido = False
+                return
+            instante = final
+            resultado.anotar("La partida terminó en el instante %d, antes del instante "
+                             "solicitado %d; se muestra el estado final." % (final, hasta))
+        try:
+            resultado.anotar(formatear_resumen(partida.linea_tiempo.consultar_t(instante)))
+        except (ValueError, ErrorHistoriaNoDisponible) as error:
+            resultado.anotar("No se puede consultar la historia: %s" % error)
+            resultado.reproducido = False
+        if aplicacion is not None:
+            resultado.anotar(aplicacion.reporte())
+        return
     resultado.anotar("Estado final: %s | reloj %d | vida %d/%d | sala %s | acciones %d | "
                      "enemigos derrotados %d" % (partida.estado, partida.reloj.tiempo_actual,
                                                  partida.jugador.vida, partida.jugador.vida_max,
@@ -180,40 +215,43 @@ def anotar_final(resultado, partida, aplicacion=None):
         resultado.anotar(aplicacion.reporte())
 
 
-def reproducir(ruta_log, fuente, presupuesto, carpeta, cache_size=25, mostrar_cada=False):
+def reproducir(ruta_log, fuente, presupuesto, carpeta, cache_size=25, mostrar_cada=False, *,
+               hasta=None, checkpoint_cada=K_DEFECTO):
     """mostrar_cada: True agrega al informe una línea por cada orden reproducida."""
     reproduccion, resultado = preparar_reproduccion(ruta_log, fuente, presupuesto, carpeta,
-                                                    cache_size)
+                                                    cache_size, hasta=hasta,
+                                                    checkpoint_cada=checkpoint_cada)
     if reproduccion is None:
         return resultado
     partida = reproduccion.partida
-    ordenes = reproduccion.ordenes
-
     controlador = Controlador(partida)        
     numero = 0
     detenido = False
-    while not ordenes.vacia():
-        orden = ordenes.sacar()
+    for linea in reproduccion.lineas:
+        if linea.startswith("#"):
+            aplicar_linea_reconstruccion(controlador, linea)
+            continue
         numero += 1
         if partida.estado != "jugando":
             resultado.anotar("La partida terminó (%s) antes de la orden %d del log; el resto se "
                              "ignora." % (partida.estado, numero))
             detenido = True
             break
-        if not controlador.ejecutar(orden):
+        if not aplicar_linea_reconstruccion(controlador, linea):
             ultimo = partida.bitacora.ultimos()
             motivo = ultimo[-1] if len(ultimo) > 0 else "rechazada"
             resultado.anotar("DIVERGENCIA en la orden %d (%s): %s. La reproducción se detiene."
-                             % (numero, orden.a_texto(), motivo))
+                             % (numero, linea, motivo))
             detenido = True
             break
         resultado.ordenes += 1
         if mostrar_cada:
             resultado.anotar("  %4d  t=%-6d %-12s vida %d  sala %s" % (
-                numero, partida.reloj.tiempo_actual, orden.a_texto(), partida.jugador.vida,
+                numero, partida.reloj.tiempo_actual, linea, partida.jugador.vida,
                 partida.jugador.sala.id))
     resultado.reproducido = not detenido
 
-    anotar_final(resultado, partida, reproduccion.aplicacion)
+    anotar_final(resultado, partida, reproduccion.aplicacion, hasta=hasta,
+                 checkpoint_cada=checkpoint_cada)
     reproduccion.cerrar()
     return resultado

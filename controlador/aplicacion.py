@@ -62,6 +62,8 @@ class Aplicacion:
     def __init__(self, fuente, presupuesto, carpeta=CARPETA_DEFECTO, cache_size=CACHE_DEFECTO,
                  semilla=None, nombre="Jugador", registrar_log=True, registrar_puntajes=True,
                  forzar=False, checkpoint_cada=K_DEFECTO):
+        if type(checkpoint_cada) is not int or checkpoint_cada <= 0:
+            raise ValueError("checkpoint_cada debe ser un entero positivo")
         self.fuente = fuente
         self.presupuesto = presupuesto
         self.carpeta = carpeta
@@ -357,6 +359,15 @@ class Aplicacion:
         self._lineas_reconstruccion.append(orden.a_texto())
         if self.log is not None:
             self.log.anotar(orden)
+
+    def conectar_controlador(self, controlador):
+        """Conecta una vez los callbacks de la sesión, también tras cargar v4."""
+        controlador.agregar_observador(self.registrar_orden)
+        controlador.agregar_observador_comentarios(self.registrar_comentario)
+
+    def obtener_reporte_resolubilidad(self):
+        """Proveedor de consulta para la vista: devuelve el reporte ya calculado."""
+        return self.reporte_resolubilidad
 
     def registrar_comentario(self, texto: str) -> None:
         # Mismo saneamiento y prefijo que BitacoraPartida.anotar_comentario.

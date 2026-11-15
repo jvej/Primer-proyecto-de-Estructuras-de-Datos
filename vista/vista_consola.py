@@ -19,11 +19,14 @@ Comandos (los números se cuentan desde 1, como se muestran en pantalla):
     guardar | cargar | salir | ayuda
 """
 
+import unicodedata
+
 from controlador.orden import (ABRIR, AYUDA, ATACAR, CARGAR, EQUIPAR, ESPERAR, GUARDAR, INV_ANTERIOR,
                    INV_INICIO, INV_ORDENAR, INV_SIGUIENTE, INVENTARIO, MOVER, Orden,
                    PERGAMINO, PUNTAJES, RECOGER, SALIR, SOLTAR, USAR)
 from vista.vista_base import Vista
 from controlador.orden import MAPA, interpretar_ir_a
+from controlador.orden import HISTORIA, interpretar_historia
 
 CRITERIOS = ("peso", "valor", "nombre")
 
@@ -53,6 +56,12 @@ def interpretar(linea, partida):
         return "Escribe un comando (o 'ayuda')."
     comando = partes[0]
     argumentos = partes[1:]
+
+    if comando == HISTORIA:
+        try:
+            return interpretar_historia(linea, partida.reloj.tiempo_actual, partida.acciones)
+        except ValueError as error:
+            return str(error)
 
     if comando == "ir" and argumentos[:1] == ["a"]:
         try:
@@ -131,6 +140,7 @@ def _con_posicion(tipo, argumentos, cantidad, que):
 
 
 AYUDA_TEXTO = """Comandos (los números se cuentan desde 1, como se ven en pantalla):
+  historia <t> | historia #k   consultar por instante o antes de la acción k (también al final)
   ir a <sala>        viajar a una sala explorada, paso a paso
   mapa               ver el mapa conocido y las puertas recordadas
   n s e o            moverse (también: ir n)
@@ -151,6 +161,33 @@ class VistaConsola(Vista):
     def __init__(self, entrada=input, salida=print):
         self._entrada = entrada
         self._salida = salida
+        self._respuesta_final = None
+
+    def mostrar_historia(self, texto):
+        self._salida(texto)
+
+    def pedir_orden_final(self, partida):
+        while True:
+            texto = self._leer("Final: historia <t> o historia #k; Enter para continuar: ")
+            if texto is None or not texto.strip():
+                return None
+            partes = texto.strip().lower().split()
+            if partes[0] == HISTORIA:
+                resultado = interpretar(texto, partida)
+                if isinstance(resultado, Orden):
+                    return resultado
+                self._salida(resultado)
+            elif partes in (["salir"], ["q"]):
+                return Orden(SALIR)
+            elif partes == ["continuar"]:
+                return None
+            elif partes in (["s"], ["si"], ["sí"], ["y"], ["yes"], ["n"], ["no"]):
+                # Una respuesta del flujo anterior sigue perteneciendo a la
+                # siguiente confirmación de repetición/sesión, sin perderla.
+                self._respuesta_final = texto
+                return None
+            else:
+                self._salida("Usa historia <t>, historia #k, salir o Enter para continuar.")
 
     def elegir_cripta(self, criptas):
         self._salida("\nCriptas disponibles:")
@@ -186,7 +223,12 @@ class VistaConsola(Vista):
         return texto.strip()
 
     def confirmar(self, pregunta):
-        texto = self._leer(pregunta + " (s/n): ")
+        texto = self._respuesta_final
+        self._respuesta_final = None
+        if texto is None:
+            texto = self._leer(pregunta + " (s/n): ")
+        else:
+            self._salida(pregunta + " (s/n): " + texto)
         if texto is None:
             return True
         return texto.strip().lower() in ("s", "si", "sí", "y", "yes")
@@ -198,6 +240,7 @@ class VistaConsola(Vista):
             return None
 
     def mostrar_partida(self, partida):
+        self._mostrar_reporte_inicio()
         jugador = partida.jugador
         sala = partida.sala_actual()
         escribir = self._salida
@@ -269,6 +312,9 @@ class VistaConsola(Vista):
     def mostrar_aviso(self, texto):
         self._salida(texto)
 
+    def mostrar_reporte_resolubilidad(self, reporte):
+        self._salida(reporte.formatear_reporte())
+
     def mostrar_ayuda(self):
         self._salida(AYUDA_TEXTO)
 
@@ -305,7 +351,10 @@ class VistaConsola(Vista):
             i += 1
 
     def _texto_enemigo(self, enemigo):
-        return "%s  vida %d/%d" % (enemigo.etiqueta(), enemigo.vida, enemigo.vida_max)
+        comportamiento = unicodedata.normalize("NFD", str(enemigo.comportamiento or "")).strip().lower()
+        comportamiento = "".join(letra for letra in comportamiento if unicodedata.category(letra) != "Mn")
+        marca = " [CAZADOR]" if comportamiento == "cazador" else ""
+        return "%s%s  vida %d/%d" % (enemigo.etiqueta(), marca, enemigo.vida, enemigo.vida_max)
 
     def _texto_objeto(self, objeto):
         return "%s (%s)  peso %s  valor %s" % (objeto.nombre, objeto.clase, objeto.peso, objeto.valor)

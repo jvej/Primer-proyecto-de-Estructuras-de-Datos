@@ -32,6 +32,7 @@ import time
 from controlador.aplicacion import CACHE_DEFECTO, CARPETA_DEFECTO, Aplicacion
 from controlador.controlador import Controlador
 from modelo.juego.errores import ErrorCripta
+from modelo.juego.linea_tiempo import K_DEFECTO
 from modelo.juego.resolubilidad import ResultadoResolubilidad
 from modelo.datos.fabrica_fuentes import crear_fuente_datos
 from modelo.datos.persistencia_partida import PersistenciaPartida
@@ -51,6 +52,7 @@ BENCHES = (
     ("lista_ordenada", "bench_lista_ordenada.py"),
     ("inventario", "bench_inventario.py"),    
     ("historial", "bench_historial.py"),      
+    ("linea_tiempo", "bench_linea_tiempo.py"),
     ("ordenamiento", "bench_ordenamiento.py"),  
     ("guardado", "bench_guardado_binario.py"),  
 )
@@ -61,6 +63,10 @@ def leer_argumentos(argv):
     parser.add_argument("--offline", metavar="CARPETA",
                         help="lee las respuestas del paquete en CARPETA en vez de la red")
     parser.add_argument("--replay", metavar="LOG", help="reproduce una partida sin interacción")
+    parser.add_argument("--hasta", type=int, metavar="T",
+                        help="con --replay, consulta el estado histórico en el instante T")
+    parser.add_argument("--checkpoint-cada", type=int, metavar="K", default=K_DEFECTO,
+                        help="acciones entre puntos de control (por defecto %d)" % K_DEFECTO)
     parser.add_argument("--verificar", metavar="CRIPTA",
                         help="imprime la resolubilidad de la cripta sin crear una vista")
     parser.add_argument("--forzar", action="store_true",
@@ -80,6 +86,13 @@ def leer_argumentos(argv):
     argumentos = parser.parse_args(argv)
     if argumentos.cache_size < 1:
         parser.error("--cache-size debe ser al menos 1")
+    if argumentos.hasta is not None:
+        if argumentos.hasta < 0:
+            parser.error("--hasta debe ser un entero no negativo")
+        if not argumentos.replay:
+            parser.error("--hasta solo se acepta con --replay")
+    if argumentos.checkpoint_cada <= 0:
+        parser.error("--checkpoint-cada debe ser un entero positivo")
     return argumentos
 
 def correr_benches(pedidos):
@@ -113,7 +126,8 @@ def correr_replay(argumentos):
         print(error)
         return 2
     resultado = reproducir(argumentos.replay, fuente, presupuesto, argumentos.datos,
-                           argumentos.cache_size, argumentos.detalle)
+                           argumentos.cache_size, argumentos.detalle, hasta=argumentos.hasta,
+                           checkpoint_cada=argumentos.checkpoint_cada)
     print(resultado.texto())
     return 0 if resultado.reproducido else 1
 
@@ -170,17 +184,17 @@ def correr_interactivo(argumentos):
     nombre = argumentos.nombre if argumentos.nombre else vista.pedir_nombre()
 
     aplicacion = Aplicacion(fuente, presupuesto, argumentos.datos, argumentos.cache_size,
-                            argumentos.semilla, nombre, forzar=argumentos.forzar)
+                            argumentos.semilla, nombre, forzar=argumentos.forzar,
+                            checkpoint_cada=argumentos.checkpoint_cada)
+    # T051–T053 consumen este proveedor sin recalcular ni reemplazar el reporte.
+    vista.proveedor_reporte_resolubilidad = aplicacion.obtener_reporte_resolubilidad
     repeticiones = ServicioRepeticiones(
         aplicacion, lambda: crear_fuente_datos(argumentos.offline is not None, argumentos.offline),
         argumentos.datos, argumentos.cache_size)
     controlador = Controlador(vista=vista, persistencia=PersistenciaPartida(aplicacion),
                               puntajes=aplicacion.puntajes, al_terminar=aplicacion.al_terminar,
                               repeticiones=repeticiones)
-    controlador.agregar_observador(aplicacion.registrar_orden)      
-    controlador.agregar_observador_comentarios(
-        aplicacion.registrar_comentario
-    )
+    aplicacion.conectar_controlador(controlador)
     if argumentos.gui:
         controlador.agregar_observador_viaje(
             vista.atender_viaje
