@@ -22,8 +22,8 @@ El núcleo algorítmico residirá en un nuevo módulo puro `modelo/juego/resolub
 **Target Platform**: Multiplataforma (Windows, Linux, macOS) en modo consola y ventana gráfica interactiva (Pygame)  
 **Project Type**: Juego de calabozo por turnos con arquitectura MVC y cliente HTTP  
 **Performance Goals**:
-- Verificación de resolubilidad < 200 ms en la cripta más grande publicada (`SC-001`).
-- Crecimiento aproximadamente lineal (`SC-002`): recorrido $O(S + E + L)$, más preprocesamiento y ordenamientos garantizados $O(n \log n)$.
+- Verificación de resolubilidad < 200 ms en la cripta publicada más grande disponible al medir, identificada por id y versión; mientras no exista, usar y declarar la cuadrícula sintética de 1000 salas del bench (`SC-001`).
+- Crecimiento aproximadamente lineal (`SC-002`): en criptas sintéticas del bench con al menos 100 llaves, duplicar salas, salidas y llaves debe multiplicar el tiempo completo por un máximo de 3, incluida la preparación. El recorrido cuesta $O(S + E + L)$, más preprocesamiento y ordenamientos garantizados $O(n \log n)$.
 - Reporte y ciclos generados a partir de la misma pasada de exploración (`SC-003`).
 - Determinismo reproducible en empates y ciclos (`SC-004`).
 **Constraints**:
@@ -124,7 +124,7 @@ tests/
 2. **Indexación de cerraduras y listas de espera** (Principio I: sin `dict` ni `set` como índice):
    - Las listas de espera se indexan por el **identificador textual que pide la puerta** (`puerta["llave"]`), o por IDs de llaves.
    - El índice final contiene $C$ identificadores textuales distintos de cerraduras, llaves y alias.
-   - Se reúnen `llave_salida`, las cerraduras de las puertas y los IDs/alias de ubicaciones y catálogo, conservando inicialmente los duplicados. Si hay $M$ entradas, se ordenan con `ordenar_merge(textos)` en $O(M \log M)$ garantizado y se eliminan duplicados en una pasada $O(M)$; quedan $C$ identificadores distintos. También se usa `ordenar_merge()` para ordenar salas y ubicaciones.
+   - Se reúnen `llave_salida`, las cerraduras de las puertas y los IDs y campos `abre` de los registros de `/llaves`, conservando inicialmente los duplicados. No se consulta el catálogo. Si hay $M$ entradas, se ordenan con `ordenar_merge(textos)` en $O(M \log M)$ garantizado y se eliminan duplicados en una pasada $O(M)$; quedan $C$ identificadores distintos. También se usa `ordenar_merge()` para ordenar salas y ubicaciones.
    - El resultado es una **lista contigua ordenada** (`list` de Python) que constituye el índice `id_texto → posición_entera`. No se emplea `dict`, `set`, ni ninguna estructura de hash.
    - Se implementa una **búsqueda binaria propia** `_buscar_cerradura(id_texto) -> int` sobre dicha lista ordenada para obtener su índice $0 \le c < C$ en $O(\log C)$, sin usar `bisect`.
    - Se crea el arreglo contiguo de listas de espera: `listas_espera = [[] for _ in range(C)]`.
@@ -163,8 +163,8 @@ tests/
      - Para cada llave $K$ de `llaves_pendientes`:
        - Marcar disponible: `llaves_disponibles[idx(K.id)] = True`.
        - Liberar `listas_espera[idx(K.id)]`.
-       - Si $K$ tiene ficha en el catálogo local y define `"abre"`, marcar `llaves_disponibles[idx(K.abre)] = True` y liberar también `listas_espera[idx(K.abre)]`.
-       - Si la ficha no está en el catálogo local, se utiliza solo el `id` directo sin realizar solicitudes HTTP (límite documentado).
+       - Si el registro de $K$ en `/llaves` define `"abre"`, marcar `llaves_disponibles[idx(K.abre)] = True` y liberar también `listas_espera[idx(K.abre)]`.
+       - Si el registro no define `abre`, se utiliza solo el `id` directo. No se usan fichas del catálogo en disco ni en memoria.
        - Para cada puerta liberada `(pos_origen, dir, pos_destino, _)`:
          - Si `not visitado[pos_destino]`:
            - `visitado[pos_destino] = True`
@@ -205,9 +205,12 @@ Si la cripta no es resoluble, el reporte completo se deriva del mismo recorrido:
    - Se itera sobre los nodos en orden lexicográfico.
    - En la pila iterativa se gestiona el estado de cada nodo y el índice de la arista saliente que se está explorando.
    - Al encontrar una arista hacia un nodo en estado Gris, se extrae el ciclo desde la pila, se normaliza para que comience y termine en la llave del ciclo con menor ID de texto (ej. `itm_a -> itm_c -> itm_b -> itm_a`), indicando junto a cada flecha la puerta que bloquea (`[sala X (DIR)]`).
-4. **Anomalías Topológicas**:
-   - Si existe `llave_salida` pero ninguna puerta hacia `sala_salida` la requiere:
-     `MOTIVO: no existe puerta hacia sala_salida que pida llave_salida`.
+4. **Motivo obligatorio** (FR-014, FR-018):
+   - Todo NO RESOLUBLE incluye `MOTIVO:`, aunque no haya llaves no obtenibles, frontera bloqueada ni ciclos. Se elige el primer motivo aplicable:
+     1. `no existe puerta hacia sala_salida que pida llave_salida`.
+     2. `llave_salida no puede obtenerse`.
+     3. `ninguna puerta hacia sala_salida que pide llave_salida es alcanzable` (la llave se obtiene, pero todas esas puertas salen de salas inalcanzables).
+   - Todo NO VERIFICADA incluye `MOTIVO:` no vacío explicando la causa.
 
 ---
 
@@ -216,8 +219,9 @@ Si la cripta no es resoluble, el reporte completo se deriva del mismo recorrido:
 - Las listas de espera se indexan por el identificador de cerradura que pide la puerta.
 - Al activarse una llave $K$:
   - Se liberan las puertas de la lista de espera de `K.id`.
-  - Si la ficha de la llave está disponible en el catálogo local (`AlmacenFichas`) y define `"abre"`, se liberan también las puertas de la lista de espera de `K.abre`.
-  - Si la ficha no está en el catálogo local, se utiliza solo el `id` directo sin realizar solicitudes HTTP. Límite documentado: en ausencia de catálogo local, solo se reconocen llaves cuyo `id` coincida directamente con la cerradura.
+  - Si su registro de `/llaves` define `"abre"`, se liberan también las puertas de la lista de espera de `K.abre`.
+  - Si ese registro no define `abre`, se utiliza solo el `id` directo. No se usan fichas del catálogo, ni guardadas en disco ni en memoria, para que el resultado dependa solo del esqueleto y de `/llaves` y sea idéntico en cualquier equipo.
+  - Límite: una apertura necesaria que dependa solo del `abre` de una ficha de catálogo se reporta NO RESOLUBLE; se puede jugar con `--forzar`.
 
 ---
 
@@ -242,9 +246,9 @@ Si la cripta no es resoluble, el reporte completo se deriva del mismo recorrido:
 5. **`modelo/datos/almacen_cripta.py`**:
    - Métodos `tiene_llaves()`, `guardar_llaves(datos)`, `leer_llaves()`.
 6. **`modelo/datos/esqueleto.py`**:
-   - Interpretar `costo` en salidas como entero $\ge 1$ (`costo = max(1, int(salida.get("costo", 100)))`).
+   - Usar 100 solo si falta `costo`; si se declara un valor que no es un entero $\ge 1$, rechazar los datos con `ErrorRed`, sin conversión ni corrección silenciosa (FR-007; corregido en revisión).
 7. **`controlador/aplicacion.py`**:
-   - Verificación previa antes de iniciar la partida. Si no es resoluble sin `--forzar`, no inicia.
+   - Verificación solo al iniciar una partida nueva y con `--verificar`. `--replay` (con o sin `--hasta`) y cargar una partida guardada no verifican ni consultan `/llaves` (FR-009). Si no es resoluble sin `--forzar`, no inicia; muestra el reporte y vuelve a la selección de cripta tanto en consola como en Pygame.
    - En caso de contingencia (sin red/presupuesto sin copia local), emitir reporte `ESTADO: NO VERIFICADA` y no iniciar salvo `--forzar`.
 8. **`main.py`**:
    - Modificador `--verificar <id>` con códigos de salida:
@@ -270,6 +274,8 @@ Si la cripta no es resoluble, el reporte completo se deriva del mismo recorrido:
    - Mediciones con $N \in \{10, 50, 100, 200, 400\}$ llaves y $N+1$ salas en línea, más la cuadrícula de 1000 salas y 50 llaves.
    - Comparación del algoritmo incremental por etapas frente al repetido por llave.
    - Informar los cocientes de tiempo por etapas al duplicar llaves: $50 \to 100 \to 200 \to 400$. Ambas versiones incluyen el mismo preprocesamiento; conservar equivalencia exacta de estado y orden de llaves.
+   - Para validar SC-002, usar casos con al menos 100 llaves que dupliquen salas, salidas y llaves; el cociente del tiempo de verificación completa, incluida la preparación, debe ser como máximo 3. Los cocientes de las líneas de $N+1$ salas son comparaciones adicionales, no bastan por sí solos para acreditar esa duplicación exacta.
+   - Para SC-001, registrar id y versión de la cripta publicada más grande disponible al medir; mientras no exista, medir con la cuadrícula sintética de 1000 salas y declarar la sustitución.
 2. **Repetición de `bench_red.py` (§5.6)**:
    - Medir solicitudes gastadas y tiempo con cliente HTTP y sesión simulada, sin red real: sin copia local (1), con copia de la misma versión ya comprobada (0), y 429 seguido de 200 (2). Aislar `/llaves` de las demás rutas y usar la selección de copia de la aplicación.
 

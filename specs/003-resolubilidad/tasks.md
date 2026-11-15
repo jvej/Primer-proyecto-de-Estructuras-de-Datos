@@ -52,7 +52,7 @@
 - [X] T013 [P] [US4] Implementar método `llaves(self, id_cripta)` en modelo/datos/cliente_offline.py leyendo `criptas/<id>/llaves.json` (FR-001, FR-006)
 - [X] T014 [P] [US4] Implementar métodos `tiene_llaves()`, `guardar_llaves(datos)` y `leer_llaves()` con invalidación por versión de cripta en modelo/datos/almacen_cripta.py (FR-004, FR-005)
 - [X] T015 [US4] Implementar método `llaves(self, id_cripta)` en modelo/datos/fuente_almacen.py delegando en `almacen_cripta.leer_llaves()` (FR-004)
-- [X] T016 [P] [US4] Actualizar interpretación de salidas en modelo/datos/esqueleto.py asignando `costo` como entero $\ge 1$ con valor 100 por defecto (`costo = max(1, int(salida.get("costo", 100)))`) (FR-007)
+- [X] T016 [P] [US4] Actualizar interpretación de salidas en modelo/datos/esqueleto.py usando 100 solo si falta `costo` y rechazando con `ErrorRed` todo costo declarado que no sea un entero $\ge 1$, sin conversión ni corrección silenciosa (FR-007) (corregido en revisión)
 - [X] T017 [P] [US4] Actualizar datos offline y fixtures en tests/crear_paquete_prueba.py y tests/cripta_de_prueba.py incorporando costos en salidas, cazadores con atributo `"rango"` (en unidades de costo), `llaves.json` con campo `"enemigo"` como ID de texto de la instancia (ej. `"e-1203"`), cripta con ciclo y cripta de referencia con decenas de cazadores, incrementando versiones de catálogo y cripta (FR-005, FR-008)
 
 **Checkpoint**: Pruebas `test_FR002_...` y `test_FR003_...` deben pasar satisfactoriamente.
@@ -69,7 +69,7 @@
 
 - [X] T018 [US2] Crear módulo modelo/juego/resolubilidad.py e implementar preprocesamiento de salas e indexación contigua de cerraduras y listas de espera (`listas_espera = [[] for _ in range(C)]`) usando `esqueleto.posicion()` y búsqueda binaria propia sobre cerraduras únicas ordenadas con `ordenar_merge()` (corrección T036) (FR-010, SC-002)
 - [X] T019 [US2] Implementar en modelo/juego/resolubilidad.py el bucle principal de BFS por etapas con `ColaFIFO`, asegurando que durante la etapa $k$ solo se crucen puertas abiertas o abiertas en etapas anteriores, registrando llaves encontradas en `llaves_pendientes` y enviando puertas bloqueadas a sus listas de espera (FR-010, FR-012, SC-002)
-- [X] T020 [US2] Implementar en modelo/juego/resolubilidad.py el cierre de etapa, la ordenación determinista de `llaves_pendientes` con `ordenar_merge()` lexicográficamente (corrección T036), la liberación de listas de espera (por `id` directo y por `"abre"` del catálogo local si está disponible sin peticiones extra) y la siembra de la siguiente etapa (FR-012, FR-013, SC-002)
+- [X] T020 [US2] Implementar en modelo/juego/resolubilidad.py el cierre de etapa, la ordenación determinista de `llaves_pendientes` con `ordenar_merge()` lexicográficamente (corrección T036), la liberación de listas de espera y la siembra de la siguiente etapa (FR-012, FR-013, SC-002). La procedencia de `abre`, antes tomada del catálogo local, queda corregida en el diseño y pendiente de implementación en T038.
 - [X] T021 [US2] Implementar en modelo/juego/resolubilidad.py la condición de victoria para calificar `RESOLUBLE` si y solo si se obtiene `llave_salida` y se alcanza `sala_salida` a través de una puerta que la pide (FR-011)
 
 **Checkpoint**: Prueba `test_FR013_...` debe pasar satisfactoriamente.
@@ -240,3 +240,13 @@ Task T031: bench/bench_resolubilidad.py
 4. US3 (Diagnóstico de ciclos y frontera) $\to$ Pasa prueba `test_FR014_...` y `test_FR018_...`.
 5. US1 (CLI `--verificar`, contingencia y `--forzar`) $\to$ Pasan pruebas `test_FR015_...` y `test_FR017_...`.
 6. Polish (Benchmarks y corrida integral de toda la suite de pruebas).
+
+---
+
+## Phase 8: Correcciones tras revisión cruzada
+
+Esta fase queda pendiente. La corrección documental debe ir en un commit propio realizado por el integrante, antes de cualquier cambio de código (§2.6). Las marcas anteriores registran el trabajo previo y no acreditan estas correcciones.
+
+- [ ] T037 Garantizar `MOTIVO:` obligatorio y no vacío en todo NO RESOLUBLE y NO VERIFICADA, aplicar los textos exactos y la prioridad de FR-014 y agregar el escenario y su prueba `test_FR014_puertas_salida_desde_salas_inalcanzables`, comprobando el caso c) sin llaves no obtenibles, frontera bloqueada ni ciclos y la plantilla de FR-018 (FR-014, FR-018).
+- [ ] T038 Quitar el catálogo de la verificación: reconocer únicamente el `id` y el `abre` del registro de `/llaves`, sin leer fichas en disco ni en memoria; comprobar que variar el catálogo no cambia el resultado ni el orden de obtención mediante pruebas cuyos nombres citen los requisitos (FR-010, FR-012).
+- [ ] T039 Agregar pruebas con el identificador del requisito en el nombre para FR-001, FR-006, FR-007, SC-001, SC-002, SC-003 y SC-004 (`test_FR001_...`, `test_FR006_...`, `test_FR007_...`, `test_SC001_...`, `test_SC002_...`, `test_SC003_...`, `test_SC004_...`). Cubrir el rechazo de costos inválidos; medir SC-001 con id y versión de la mayor cripta publicada disponible o declarar el uso provisional de la cuadrícula sintética de 1000 salas; para SC-002 medir la verificación completa, incluida la preparación, con al menos 100 llaves y duplicación de salas, salidas y llaves, con cociente máximo 3 (FR-001, FR-006, FR-007, SC-001, SC-002, SC-003, SC-004).

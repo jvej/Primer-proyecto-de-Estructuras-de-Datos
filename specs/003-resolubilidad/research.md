@@ -36,7 +36,7 @@ Este documento consolida las decisiones de diseño técnico, estructuras de dato
   - Un arreglo indexado por identificador de cerradura con ordenamiento previo de IDs tiene menor sobrecarga en tiempo y memoria que construir una tabla hash propia con sondeo lineal.
 - **Evidencia medida y causa de la corrección**:
   - El commit `809f398` (tabla T035 de [tasks.md](./tasks.md)) midió 1,577 ms por etapas para 100 llaves y 19,503 ms para 200 en topología `linea`: aproximadamente 12,37 veces el tiempo al duplicar las llaves.
-  - `_Indices` concatena `llave_salida`, las cerraduras de las puertas y los IDs de ubicaciones (más catálogo/alias si existen). Los tramos ordenados concatenados presentan poco desorden en el muestreo lejano de `ordenar()`. Al quedar en $\le 2\%$, el selector elige inserción, aunque mezclar los tramos genera desplazamientos cuadráticos $O(n^2)$.
+  - En la versión medida, `_Indices` concatenaba `llave_salida`, las cerraduras de las puertas y los IDs de ubicaciones (más catálogo/alias si existían; ese uso del catálogo se descarta en la Decisión 3). Los tramos ordenados concatenados presentan poco desorden en el muestreo lejano de `ordenar()`. Al quedar en $\le 2\%$, el selector elige inserción, aunque mezclar los tramos genera desplazamientos cuadráticos $O(n^2)$.
   - Se evita ese selector solo en el verificador, usando `ordenar_merge()` tanto al preparar índices como dentro de cada etapa. El algoritmo de alcance, diagnóstico y reporte permanece igual. Una prueba compara el resultado completo y el orden de llaves con el selector anterior sobre las criptas de las pruebas existentes.
   - El bench amplía la línea a 400 llaves e informa el cociente temporal al duplicar $50 \to 100 \to 200 \to 400$, con preprocesamiento incluido en ambas versiones y sin umbrales de tiempo dependientes de la máquina en las pruebas.
 
@@ -48,11 +48,14 @@ Este documento consolida las decisiones de diseño técnico, estructuras de dato
   - Las listas de espera se indexan por el identificador que pide la puerta.
   - Al activarse una llave obtenida $K$:
     1. Se liberan las puertas de la lista de espera asociadas a `K.id`.
-    2. Si la ficha de la llave está disponible en el catálogo local (`AlmacenFichas`) y contiene el campo `"abre"`, se liberan también las puertas de la lista de espera asociadas a `K.abre`.
-    3. Si la ficha de la llave no se encuentra en el catálogo local, se utiliza únicamente su `K.id` (sin realizar solicitudes HTTP bajo ningún concepto). Este comportamiento se documenta como un límite conocido del sistema.
+    2. Si su registro de `/llaves` contiene el campo `"abre"`, se liberan también las puertas de la lista de espera asociadas a ese valor.
+    3. Si su registro no define `abre`, se utiliza únicamente su `K.id`. La verificación no usa fichas del catálogo, ni en disco ni en memoria (FR-010).
 - **Justificación**:
   - Respeta el Principio V de la Constitución (toda solicitud HTTP debe presupuestarse). No se consumen peticiones de red para consultar atributos de fichas.
-  - Replica el comportamiento de `Partida._tiene_llave()` siempre que el catálogo local disponga de las fichas precargadas, y degrada limpiamente utilizando el `id` directo si la ficha no está almacenada.
+  - Garantiza determinismo: con el mismo esqueleto y los mismos registros de `/llaves`, cualquier equipo produce el mismo resultado y orden de llaves (FR-010, FR-012), independientemente de las fichas cargadas o guardadas.
+- **Alternativa descartada tras revisión cruzada**:
+  - Consultar el `abre` de las fichas del catálogo local (`AlmacenFichas`) cuando estuvieran disponibles y usar solo el `id` en su ausencia. Se descarta porque el resultado variaría según el contenido del catálogo en disco o en memoria de cada equipo, vulnerando el determinismo.
+  - Límite aceptado: si una apertura necesaria solo consta en el `abre` de una ficha de catálogo, la verificación reporta NO RESOLUBLE; se puede jugar con `--forzar`.
 
 ---
 

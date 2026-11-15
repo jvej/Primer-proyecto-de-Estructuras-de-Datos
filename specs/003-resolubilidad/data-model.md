@@ -20,7 +20,7 @@ Representa una conexión orientada entre la sala actual y una sala adyacente den
   - `costo` (*int*): Costo de desplazamiento por la salida. Entero mayor o igual a 1 (`costo >= 1`). Si no viene especificado en la respuesta JSON del servicio web, toma obligatoriamente el valor por defecto `100`.
   - `llave` (*str | None*): Identificador textual de la llave requerida para abrir la salida si está cerrada. Puede ser `None` si la puerta está cerrada sin llave asociada o si está abierta.
 - **Invariantes**:
-  - `costo >= 1`.
+  - `costo` debe ser un entero mayor o igual que 1; si se declara un valor inválido, se rechazan los datos con `ErrorRed`, sin corregirlo en silencio. Solo la ausencia del campo permite el valor por defecto 100 (FR-007).
   - Si `estado == "abierta"`, la puerta es transitable de inmediato en la verificación.
   - Si `estado == "cerrada"` y `llave is None`, la puerta es permanentemente infranqueable durante la verificación y forma parte de la frontera bloqueada si conecta una sala alcanzable con una no alcanzable.
 
@@ -48,7 +48,7 @@ Información devuelta por la consulta `GET /criptas/<id>/llaves` y procesada par
   - `id` (*str*): Identificador textual de la llave (ej. `"itm_llave_bronce"`).
   - `sala` (*int*): Sala donde se encuentra la llave en el suelo o sala inicial donde inicia el enemigo que la porta.
   - `enemigo` (*str | None*): Identificador de texto de la instancia de enemigo que la porta (por ejemplo `"e-1203"`), o `None` si la llave está en el suelo. En este caso, la llave reside en el campo `suelta` de dicha instancia de enemigo.
-  - `abre` (*str | None*): Identificador de la cerradura o puerta que esta llave desbloquea según su ficha del catálogo local (si existe en el catálogo local).
+  - `abre` (*str | None*): Identificador adicional de la llave pedida por una puerta que esta llave desbloquea, exclusivamente si figura en su registro de `/llaves`. No se obtiene de fichas del catálogo en disco ni en memoria (FR-010).
 - **Invariantes**:
   - En la verificación de resolubilidad, una llave se considera disponible para el jugador en el momento en que se alcanza la sala correspondiente a su `sala`.
 
@@ -64,7 +64,7 @@ Resultado estructurado emitido tras el análisis topológico de la cripta.
   - `frontera_bloqueada` (*list[tuple[int, str, int, str | None]]*): Lista de puertas cerradas adyacentes a la región explorada `(id_sala_origen, dir, id_sala_destino, llave_pedida)`. **Excluye estrictamente** puertas cuyas dos salas (origen y destino) ya son alcanzables.
   - `ubicacion_llaves` (*list[tuple[str, str]]*): Lista de pares `(id_llave, descripcion_ubicacion)` para las llaves requeridas por la frontera bloqueada o faltantes.
   - `ciclos` (*list[str]*): Lista de cadenas representativas de dependencias circulares detectadas (ej. `"itm_a -> itm_b [sala 3 (S)] -> itm_a [sala 8 (O)]"`).
-  - `motivo` (*str | None*): Mensaje explicativo cuando la verificación no se completa o se detecta una anomalía de diseño.
+  - `motivo` (*str | None*): Obligatorio y no vacío en NO RESOLUBLE y NO VERIFICADA. En NO RESOLUBLE se usa el primer texto aplicable, en este orden: `no existe puerta hacia sala_salida que pida llave_salida`; `llave_salida no puede obtenerse`; `ninguna puerta hacia sala_salida que pide llave_salida es alcanzable` (la llave se obtiene, pero todas esas puertas salen de salas inalcanzables). En NO VERIFICADA explica la causa que impidió completar la verificación (FR-014, FR-018).
 
 ---
 
@@ -91,7 +91,7 @@ Conforme a la Constitución (Principio I), está prohibido el uso de `dict` y `s
 3. **Listas de Espera (`listas_espera`)**:
    - Lista contigua de tamaño $C$ indexada por el identificador que pide la puerta, donde `listas_espera[idx_cerradura]` es una lista contigua de puertas `[(pos_origen, dir, pos_destino), ...]`.
    - Inserción en $O(1)$ amortizado al encontrar una puerta cerrada cuya llave no ha sido obtenida en una etapa previa.
-   - Al activarse una llave, se liberan las listas de espera asociadas a su `id` y, si su ficha está disponible en el catálogo local, también la lista de espera asociada a su atributo `abre`. Si la ficha no está en el catálogo local, se usa únicamente su `id` (sin realizar solicitudes HTTP).
+   - Al activarse una llave, se liberan las listas de espera asociadas a su `id` y, si su registro de `/llaves` define `abre`, también la lista de espera asociada a ese valor. Si no lo define, se usa únicamente su `id`. No se usan fichas del catálogo en disco ni en memoria, para que el resultado dependa solo del esqueleto y de `/llaves` (FR-010).
 
 4. **Frontera Bloqueada**:
    - Compuesta por las puertas cerradas $(u \to v)$ donde `visitado[u] == True` y `visitado[v] == False`.
