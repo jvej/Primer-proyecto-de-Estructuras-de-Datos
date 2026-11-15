@@ -54,7 +54,9 @@ class Partida:
         self._en_retroceso = False
         from modelo.juego.cazador import PlanificadorCazador
         self.planificador_cazador = PlanificadorCazador(self.mapa)
+        self.cache_rutas = self.planificador_cazador
         self.suscribir_invalidacion_rutas(self.planificador_cazador.invalidar_todo)
+        self.suscribir_cambio_puerta(self.planificador_cazador.notificar_cambio_puerta)
         self.suscribir_cambio_puerta(self._observar_cambio_puerta)
 
     def suscribir_cambio_puerta(self, observador) -> None:
@@ -80,7 +82,8 @@ class Partida:
             obs()
         cache = getattr(self, "cache_rutas", None)
         if cache is not None and hasattr(cache, "invalidar_todo"):
-            cache.invalidar_todo()
+            if cache.invalidar_todo not in self._observadores_invalidacion_rutas:
+                cache.invalidar_todo()
 
     def cambiar_estado_puerta(self, salida, nuevo_estado: str) -> bool:
         """Punto único centralizado de mutación de puertas (FR-008, Contrato C2).

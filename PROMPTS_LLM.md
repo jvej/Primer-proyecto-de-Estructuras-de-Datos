@@ -1,4 +1,4 @@
-# Bitácora de uso de LLM 
+# Bitácora de uso de LLM
 
 | | |
 |---|---|
@@ -416,53 +416,53 @@ Utilicé Claude como herramienta de apoyo para comprender los requisitos, obtene
 
 > Soy Mariano, responsable de la capacidad 001 de CRIPTA Parte II:
 > terreno, cazador e invalidación de rutas.
-> 
+>
 > Leé el enunciado oficial de la segunda parte, las reglas del proyecto
 > y .specify/memory/constitution.md. Revisá las especificaciones
 > existentes para usar el número 001 si continúa disponible.
-> 
+>
 > Guiame mediante spec-kit para crear la especificación de esta capacidad.
 > La redacción debe ser clara, propia de estudiantes de segundo año y
 > centrada en comportamientos observables. Las decisiones sobre
 > estructuras, clases y archivos se definirán durante la planificación.
-> 
+>
 > Mi objetivo interno es terminar el 11 de noviembre de 2026.
 > El 15 de noviembre es el límite de respaldo.
-> 
+>
 > Incluí estos requisitos funcionales con identificadores FR estables:
-> 
+>
 > 1. Cada salida admite un costo entero mayor o igual que 1. Cuando
 >    se omite, el costo es 100 y es igual en ambos sentidos.
-> 
+>
 > 2. El movimiento de cualquier actor tarda:
 >    max(1, costo_salida * 100 // velocidad).
 >    Los costos de las demás acciones conservan las reglas vigentes.
 >    Errantes y rastreadores conservan su comportamiento de elección
 >    de movimiento.
-> 
+>
 > 3. En su turno, el cazador ataca si comparte sala con el jugador.
 >    En caso contrario, determina el costo mínimo hasta la sala actual
 >    del jugador utilizando únicamente salidas abiertas.
-> 
+>
 > 4. Si falta una ruta o su costo mínimo supera el rango del cazador,
 >    espera con costo base 100. Si el costo iguala el rango, puede avanzar.
-> 
+>
 > 5. Si existe una ruta dentro del rango, avanza un paso por una ruta
 >    de costo mínimo. La acción usa el costo de la salida atravesada.
-> 
+>
 > 6. Cuando varias primeras vecinas permiten alcanzar el mismo costo
 >    mínimo, elige la vecina de menor ID.
-> 
+>
 > 7. El cazador conoce el esqueleto completo y las puertas reales.
 >    La niebla del jugador y la descarga del contenido de las salas
 >    no condicionan su decisión. El cazador no abre puertas.
-> 
+>
 > 8. Cada decisión debe coincidir con un cálculo desde cero en ese
 >    instante. Contemplar apertura y cierre de puertas, movimiento
 >    del jugador, cambios de velocidad, otros actores y retroceso.
-> 
+>
 > Incluí los siete escenarios obligatorios con dado, cuando y entonces:
-> 
+>
 > - Cazador sin ruta abierta.
 > - Ruta mínima más cara que el rango, incluyendo la prueba del límite.
 > - Ruta con más pasos y menor costo frente a otra con menos pasos y
@@ -472,13 +472,13 @@ Utilicé Claude como herramienta de apoyo para comprender los requisitos, obtene
 > - Actor con velocidad alta atravesando una salida de costo 1.
 > - Cambio de velocidad durante una salida costosa, aplicando la regla
 >   vigente de reprogramación del tiempo restante.
-> 
+>
 > Agregá escenarios para ataque al compartir sala, costo predeterminado,
 > simetría del costo, una puerta que abre una ruta antes imposible y
 > restauración de puertas mediante retroceso.
-> 
+>
 > Definí criterios SC medibles para:
-> 
+>
 > - Ciclo entre decisiones del jugador inferior a 20 ms en la cripta
 >   de referencia con decenas de cazadores activos.
 > - Búsqueda acotada al alcance del cazador.
@@ -486,15 +486,15 @@ Utilicé Claude como herramienta de apoyo para comprender los requisitos, obtene
 > - Comparación de reutilización y recálculo con puertas estables
 >   e inestables.
 > - Reproducción determinista con la misma cripta, semilla y acciones.
-> 
+>
 > Separá los resultados esperados de las mediciones pendientes.
-> 
+>
 > Después de generar la especificación, guiame por la fase de aclaración.
 > Preguntá únicamente por ambigüedades que los documentos no resuelvan.
-> 
+>
 > Mi primera implementación posterior será el costo de movimiento
 > para todos los actores, con pruebas vinculadas a los FR.
-> 
+>
 > Registrá esta solicitud de manera textual en PROMPTS_LLM.md junto
 > con mi nombre, la fecha real, la herramienta, el modelo si se conoce
 > y el uso de la respuesta.
@@ -512,65 +512,65 @@ Utilicé Claude como herramienta de apoyo para comprender los requisitos, obtene
 > Revisá y corregí specs/001-terreno-cazador/spec.md usando el
 > enunciado oficial y la constitución. Conservá los identificadores
 > FR y SC existentes y aplicá los siguientes ajustes.
-> 
+>
 > 1. Corregí FR-002. El movimiento utiliza:
 >    max(1, costo_salida * 100 // velocidad).
-> 
+>
 >    Las demás acciones conservan sus costos vigentes de P1:
 >    atacar y esperar 100, usar/equipar 50, recoger/soltar 25
 >    y abrir puertas 50.
-> 
+>
 >    Revisá esos valores contra el proyecto y el enunciado.
 >    Agregá un escenario que compruebe que introducir costos
 >    de terreno conserva los costos de las demás acciones.
-> 
+>
 > 2. Corregí SC-004 para reflejar el límite de 20 ms por ciclo
 >    entre decisiones del jugador, medido en el equipo local,
 >    sin red ni renderizado y con decenas de cazadores activos
 >    en la cripta de referencia.
-> 
+>
 >    La evaluación debe permitir detectar ciclos que excedan
 >    el límite. La media por sí sola es insuficiente.
 >    La metodología de medición se detallará en plan.md.
-> 
+>
 > 3. Reformulá SC-005 para exigir la comparación entre cálculo
 >    individual y compartido con distintos números de cazadores
 >    y rangos. La elección final y las condiciones donde conviene
 >    cada alternativa deben justificarse mediante resultados reales.
-> 
+>
 > 4. Reformulá SC-006 para exigir la comparación de reutilización
 >    frente a recálculo en escenarios de puertas estables e
 >    inestables, comprobando siempre equivalencia observable.
 >    La mejora de rendimiento queda sujeta a medición.
-> 
+>
 > 5. Reformulá SC-002 como propiedad observable de rendimiento.
 >    Para un cazador de rango pequeño, el trabajo de búsqueda
 >    debe depender de la región pertinente dentro de su alcance.
 >    El plan definirá cómo cumplirlo y medirlo, incluyendo el
 >    caso de cálculos compartidos con rangos diferentes.
-> 
+>
 > 6. Eliminá la ambigüedad de “ID alfanumérico/numérico”.
 >    Usá el orden de los identificadores definido por el contrato
 >    de datos del proyecto. Si el contrato deja una duda real,
 >    señalala para aclaración.
-> 
+>
 > 7. Revisá las frases sobre “llegar al destino” o “completar el
 >    movimiento”. Conservá la semántica temporal de la primera
 >    parte y especificá cómo el costo determina el intervalo
 >    hasta la siguiente actuación del actor.
-> 
+>
 > 8. Concretá el escenario de cambio de velocidad.
 >    Una acción de costo 300 iniciada en t=0 con velocidad 100
 >    tiene su siguiente evento en t=300. Si en t=100 cambia a
 >    velocidad 50, el tiempo restante pasa de 200 a 400 y el
 >    evento queda programado para t=500.
 >    Contrastá el ejemplo con la regla vigente de P1.
-> 
+>
 > 9. Agregá un escenario explícito de movimiento del jugador
 >    entre turnos del cazador, vinculado a FR-008.
 >    La nueva decisión debe dirigirse a su posición actual y
 >    coincidir con recalcular desde cero.
-> 
+>
 > 10. Ajustá la aclaración de alcance.
 >     Mariano es responsable de las reglas del motor para 001,
 >     sus pruebas, benchmarks, integración de mediciones y
@@ -578,7 +578,7 @@ Utilicé Claude como herramienta de apoyo para comprender los requisitos, obtene
 >     reparto acordado con Axel y Kim.
 >     Expresá esto en términos de responsabilidades y dejá
 >     las rutas de archivos y decisiones técnicas para el plan.
-> 
+>
 > Mostrame los cambios y cualquier ambigüedad pendiente.
 > Registrá este prompt textual en PROMPTS_LLM.md.
 
@@ -590,7 +590,8 @@ Utilicé Claude como herramienta de apoyo para comprender los requisitos, obtene
 - **Fecha**: 07/11/2026
 - **Herramienta**: Google Antigravity (IDE v2.0)
 - **Modelo**: Gemini 3.8 Flash / Claude Opus 4.6
-- **Uso de la respuesta**: Generar los artefactos de la fase de planificación de spec-kit (plan.md, esearch.md, data-model.md, 	asks.md) y el reporte de análisis de consistencia para la capacidad 001 (terreno, cazador e invalidación de rutas), estructurados en cuatro bloques técnicos (costos de movimiento, contrato C2 de puertas, contrato C3 del cazador e invalidación/benchmarking) bajo las restricciones de la constitución.
+- **Uso de la respuesta**: Generar los artefactos de la fase de planificación de spec-kit (plan.md,
+esearch.md, data-model.md, 	asks.md) y el reporte de análisis de consistencia para la capacidad 001 (terreno, cazador e invalidación de rutas), estructurados en cuatro bloques técnicos (costos de movimiento, contrato C2 de puertas, contrato C3 del cazador e invalidación/benchmarking) bajo las restricciones de la constitución.
 
 > Continuemos con la planificación de mi capacidad
 > 001-terreno-cazador.
@@ -762,8 +763,7 @@ Utilicé Claude como herramienta de apoyo para comprender los requisitos, obtene
 > 
 > Al terminar, mostrámelos resultados reales, las tareas
 > completadas, los archivos modificados y cualquier pendiente.
-> Entregame el contenido completo de los archivos modificados
-> para copiar y pegar.
+>
 
 
 #### 25. Inspección e implementación de puertas, avisos y retroceso (Bloque 2, T011-T014) — 07/11/2026
@@ -928,6 +928,65 @@ Utilicé Claude como herramienta de apoyo para comprender los requisitos, obtene
 > Registrá este prompt completo en PROMPTS_LLM.md.
 > Entregame resultados reales, archivos completos modificados,
 > tareas verificadas y comandos de commit. Yo hago los commits.
+
+#### 27. Invalidación reactiva de rutas con reutilización selectiva (Bloque 4, T021-T023) - 12/11/2026
+
+- **Integrante**: Mariano
+- **Fecha**: 12/11/2026
+- **Herramienta**: Google Antigravity (IDE v2.0)
+- **Modelo**: Gemini 3.8 Flash / Claude Opus 4.6
+- **Uso de la respuesta**: Implementar test-first las pruebas de invalidación reactiva de rutas para cazadores (FR-008) cubriendo cierre de puertas en ruta, apertura habilitante, apertura de atajo más barato, movimiento del jugador entre turnos, activación con mayor rango, retroceso con pergamino y cambios de puertas fuera de región; implementar en `cazador.py` la reutilización selectiva diferenciando $R_{\text{activo}}$ y $R_{\text{utilizado}}$ con verificación de validez por posición de jugador, cota de rango y filtrado de puertas afectadas según C2; corregir la doble invalidación en `Partida._notificar_invalidacion_rutas`; actualizar plan.md, research.md y tasks.md.
+
+> Continuemos T021–T023 sobre el cazador implementado.
+>
+> Leé el código actual de Partida, conocimiento, planificador
+> de «ir a», cazador y registro de retroceso. Respetá los
+> contratos existentes de Kim y Mariano.
+>
+> Primero escribí pruebas de FR-008 para:
+> - Cierre de una puerta de la ruta.
+> - Apertura que habilita una ruta antes imposible.
+> - Apertura que crea un atajo más barato.
+> - Movimiento del jugador entre turnos.
+> - Activación de un cazador con mayor rango.
+> - Retroceso que restaura puertas, jugador y enemigos.
+> - Cambios de puertas fuera de la región calculada.
+>
+> Compará las decisiones optimizadas con un cálculo desde
+> cero sobre el mismo estado. Comprobá acción, primera
+> vecina y costo de movimiento.
+>
+> Implementá la reutilización diferenciando R_activo y
+> R_utilizado. Conservá el campo únicamente cuando se pueda
+> demostrar que sigue siendo válido. Usá marcas vigentes
+> para reconocer distancias calculadas.
+>
+> Conectá la invalidación con los avisos C2 existentes.
+> Revisá _notificar_invalidacion_rutas: actualmente permite
+> observadores y una llamada directa a cache_rutas.
+> Elegí una integración que evite invalidar dos veces
+> el mismo componente por un único aviso.
+>
+> Después del pergamino descartá los datos derivados de rutas.
+> Verificá que la memoria de puertas del jugador conserve
+> las reglas de observación y retroceso. El cazador consulta
+> el estado real aunque el jugador recuerde otro.
+>
+> Autorizo ajustar plan.md, research.md y tasks.md de 001
+> para documentar la justificación y trazabilidad del cambio.
+> Si cambia una regla funcional, corregí primero spec.md
+> y prepará su commit antes del código.
+>
+> Ejecutá las pruebas completas con venv\Scripts\python.exe:
+> -m tests.test_terreno_cazador
+> -m tests.test_partida
+> -m tests.test_conocimiento_partida
+> -m tests.test_planificador_rutas
+> y las regresiones de retroceso.
+>
+> Registrá este prompt #27 textualmente en PROMPTS_LLM.md.
+> Entregame archivos completos modificados, resultados reales,
+> pendientes y comandos de git para que yo haga el commit.
 
 ---
 

@@ -157,3 +157,10 @@ Para responder a los criterios `SC-004`, `SC-005` y `SC-006`:
    - Validar en cada paso que la decisión tomada por el cazador con caché sea idéntica a la calculada desde cero (`assert decision_reutilizada == decision_desde_cero`).
 4. **Repetición de `bench_motor.py` (§5.6)**:
    - Ejecutar la agenda de eventos y el bucle de eventos incorporando cazadores activos y costos variables para contrastar contra los tiempos de la primera parte.
+
+### 4.4 Implementacin de Reutilizacin Selectiva e Invalidacin Reactiva (T021-T023)
+En la implementacin de `PlanificadorCazador` (`modelo/juego/cazador.py`):
+1. **Diferenciacin de Rangos**: Se distingue $R_{\text{activo}}$ (el rango especfico del cazador que consulta su movimiento) y $R_{\text{utilizado}}$ (la cota mxima utilizada en la ltima llamada a `dijkstra_acotado`). Si se activa un cazador con $R_{\text{activo}} > R_{\text{utilizado}}$, `es_valido()` evala a `False` y se expande el clculo automticamente.
+2. **Filtrado de Puertas C2**: Mediante `notificar_cambio_puerta(salida, anterior, nuevo)`, se verifica si al menos uno de los extremos (`salida.sala_a` o `salida.sala_b`) fue alcanzado en la bsqueda vigente con distancia $\le R_{\text{utilizado}}$. Si ambos extremos estn fuera del radio o no alcanzados, el campo de distancias se conserva y no se altera el token de bsqueda.
+3. **Descarte tras Retroceso**: Tras la invocacin de `Partida.usar_pergamino()`, la ejecucin de `deshacer_ultimo()` concluye invocando `_notificar_invalidacion_rutas()`. Se ajust dicho mtodo para evitar invalidar dos veces un mismo componente (verificando `if cache.invalidar_todo not in self._observadores_invalidacion_rutas`).
+4. **Independencia Cognitiva**: El cazador consulta siempre el estado fsico real de las puertas (`salida.esta_abierta()`), mientras que la memoria de observacin del jugador reside en `ConocimientoMapa` (`puerta_recordada`), respetando la separacin de responsabilidades de Kim y Mariano.
