@@ -37,8 +37,8 @@ Imágenes ("Poses personajes/"), PNG con fondo transparente, todos mirando a la 
                                        id exacto (objeto_itm_daga.png), si no el de su clase
                                        (objeto_arma.png); si no hay ninguno, una tarjeta de texto
 Personajes: jugador (manos vacías), jugador_espada (arma equipada), jugador_antorcha
-(antorcha encendida), jugador_armado (arma y antorcha), guardian, errante, rastreador
-y enemigo (respaldo para cualquier comportamiento desconocido).
+(antorcha encendida), jugador_armado (arma y antorcha), guardian, errante, rastreador,
+cazador y enemigo (respaldo para cualquier comportamiento desconocido).
 Se eligen por comportamiento, no por id de cripta ni de catálogo (sin importar tildes ni
 mayúsculas: "Guardián" de la API usa guardian.png). Si falta un cuadro
 se usa la imagen estática; si falta todo, una figura simple. Nunca se cae el juego.
@@ -46,8 +46,8 @@ se usa la imagen estática; si falta todo, una figura simple. Nunca se cae el ju
 Sonidos ("Sonidos/", junto a "Poses personajes/"), .ogg o .wav; el que falte no suena:
     ataque_espada / ataque_punos       el jugador ataca con arma / sin arma
     dano_jugador                       el jugador recibe daño (golpe o trampa)
-    dano_<comportamiento> / dano_enemigo       un enemigo recibe daño (dano_rastreador...)
-    muerte_<comportamiento> / muerte_enemigo   muere un enemigo
+    dano_<comportamiento> / dano_enemigo       un enemigo recibe daño (dano_rastreador, dano_cazador...)
+    muerte_<comportamiento> / muerte_enemigo   muere un enemigo (muerte_cazador...)
     pasos, puerta_abrir, trampa        corre a una puerta, abre CON LLAVE, salta una trampa
     recoger, equipar, beber, antorcha, pergamino   según el mensaje que deja la acción
     victoria, derrota                  final de la partida (los botones no suenan)
@@ -107,6 +107,7 @@ COLOR_JUGADOR = (70, 140, 80)
 COLOR_GUARDIAN = (120, 140, 175)
 COLOR_ERRANTE = (190, 70, 60)
 COLOR_RASTREADOR = (150, 90, 200)
+COLOR_CAZADOR = (215, 190, 140)
 COLOR_ENEMIGO = (160, 160, 160)
 
 SALA = pygame.Rect(30, 92, 820, 430)
@@ -172,7 +173,7 @@ class Hoja:
 class Sprites:
 
     PERSONAJES = ("jugador", "jugador_espada", "jugador_antorcha", "jugador_armado",
-                  "guardian", "errante", "rastreador", "enemigo")
+                  "guardian", "errante", "rastreador", "cazador", "enemigo")
     RESPALDO_JUGADOR = ("jugador", "jugador_espada", "jugador_antorcha", "jugador_armado")
     ANIMACIONES = (REPOSO, ATAQUE, DANO, MUERTE, CORRER)
     MAXIMO_CUADROS = 8
@@ -1513,6 +1514,11 @@ class VistaPygame(Vista):
         elif nombre == "errante":
             pygame.draw.polygon(self.pantalla, color,
                                 ((rect.centerx, rect.y), (rect.right, rect.bottom), (rect.x, rect.bottom)))
+        elif nombre == "cazador":
+            # Respaldo propio: punta de flecha hacia la derecha (persigue al jugador).
+            pygame.draw.polygon(self.pantalla, color,
+                                ((rect.x, rect.y), (rect.right, rect.centery), (rect.x, rect.bottom),
+                                 (rect.x + rect.w // 3, rect.centery)))
         else:
             pygame.draw.polygon(self.pantalla, color, ((rect.centerx, rect.y), (rect.right, rect.centery),
                                                        (rect.centerx, rect.bottom), (rect.x, rect.centery)))
@@ -1704,6 +1710,8 @@ class VistaPygame(Vista):
             return COLOR_ERRANTE
         if comportamiento == "rastreador":
             return COLOR_RASTREADOR
+        if comportamiento == "cazador":
+            return COLOR_CAZADOR
         return COLOR_ENEMIGO
 
 
