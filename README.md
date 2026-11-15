@@ -107,6 +107,8 @@ Al terminar cada partida se imprime un reporte con las solicitudes realizadas, e
 | `python main.py --gui` | Ventana Pygame; combinable con `--offline` |
 | `python main.py --offline CARPETA` | Lee respuestas desde disco, sin gastar solicitudes |
 | `python main.py --replay datos_cripta/partidas/ARCHIVO.log` | Reproduce una partida sin interacción |
+| `python main.py --replay ARCHIVO.log --hasta T` | Reproduce hasta el instante `T` e imprime el estado en ese momento, sin interfaz |
+| `python main.py --verificar CRIPTA` | Solo verifica si la cripta se puede ganar e imprime el reporte; no abre la interfaz. Combinable con `--offline` |
 | `python main.py --bench` | Corre todas las mediciones |
 | `python main.py --bench historial inventario` | Solo los subsistemas indicados |
 
@@ -119,6 +121,9 @@ Al terminar cada partida se imprime un reporte con las solicitudes realizadas, e
 | `--nombre TEXTO` | Nombre del jugador; si no se da, se pregunta al iniciar |
 | `--datos CARPETA` | Dónde guardar los archivos generados (por defecto `datos_cripta`) |
 | `--detalle` | Con `--replay`, muestra cada orden reproducida |
+| `--forzar` | Permite jugar una cripta no resoluble o que no se pudo verificar |
+| `--hasta T` | Con `--replay`, consulta el estado en el instante `T` |
+| `--checkpoint-cada K` | Acciones entre puntos de control de la línea de tiempo (10 por defecto) |
 
 ---
 
@@ -131,6 +136,9 @@ Escribí `ayuda` dentro de la partida para ver esta lista. Los números se cuent
 | Orden | Efecto |
 |---|---|
 | `n` `s` `e` `o` (o `ir n`) | Moverse |
+| `ir a <sala>` | Viajar a una sala ya explorada por la ruta más barata conocida, paso a paso |
+| `mapa` | Ver el mapa conocido y las puertas recordadas |
+| `historia <t>` o `historia #k` | Consultar el estado en el instante `t` o justo antes de la acción número `k` (no consume tiempo) |
 | `abrir n\|s\|e\|o` | Abrir una puerta |
 | `atacar [N]` | Atacar a un enemigo |
 | `esperar` o `x` | Esperar un turno |
@@ -164,6 +172,10 @@ Escribí `ayuda` dentro de la partida para ver esta lista. Los números se cuent
 | 1 / 2 / 3 | Vista por peso / valor / nombre (con Shift: descendente) |
 | I | Inventario |
 | P | Puntajes |
+| M | Mapa conocido (flechas o rueda para recorrer, Esc para cerrar) |
+| V | Ir a una sala explorada (Esc cancela el viaje; R cancela y usa un pergamino al terminar) |
+| L | Historia: escribir `t` o `#k`, Enter consulta, Esc cierra |
+| H / F1 | Ayuda |
 | F5 / F9 | Guardar / cargar |
 | Esc | Salir |
 
@@ -180,6 +192,7 @@ CARPETA/
   criptas/<id>/version.json
   criptas/<id>/salas_<n>.json
   criptas/<id>/contenido_<sala>.json
+  criptas/<id>/llaves.json
   catalogo/<id_ficha>.json
   catalogo/version.json
 ```
@@ -189,6 +202,38 @@ Para crear un paquete de prueba con una cripta sintética y jugarlo de inmediato
 ```
 python -m tests.crear_paquete_prueba
 python main.py --offline paquete_prueba/
+```
+
+---
+
+## Verificación de resolubilidad
+
+Antes de iniciar una partida nueva el programa comprueba si la cripta se puede ganar (conseguir `llave_salida` y entrar a `sala_salida` por una puerta que la pide). Usa el esqueleto y la consulta `/llaves`, que se guarda junto a la cripta y no se vuelve a pedir mientras no cambie la versión. El reporte se muestra en la interfaz activa:
+
+```
+ESTADO: RESOLUBLE | NO RESOLUBLE | NO VERIFICADA
+ORDEN DE LLAVES:            (si es resoluble, por etapas)
+LLAVES NO OBTENIBLES / FRONTERA BLOQUEADA / UBICACIÓN DE LLAVES / CICLOS DETECTADOS / MOTIVO
+```
+
+Si no es resoluble, o no se pudo verificar por falta de red o de presupuesto, la partida no inicia salvo con `--forzar`. Para verificar sin jugar:
+
+```
+python main.py --verificar CRIPTA
+```
+
+Código de salida: `0` resoluble, `1` no resoluble, `2` no verificada o cripta inexistente. Ni el replay ni la carga de una partida guardada vuelven a verificar.
+
+---
+
+## Línea de tiempo
+
+Durante la partida, `historia <t>` (o la tecla L) muestra el estado en el instante `t`: reloj, sala, vida, estadísticas, inventario, efectos, enemigos de la sala y mapa conocido. `historia #k` muestra el estado justo antes de la acción número `k`. No consume tiempo, no se escribe en la bitácora y no cambia lo que el pergamino puede deshacer. Las acciones revertidas con un pergamino desaparecen de la historia, y guardar y cargar conserva la línea completa.
+
+Se guarda un punto de control cada K acciones (10 por defecto, ajustable con `--checkpoint-cada K`). Para consultar una partida ya terminada:
+
+```
+python main.py --replay datos_cripta/partidas/ARCHIVO.log --hasta T
 ```
 
 ---
@@ -216,38 +261,74 @@ python main.py --bench
 python main.py --bench historial inventario
 ```
 
-Subsistemas disponibles: `agenda`, `red`, `cache`, `fichas`, `cripta`, `lista_ordenada`, `inventario`, `historial`, `ordenamiento`, `guardado`. Cada uno corresponde a un archivo en `bench/`.
+Subsistemas disponibles: `mapa_conocido`, `agenda`, `red`, `resolubilidad`, `cache`, `fichas`, `cripta`, `lista_ordenada`, `inventario`, `historial`, `linea_tiempo`, `ordenamiento`, `guardado`, `cazador`. Cada uno corresponde a un archivo en `bench/`.
+
+Las criptas sintéticas de las mediciones salen de `bench/generador_criptas.py` (deterministas por semilla, topología en línea o cuadrícula, costos, cazadores con rango y cadenas de llaves).
 
 ---
 
 ## Pruebas
 
-Cada archivo `test_*.py` de la carpeta `tests` se ejecuta como módulo desde la raíz:
+Cada archivo `test_*.py` de la carpeta `tests` se ejecuta como módulo desde la raíz, por ejemplo:
+
+```
+python -m tests.test_resolubilidad
+```
+
+Módulos disponibles:
 
 ```
 python -m tests.test_almacen_cripta
 python -m tests.test_almacen_fichas
 python -m tests.test_almacen_local_cache
+python -m tests.test_bench_linea_tiempo
+python -m tests.test_bench_mapa_conocido_002
+python -m tests.test_bench_resolubilidad
 python -m tests.test_cache
+python -m tests.test_carga_v4_002
+python -m tests.test_cierre_instante_t
+python -m tests.test_comentarios_ir_a_002
+python -m tests.test_conocimiento
+python -m tests.test_conocimiento_partida
 python -m tests.test_controlador
+python -m tests.test_esqueleto
+python -m tests.test_fr010_generaciones_002
+python -m tests.test_generador_criptas
 python -m tests.test_guardado_binario
+python -m tests.test_guardado_v4_002
 python -m tests.test_gui
+python -m tests.test_historia_interfaces
+python -m tests.test_historia_persistencia
+python -m tests.test_integracion_comentarios_002
 python -m tests.test_inventario
 python -m tests.test_inventario_partida
+python -m tests.test_ir_a_compuesto
+python -m tests.test_ir_a_grafico_002
+python -m tests.test_linea_tiempo
 python -m tests.test_lista_ordenada
+python -m tests.test_mapa_consola
 python -m tests.test_motor_base
+python -m tests.test_niebla_ir_a
 python -m tests.test_ordenamiento
 python -m tests.test_partida
+python -m tests.test_persistencia_cazador
+python -m tests.test_planificador_rutas
 python -m tests.test_red
 python -m tests.test_replay_puntajes
+python -m tests.test_resolubilidad
+python -m tests.test_resolubilidad_integracion
+python -m tests.test_resolubilidad_unitaria
 python -m tests.test_revision
+python -m tests.test_terreno_cazador
 ```
 
-O todos juntos con:
+Todos juntos (PowerShell), con un resumen de fallos al final:
 
 ```
-python -m unittest discover -s tests -t .
+$fallos = 0; Get-ChildItem tests -Filter 'test_*.py' | ForEach-Object { python -m ("tests." + $_.BaseName); if ($LASTEXITCODE -ne 0) { $fallos++ } }; "Módulos con fallos: $fallos"
 ```
+
+Las pruebas de interfaz gráfica (`test_gui`, `test_historia_interfaces`, `test_ir_a_grafico_002`) necesitan Pygame instalado.
 
 ---
 
@@ -257,9 +338,9 @@ Se crean dentro de `datos_cripta/` (o la carpeta que se indique con `--datos`). 
 
 | Ruta | Contenido |
 |---|---|
-| `criptas/<id>__<version>.bin` | Esqueleto y contenido persistidos por versión |
+| `criptas/<id>__<version>.bin` | Esqueleto, contenido y llaves persistidos por versión |
 | `catalogo/catalogo_<version>.bin` | Fichas del catálogo persistidas por versión |
-| `partidas/<cripta>_<fecha>_<hora>.log` | Bitácora de cada partida; se reproduce con `--replay` |
+| `partidas/<cripta>_<fecha>_<hora>.log` | Bitácora de cada partida; se reproduce con `--replay`. Las líneas `# ir a X` marcan observaciones de un viaje automático |
 | `guardados/partida.bin` | Partida guardada (formato binario propio) |
 | `puntajes.txt` | Tabla de puntajes local |
 
@@ -295,15 +376,15 @@ Los datos de cada cripta se obtienen de un servicio web de solo lectura con un p
 
 ## Uso de LLM
 
-El equipo registra los prompts utilizados en `PROMPTS_LLM.md` (§10.3).
+El equipo registra los prompts utilizados en `PROMPTS_LLM.md` (Parte I y Parte II), con fecha, autor, herramienta y modelo. Las decisiones de diseño y sus mediciones están en `DECISIONES.md`, y las especificaciones de la Parte II en `specs/001-…` a `specs/004-…`.
 
 ---
 
 ## Equipo
 
-| Integrante | Responsabilidades |
-|---|---|
-| Jeferson | Red, precarga, resolución del catálogo, bitácora en pantalla |
-| Kim | Caché persistente, ordenamiento, guardado binario |
-| Mariano | Motor: agenda de eventos, rastro, efectos, combate, retroceso |
-| Axel | Inventario, replay, puntajes, controlador e interfaz |
+| Integrante | Parte I | Parte II |
+|---|---|---|
+| Jeferson | Red, precarga, resolución del catálogo, bitácora en pantalla | 003: datos nuevos del servicio (`/llaves`, costos, cazadores), generador de criptas sintéticas, verificación de resolubilidad, `--verificar` y `--forzar`; preparación de spec-kit |
+| Kim | Caché persistente, ordenamiento, guardado binario | 002: mapa conocido y niebla, antorcha, Dijkstra propio, `ir a`, guardado v4 |
+| Mariano | Motor: agenda de eventos, rastro, efectos, combate, retroceso | 001: costos de terreno, puertas, cazador e invalidación de rutas |
+| Axel | Inventario, replay, puntajes, controlador e interfaz | 004: línea de tiempo (`historia`, `--hasta`, puntos de control) e interfaz |
