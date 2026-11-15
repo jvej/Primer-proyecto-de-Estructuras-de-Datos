@@ -97,8 +97,11 @@ def bench_ciclo():
     rapido = {"id": "ent_bench_rapido", "clase": "enemigo", "nombre": "Esqueleto", "vida_max": 10,
               "ataque": 4, "defensa": 2, "velocidad": 100, "comportamiento": "guardian", "suelta": []}
     lento = dict(rapido, id="ent_bench_lento", velocidad=5)
+    cazador = {"id": "ent_bench_cazador", "clase": "enemigo", "nombre": "Cazador", "vida_max": 10,
+               "ataque": 4, "defensa": 2, "velocidad": 100, "comportamiento": "cazador", "rango": 500, "suelta": []}
     for enemigos, ficha, texto in ((300, lento, "300 eventos pendientes, ~15 actúan por ciclo"),
-                                   (300, rapido, "300 enemigos atacando a la vez (peor caso)")):
+                                   (300, rapido, "300 enemigos atacando a la vez (peor caso)"),
+                                   (50, cazador, "50 cazadores atacando/decidiendo (§5.6 Parte II)")):
         medio, maximo, _ = medir_ciclos(enemigos, ficha, 50)
         print("%-52s %8.2f %8.2f" % (texto, medio, maximo))
 
