@@ -30,6 +30,8 @@ Una sección por cada problema de §4 resuelto, más las decisiones de rendimien
   - [13. §4.6 Pergaminos de retroceso e historial reversible](#13-46-pergaminos-de-retroceso-e-historial-reversible)
   - [14. §4.11 Bitácora de partida y reproducción](#14-411-bitácora-de-partida-y-reproducción)
   - [15. Tabla de puntajes (§2.12)](#15-tabla-de-puntajes-212)
+  - [16. Línea de tiempo (004, Parte II)](#16-línea-de-tiempo-004-parte-ii)
+  - [17. Niebla de guerra e IR_A (002, Parte II)](#17-niebla-de-guerra-e-ir_a-002-parte-ii)
 
 ---
 
@@ -1375,6 +1377,150 @@ Se confirmó que una recolección de generación 2 explica la mayor parte de eso
 | FR-010: inverso y persistente sobre destino compartido | Corrección con generaciones integrada; verificado en 617f666 | `tests.test_linea_tiempo`: `test_FR010_destino_compartido_inverso_y_persistente` y `test_FR010_no_reversibles_reubicados_y_estado_actual` |
 
 Las cuatro entregas quedan verificadas en 617f666 mediante el cierre T050/T065: los 14 módulos solicitados pasan con `venv\Scripts\python.exe -m tests.<modulo>`, incluidas las regresiones de resolubilidad, integración, replay, guardado y GUI. La revisión de solo lectura confirma la condición original de `_armar`, los contratos de resolubilidad y CLI, el inverso manual del reloj y la ausencia de cambios de Axel en `_avanzar`, así como las restricciones de estructuras y MVC. Archivos antiguos con marcas incompletas no permiten inventar las observaciones faltantes. K=10 cumple los casos medidos, pero K no limita los deltas por acción ni elimina pausas del sistema.
+
+---
+
+## 17. Niebla de guerra e IR_A (002, Parte II)
+
+Responsable: Kimberly. Base funcional publicada:
+`617f6665455e81a0ffe7311a4e60006aef1e8a2f`.
+[Especificación](specs/002-niebla-ir-a/spec.md),
+[plan](specs/002-niebla-ir-a/plan.md) y
+[matriz y mediciones](specs/002-niebla-ir-a/DECISIONES.md).
+Los seis apartados siguen la estructura del documento del equipo. El extracto
+oficial disponible cubre funcionalidad y rendimiento de 002; no se certifican
+los requisitos documentales del enunciado completo ni P1 §10.3 sin verificarlos.
+
+### 17.1 Problema
+
+Separar el conocimiento del jugador del mapa precargado, mantener memoria de
+puertas y exploración por antorcha, y navegar sin revelar información privada.
+Cada paso de IR_A debe conservar eventos, tiempo, registro y retroceso propios.
+El conocimiento debe sobrevivir al guardado y reconstruirse en la historia.
+
+### 17.2 Alternativas consideradas
+
+Son alternativas documentadas en research.md de 002, no experimentos adicionales:
+
+| Tema | Decisión frente a alternativa documentada |
+|---|---|
+| Conocimiento | Arreglos por Sala.indice frente a atributos en Sala, árboles o recorridos de listas; separan mundo real y conocimiento con acceso directo. |
+| Montículo | Eliminación perezosa frente a decrease_key con índice inverso; evita un índice auxiliar prohibido. |
+| Búsqueda | Dijkstra compartido frente a duplicar algoritmos, con arreglos y tokens independientes para cada consumidor. |
+| Navegación | Búsqueda inversa desde el destino y elección del primer vecino frente a reconstruir una ruta completa desde el jugador. |
+| Medición | Benchmark independiente conservado e integrado mediante adaptador en --bench. |
+
+No se atribuyen alternativas evaluadas sin fuente a las generaciones FR-010
+ni a T046: son correcciones de integración verificadas por pruebas.
+
+### 17.3 Decisión adoptada
+
+- **C1 de 002:** cambios indexados mediante Partida.cambiar y Registro.
+  No confundir con C1 de 004: captura histórica, que ocurre antes de escribir.
+- **Conocimiento:** N estados de sala y 4N memorias de puertas, contadores
+  mantenidos y referencias al mapa conservadas. Salas: 0 desconocida, 1 avistada,
+  2 explorada. Puertas: 0 desconocida, 1 abierta, 2 cerrada.
+- **C2:** observar sincroniza ambos extremos sin explorar la vecina. Un cambio
+  físico remoto no actualiza la memoria. Se conservan los consumidores de
+  conocimiento y la invalidación selectiva del cazador de Mariano.
+- **Antorcha y privacidad:** revela vecinas al entrar sin activar contenido
+  remoto ni observar puertas remotas. mapa_conocido y salidas_visibles filtran
+  identificadores, nombres y contenido no permitido. Las salidas tienen costo
+  y destino None si no está explorado. MAPA no consume tiempo.
+- **C3:** montículo binario propio y dijkstra_acotado sin estado global, con
+  filtro, cota inclusiva y marcas/tokens por consumidor. Sin heapq, bisect,
+  collections ni bibliotecas de rutas.
+- **C4:** solo salas exploradas y puertas recordadas abiertas; minimiza costos
+  y desempata por menor ID del primer vecino. IR_A no es orden ordinaria:
+  recalcula antes de cada movimiento, nunca abre puertas y se interrumpe por
+  llegada, enemigos vivos, daño, ausencia de ruta o final de partida.
+- **Marcas:** tras callbacks y comprobaciones de cancelación, emite # ir a X
+  inmediatamente antes de cada observación exterior efectiva, incluso sin
+  movimiento. Se preservan el orden y las repeticiones legítimas.
+- **Pygame:** V solicita destino; Escape cancela sin SALIR; R deja un único
+  pergamino pendiente ligado a la partida y ejecutado fuera del callback.
+  QUIT prevalece y descarta ese pendiente.
+- **FR-010 de 004:** generaciones exclusivamente en memoria_puertas. El inverso
+  restaura si su generación sigue vigente. Una observación permanente incrementa
+  la generación incluso con el mismo valor. No protege otras listas ni contadores.
+  Es distinto del FR-010 de privacidad de 002.
+- **Persistencia v4 y T046:** foto_de copia conocimiento y guardar utiliza
+  lineas_para_reconstruir(). Cargar aplica cada cadena con el callback de
+  preparar_reconstruccion y valida dentro del contexto antes de publicar.
+  Un error conserva la sesión anterior; no sustituye Registro ni sus arreglos.
+  Orden se importa desde modelo.juego.orden, respetando MVC.
+- **Formato:** N uint16, N estados, P uint16 y P entradas <HBB>. P cuenta
+  posiciones de memoria, incluidos ambos extremos; ceros omitidos. Bloque de
+  enemigos conservado; rango recuperado del catálogo. Rechazo explícito de v3.
+  Validación estructural y comparación con replay; no hay CRC.
+- **003:** cargar no vuelve a verificar resolubilidad; se conserva la condición
+  `partida_nueva and ordenes_previas is None and exigir_versiones is None`.
+
+### 17.4 Análisis de complejidad
+
+| Operación | Complejidad y memoria |
+|---|---|
+| Consultar estado/puerta por índice y resumen | O(1); almacenamiento persistente O(N). |
+| Consulta por ID | O(log N), búsqueda binaria propia. |
+| Explorar | Proporcional a salas y salidas directamente reveladas; sin recorrido global. |
+| Mostrar mapa completo | O(N), distinto de consultar una celda. |
+| Registrar o invertir celda | O(1); pergamino O(cambios del grupo). |
+| Dijkstra con eliminación perezosa | O((V' + E') log(V' + E')); en el grafo de grado acotado, O((V' + E') log V'). |
+| Espacio del planificador | Arreglos persistentes O(N), más montículo temporal dependiente de las relajaciones. |
+| Cargar | Replay de las líneas más validación y recuento O(N); mantiene identidad de arreglos. |
+
+V' y E' son el subgrafo alcanzable permitido por el filtro. El costo de cada
+paso puede depender de ese componente completo, no solo de la longitud de ruta.
+
+### 17.5 Evidencia empírica y funcional
+
+Resultados de ejecuciones anteriores sobre el contenido de 617f666; esta
+edición documental no vuelve a ejecutar pruebas ni benchmarks:
+
+- Cierre de integración: **42/42 módulos** por separado y **229/229 pruebas
+  unittest** conjuntas. No son cantidades sumables ni cobertura porcentual.
+- Validación posterior: **15/15 módulos** aprobados; arranque CLI offline real,
+  mapa, movimiento, turno enemigo, historia, guardar y cargar. Ventana Pygame
+  real de 1280 x 720 dibujada. No se realizó partida gráfica completa manual
+  ni validación del servicio web real.
+- Suites específicas: test_conocimiento, test_conocimiento_partida,
+  test_niebla_ir_a, test_planificador_rutas, test_ir_a_compuesto,
+  test_comentarios_ir_a_002, test_ir_a_grafico_002,
+  test_fr010_generaciones_002 (12), test_guardado_v4_002 (15),
+  test_carga_v4_002 (11), test_historia_persistencia y test_linea_tiempo.
+- FR-010 cubre permanente antes/después de reversible, mismo valor, dos extremos,
+  varios grupos/pergaminos, otras listas y ausencia de tiempo/grupos adicionales.
+  T046 cubre marcas repetidas, observaciones sin movimiento, rechazo, rollback,
+  import MVC y pergaminos posteriores a cargar.
+
+Benchmark **sintético**, Windows 11, Python 3.13.18, semilla 20261110,
+7 x 20 ejecuciones de rutas; preparación y calentamiento fuera del tiempo.
+Comando: `python main.py --bench mapa_conocido`.
+
+| Salas / conexiones | Planificar: media / máximo (ms) |
+|---|---|
+| 10 / 13 | 0,074946 / 0,478600 |
+| 100 / 180 | 0,972790 / 1,944900 |
+| 1000 / 1936 | 11,755245 / 15,624900 |
+
+La media histórica aproximada de 8,548 ms corresponde a otra medición, no a
+una línea base equivalente. Las métricas completas de consultas, exploración,
+registro/inversión, pergamino y los cuatro benchmarks de regresión están en
+DECISIONES.md de 002; no se atribuyen a una ejecución nueva de esta edición.
+
+### 17.6 Límites conocidos y cierre pendiente
+
+- **SC-001:** falta identificar la cripta oficial y medir el cálculo/recálculo
+  completo frente a 5 ms. Las 1000 salas sintéticas no son esa referencia.
+- **T030:** benchmarks ejecutados; falta comparación con línea base equivalente.
+- **T031:** pendiente cierre integral FR/SC y las evidencias anteriores. Los
+  13 fallos históricos ya están corregidos; las menciones 35/39 en documentos
+  de 002 describen su revisión anterior, no el estado funcional actual.
+- N y P tienen límites uint16; v3 se rechaza. Logs antiguos con observaciones
+  ausentes no permiten inventar marcas. No hay CRC implementado.
+- Se conserva el cierre T050/T065 de Axel en 16.6 y sus mediciones originales.
+- No se certifica P1 §10.3 ni otros requisitos académicos no leídos completos.
+  La bitácora de IA distingue extractos auténticos y resúmenes retrospectivos.
 
 ---
 

@@ -26,6 +26,7 @@ Este documento reúne los registros de uso de modelos de lenguaje (LLM) de cada 
 5. [Recursos visuales, sonido y repeticiones — Jeferson](#5-recursos-visuales-sonido-y-repeticiones--jeferson)
 6. [Parte II — Línea de tiempo (004) — Axel](#parte-ii--línea-de-tiempo-004--axel)
 7. [Parte II — Resolubilidad, datos y preparación de spec-kit (003) — Jeferson](#parte-ii--resolubilidad-datos-y-preparación-de-spec-kit-003--jeferson)
+8. [Niebla de guerra e IR_A — Kimberly, Parte II](#8-niebla-de-guerra-e-ir_a--kimberly-parte-ii)
 
 ---
 
@@ -2504,3 +2505,90 @@ Claudio se supone que ya Mariano, Axel y Kim terminaron todas sus partes y se su
 **Para qué:** Revisar el estado integrado y redactar mis secciones de `DECISIONES.md` (8b, 8c y 8d) y esta bitácora.
 
 **Resultado / qué se corrigió a mano:** Claude corrió los 42 módulos de pruebas sobre la rama integrada (39 pasan; los 3 de interfaz gráfica requieren pygame y se corren localmente) y redactó las secciones con los datos reales del bench, que revisé antes de hacer commit. Commit `4879b82`.
+
+
+---
+
+## 8. Niebla de guerra e IR_A — Kimberly, Parte II
+
+### 8.1 Alcance y fuentes
+
+Registro retrospectivo de 002 y su integración en 617f666. Herramienta
+verificable en esta conversación: Codex. No se asignan modelo, intensidad o
+fecha por consulta sin fuente original. La sección 2 conserva íntegra su
+bitácora de Parte I y sus declaraciones dentro del período allí indicado;
+no constituye una declaración de ausencia de uso de Codex en Parte II.
+
+Fuentes: mensajes originales de Kimberly disponibles en la conversación de
+trabajo, archivos y commits citados. Las solicitudes/autorizaciones no prueban
+revisión humana de cada línea; las ejecuciones del agente no se atribuyen a
+trabajo manual de Kimberly. No se afirma cumplimiento completo de P1 §10.3,
+que no se verificó en texto legible para esta consolidación.
+
+### 8.2 Extractos auténticos recuperables
+
+Son extractos literales de mensajes de usuario, no exportaciones completas.
+No se recuperaron fechas individuales. El contexto resumido figura en 8.3.
+
+Solicitud de conocimiento:
+
+> Constructor: ConocimientoMapa(n, salas_por_indice, mapa). Conservar las referencias sin copiar.
+
+Solicitud de viaje compuesto:
+
+> Implementa el parseo de "ir a <sala>", la ejecución de movimientos individuales, el recálculo antes de cada paso, las condiciones de interrupción y el registro para replay.
+
+Solicitud de protección FR-010 (extracto con sus saltos de línea):
+
+> Proteger exclusivamente el arreglo
+> conocimiento.memoria_puertas.
+
+Solicitud de T046 (extracto):
+
+> Este callback devuelve True para
+> comentarios ignorados y líneas válidas.
+>
+> Devuelve False para órdenes rechazadas.
+
+No se completan segmentos ausentes ni se agregan fechas supuestas.
+
+### 8.3 Resúmenes retrospectivos verificables
+
+Las celdas siguientes son resúmenes de consultas y resultados, NO prompts literales.
+
+| Etapa resumida | Uso y evidencia verificable |
+|---|---|
+| Contratos y proveedor C3 para Mariano | MonticuloMin y dijkstra_acotado; d67705a; test_niebla_ir_a. |
+| Conocimiento, estados, memoria y contadores | d223a1d; test_conocimiento y test_conocimiento_partida. |
+| Exploración, antorcha, privacidad y vistas | 5784bc3 y entregas posteriores; test_mapa_consola y test_ir_a_grafico_002. |
+| Planificación y viaje compuesto | PlanificadorRutas y Controlador; e13c5b3 y correcciones posteriores; test_planificador_rutas y test_ir_a_compuesto. |
+| Observador y cancelación gráfica | 75d0eb2 y efbe1f5; test_ir_a_compuesto y test_ir_a_grafico_002. |
+| Comentarios en log activo y marca por observación | 3565017 y 69dbc30; test_integracion_comentarios_002 y test_comentarios_ir_a_002. |
+| Codec y carga v4 transaccional | 5956ecb e integración posterior; test_guardado_v4_002 y test_carga_v4_002. |
+| Observaciones permanentes frente a inversos anteriores | Generaciones solo en memoria_puertas; 2d42a8a; 12 pruebas de test_fr010_generaciones_002. |
+| Conexión T045/T046 y dependencia MVC | 3c20c98; test_historia_persistencia y test_carga_v4_002. |
+| Instrumentación reproducible y --bench | f3741c8 y 75cc63e; bench_niebla_ir_a y test_bench_mapa_conocido_002; sin certificar SC-001/T030. |
+| Integración y fixtures autorizados | 617f666; resultados previos 42/42 módulos y 229/229 unittest; validación posterior 15/15 módulos. No son ejecuciones nuevas de esta edición. |
+| Consolidación documental | Solicitud actual: conservar las incorporaciones de Axel/Jeferson y editar solo estos dos documentos, sin código ni commits. |
+
+### 8.4 Spec-kit: evidencia y recuperación pendiente
+
+El historial contiene 14602fb (especificación de 002) y db75930 (plan y tareas),
+previos a implementaciones posteriores. Es evidencia de artefactos, no del
+texto exacto de una invocación. En las fuentes inspeccionadas para esta edición
+no se recuperó una invocación original de Kimberly con texto propio suficiente
+para transcribirla. No se atribuyen invocaciones de Axel/Jeferson ni contenido
+de skills a Kimberly.
+
+Pendiente: recuperar de las sesiones originales los mensajes de especificación,
+aclaración, planificación, tareas y análisis que realmente existan. Añadir fuente,
+texto y metadatos disponibles; mantener como resumen cualquier evidencia parcial.
+
+### 8.5 Límites del registro
+
+- No es una exportación exhaustiva de las sesiones; faltan transcripciones y
+  fechas verificables. La fecha de un commit no prueba la fecha de una consulta.
+- No se inventan modelos, revisiones humanas, autoría manual ni resultados.
+- Los registros originales se conservan sin reescribirlos para aparentar otro proceso.
+- Las mediciones sintéticas no acreditan SC-001 oficial.
+- El cumplimiento académico requiere verificar el texto completo de P1 §10.3.
