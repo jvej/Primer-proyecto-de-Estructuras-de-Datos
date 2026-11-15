@@ -52,7 +52,10 @@ class PruebasConocimientoPartida(unittest.TestCase):
         self.assertEqual(p.conocimiento.puerta_recordada(p.mapa.sala(2), 1), PUERTA_CERRADA)
 
     def test_FR006_FR012_abrir_autocierre_y_retroceso(self):
-        salas = esqueleto_linea(6, [(1, 2, {"cerrada": True, "llave": "itm_llave_bronce", "cierre_automatico": 50})])
+        # Ajuste por garantía de cierre de instante t: abrir toma 50 pulsos. Para que el cierre
+        # automático venza durante esperar() y no en el instante de finalización de abrir (t=50),
+        # se fija cierre_automatico=60 (> 50), preservando la secuencia de prueba diseñada por Kim.
+        salas = esqueleto_linea(6, [(1, 2, {"cerrada": True, "llave": "itm_llave_bronce", "cierre_automatico": 60})])
         esc = self.escenario(salas)
         esc.dar("itm_llave_bronce")
         esc.dar("itm_pergamino")
