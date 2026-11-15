@@ -2522,8 +2522,9 @@ no constituye una declaración de ausencia de uso de Codex en Parte II.
 Fuentes: mensajes originales de Kimberly disponibles en la conversación de
 trabajo, archivos y commits citados. Las solicitudes/autorizaciones no prueban
 revisión humana de cada línea; las ejecuciones del agente no se atribuyen a
-trabajo manual de Kimberly. No se afirma cumplimiento completo de P1 §10.3,
-que no se verificó en texto legible para esta consolidación.
+trabajo manual de Kimberly. El registro ofrece las fuentes verificables; su
+evaluación académica requiere cotejar el texto completo de P1 §10.3 y resolver
+las recuperaciones pendientes identificadas en 8.4.
 
 ### 8.2 Extractos auténticos recuperables
 
@@ -2571,18 +2572,48 @@ Las celdas siguientes son resúmenes de consultas y resultados, NO prompts liter
 | Integración y fixtures autorizados | 617f666; resultados previos 42/42 módulos y 229/229 unittest; validación posterior 15/15 módulos. No son ejecuciones nuevas de esta edición. |
 | Consolidación documental | Solicitud actual: conservar las incorporaciones de Axel/Jeferson y editar solo estos dos documentos, sin código ni commits. |
 
-### 8.4 Spec-kit: evidencia y recuperación pendiente
+### 8.4 Spec-kit: búsqueda en sesiones y evidencia pendiente
 
-El historial contiene 14602fb (especificación de 002) y db75930 (plan y tareas),
-previos a implementaciones posteriores. Es evidencia de artefactos, no del
-texto exacto de una invocación. En las fuentes inspeccionadas para esta edición
-no se recuperó una invocación original de Kimberly con texto propio suficiente
-para transcribirla. No se atribuyen invocaciones de Axel/Jeferson ni contenido
-de skills a Kimberly.
+Se inspeccionó el directorio local de sesiones de Codex indicado por Kimberly.
+Contiene un archivo JSONL disponible:
+`rollout-2026-11-08T23-28-16-01a1bec7-5367-7dc1-ac66-cce25984377c.jsonl`.
+La fecha del nombre no acredita la fecha de cada consulta. Se leyeron mensajes
+originales de usuario (response_item y event_msg), historial de reemplazo y
+mensajes retenidos de los tres bloques compactados; se excluyeron respuestas,
+código de herramientas y contenido de las skills como supuestos prompts.
 
-Pendiente: recuperar de las sesiones originales los mensajes de especificación,
-aclaración, planificación, tareas y análisis que realmente existan. Añadir fuente,
-texto y metadatos disponibles; mantener como resumen cualquier evidencia parcial.
+Resultado: **cero invocaciones históricas recuperadas con texto propio** para
+las seis fases de 002. Las menciones dentro del pedido de recuperación son
+criterios de búsqueda, no invocaciones anteriores. Se buscaron variantes
+`$speckit-*`, `/speckit-*` y `/speckit.*`.
+
+| Invocación histórica de Kimberly | Estado de recuperación | Evidencia disponible |
+|---|---|---|
+| speckit-specify | Pendiente de recuperar mensaje completo | Artefacto en 14602fb; no sustituye el prompt. |
+| speckit-clarify | Pendiente de recuperar mensaje completo | Aclaraciones en spec.md; sin mensaje original localizado. |
+| speckit-plan | Pendiente de recuperar mensaje completo | Plan y tareas en db75930; sin transcripción original. |
+| speckit-tasks | Pendiente de recuperar mensaje completo | tasks.md existente; no prueba el texto de la invocación. |
+| speckit-analyze | Pendiente de recuperar mensaje histórico completo | Las skills adjuntas ahora no prueban un análisis histórico de 002. |
+| speckit-implement | Pendiente de recuperar mensaje histórico completo | Commits y pruebas acreditan resultados, no el prompt literal. |
+
+**Adjuntos actuales identificados, separados del historial de implementación:**
+los seis contenidos de skills fueron adjuntados como mensajes de usuario en
+`2026-11-15T05:31:28.031Z` (analyze, clarify), `.032Z` (implement, plan,
+specify y tasks), equivalentes al 14 de noviembre a las 23:31:28 en Costa Rica.
+Son plantillas de instrucciones; no se transcriben aquí como consultas redactadas
+por Kimberly ni se cuentan entre las seis invocaciones históricas.
+El contexto de turno disponible identifica gpt-6.1-sol y el metadato de sesión
+identifica Codex en VS Code, CLI 0.164.0-alpha.11.1, para esa actividad actual;
+esos datos no se extrapolan a las fases anteriores. El propósito del pedido
+actual es recuperar trazabilidad y cerrar documentación, no rehacer la capacidad.
+No hay evidencia suficiente para atribuir correcciones manuales en esas fases.
+
+El historial conserva 14602fb y db75930 como evidencia de especificación y
+planificación anteriores a implementaciones posteriores. Para completar las
+transcripciones se requieren las exportaciones originales o sesiones faltantes;
+no se deducen fechas de consulta a partir de los commits ni se reconstruyen
+prompts por similitud con artefactos. No se incorporaron credenciales ni
+contenido de proyectos ajenos.
 
 ### 8.5 Límites del registro
 
@@ -2591,4 +2622,5 @@ texto y metadatos disponibles; mantener como resumen cualquier evidencia parcial
 - No se inventan modelos, revisiones humanas, autoría manual ni resultados.
 - Los registros originales se conservan sin reescribirlos para aparentar otro proceso.
 - Las mediciones sintéticas no acreditan SC-001 oficial.
-- El cumplimiento académico requiere verificar el texto completo de P1 §10.3.
+- La revisión de P1 §10.3 y la recuperación de los mensajes faltantes completarán
+  la evidencia académica; el alcance disponible queda delimitado en 8.4.

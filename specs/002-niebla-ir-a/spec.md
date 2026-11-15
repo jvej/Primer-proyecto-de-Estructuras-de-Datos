@@ -4,11 +4,21 @@
 
 **Created**: 2026-11-08
 
-**Status**: Draft
+**Status**: Implementada funcionalmente; aceptación de rendimiento pendiente
 
 **Input**: User description: "Niebla de guerra, mapa conocido y viaje automático \"ir a\" para CRIPTA. Describe solo qué pasa en el juego, sin nombrar estructuras de datos, clases ni módulos."
 
 ---
+
+## Estado de validación
+
+La verificación sobre la revisión 18b9364 ejecutó 42/42 módulos de pruebas y
+229/229 pruebas unittest conjuntas, sin fallos. Estas cifras describen la
+evidencia funcional disponible y no equivalen a cobertura exhaustiva.
+SC-001 sigue pendiente: falta identificar y medir la cripta oficial con todo
+el mapa conocido. Las mediciones sintéticas de 10, 100 y 1000 salas no la
+sustituyen. T030 y T031 conservan los pendientes documentados en tasks.md.
+Los requisitos y umbrales siguientes se mantienen sin cambios.
 
 ## Clarifications
 

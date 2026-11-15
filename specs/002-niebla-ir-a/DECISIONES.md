@@ -218,14 +218,26 @@ referencia sorted() solo comparativa, no usada en estructuras evaluadas.
 
 No hay linea base equivalente localizada; no certificar ausencia de regresiones.
 
+## Verificación posterior sobre 18b9364
+
+42/42 módulos ejecutados por separado y 229/229 unittest conjuntos aprobados,
+sin errores; ejecución conjunta de 140,442 s. Dos corridas nuevas de los cinco
+benchmarks terminaron con código 0. La sección 17.5 del
+[documento global](../../DECISIONES.md#175-evidencia-empírica-y-funcional)
+registra condiciones, valores Parte I/II, variabilidad y límites. No se vuelven
+a ejecutar aquí ni se reemplazan las mediciones históricas anteriores.
+
+Los máximos de planificación de 1000 salas sintéticas fueron 39,5715 y
+16,4738 ms; no representan la cripta oficial de SC-001. La matriz funcional
+anterior conserva sus requisitos y pruebas, pero sus referencias a fallos
+compartidos pendientes corresponden a la revisión histórica, ya superada.
+
 ## Pendientes y coordinacion
 
 - SC-001: identificar y medir la cripta oficial, sin redefinirla.
 - T030: comparacion con linea base equivalente; ejecucion y reporte ya realizados.
-- T031: cierre global de cobertura y regresiones. Ultima suite: 35/39 modulos.
-- Axel/004: nueve fallos de interfaces HISTORIA y dos de replay hasta; T045/T046 si esta integrado.
-- Mariano/T025 de 004: un fallo de simultaneos vida 28 vs 27, reproducido tambien en 004 puro.
-- Pruebas compartidas: test_gui escanea import pygame e incluye test_historia_interfaces; falso positivo MVC.
-- No se atribuyen esos pendientes como implementados por otros integrantes.
+- T031: cierre integral FR/SC pendiente; regresiones nuevas 42/42 módulos y 229/229 unittest aprobados.
+- Interfaces HISTORIA, replay hasta, eventos simultáneos y falso positivo GUI: corregidos en la integración final; ya no constituyen fallos abiertos.
+- T045/T046 y FR-010 integrados y verificados; se conserva la autoría de las entregas de cada integrante.
 - research.md conserva estimaciones de memoria no medidas en objetos Python.
-- spec.md conserva requisitos y estado Draft. Checklist previo evalua especificacion, no entrega.
+- spec.md conserva requisitos e identifica implementación funcional con rendimiento pendiente. El checklist previo evalúa especificación, no entrega.
