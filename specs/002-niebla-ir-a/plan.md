@@ -363,3 +363,121 @@ El adaptador bench/bench_mapa_conocido.py llama main([]) del benchmark existente
 la entrada BENCHES esta integrada y probada. SC-001 y comparacion T030 pendientes.
 Los nombres de pruebas propuestos en este plan son historicos; la matriz de
 DECISIONES.md y tasks.md identifica los modulos realmente ejecutados.
+
+## Ampliacion US5: mapa dibujado (FR-025..FR-038, SC-006..SC-008)
+
+Fecha: 2026-11-17. La spec confirmada es la fuente normativa; no se modifica.
+Se conserva el diseño anterior para historia, persistencia y rutas. Esta sección
+planifica únicamente el mapa dibujado y sus pruebas/documentos.
+
+### Contrato y separación MVC
+
+- `modelo/juego/mapa_dibujado.py`: registros de entrada de conocimiento, casillas,
+  conexiones y resultado; función pura `calcular_layout(conocidas, actual)`.
+  No recibe Partida, mapa completo, actores ni puertas vivas. No imprime.
+- `ConocimientoMapa` conserva exactamente el almacenamiento de f600fdd: lista simple
+  de estados, sin subclase, enlaces ni directorio derivado. Esta revisión autorizada
+  retira el diseño anterior para evitar ampliar la lógica de escrituras e inversos
+  de una estructura compartida por todas las mecánicas del juego.
+- `Partida.mapa_dibujado()`: obtiene una fotografía compacta de exploradas y sus
+  salidas conocidas. Al abrir, la foto recorre una sola vez la lista estado_salas;
+  solo accede al objeto de sala cuando el estado es EXPLORADA. No consulta topología,
+  ids, nombres o contenido de salas desconocidas para filtrar o ubicar casillas.
+  Deduplica destinos por identidad/índice, sin consultar ids ni nombres de avistadas.
+  Usa ListaOrdenada propia construida en bloque para traducir índices a referencias
+  compactas. El índice solo identifica extremos: nunca decide el orden visible.
+- Salidas públicas: casillas `(x,y,estado,id,nombre,es_jugador)`; avistadas con id y
+  nombre None. Conexiones con referencias compactas a casillas, dirección, costo,
+  memoria de puerta y llave ya expuesta. Conteos de exploradas y avistadas.
+- Controlador MAPA suministra esta foto a la vista. `mapa_conocido()` y
+  `lineas_mapa_conocido()` conservan su contrato para historia y clientes anteriores.
+- Consola dibuja ASCII por bloques horizontales y tabla de salidas, sin truncamiento.
+  Pygame solo transforma coordenadas para encuadrar, desplazar y ampliar; recibe un
+  layout ya calculado una vez. Usa primitivas y las fuentes/colores existentes.
+
+### Recorrido y colisiones
+
+1. Ordenar únicamente las exploradas por id con el ordenamiento propio. Preparar
+   el orden de avistadas recorriendo esas exploradas y sus salidas N,S,E,O; la primera
+   salida conocida que revele una avistada fija su referencia anónima y origen.
+2. BFS desde la actual solo por exploradas. Desplazamientos N=(0,-1), S=(0,1),
+   E=(1,0), O=(-1,0). Cada nivel procesa exploradas por menor id y cada sala sus
+   salidas N,S,E,O. Una cola es almacenamiento contiguo con cursor, sin quitar al
+   principio. Para componentes desconectadas, comenzar por la menor id pendiente,
+   separando sus coordenadas de las anteriores sin inventar conexiones.
+3. Resolver posiciones reclamadas en prioridad global: exploradas por menor id,
+   luego avistadas por su orden de descubrimiento. Así una reserva posterior de menor
+   prioridad nunca desplaza a otra de mayor prioridad. Las avistadas se proponen
+   adyacentes a su primera salida reveladora, desde la posición final de su origen.
+4. Para una posición ocupada, buscar anillos de distancia Manhattan r=1,2,...
+   respecto a la reclamada. Dentro de cada anillo, probar primero los ejes N,S,E,O:
+   (0,-r),(0,r),(r,0),(-r,0). Después, para a=1..r-1, probar
+   (a,-(r-a)), (a,r-a), (-a,r-a), (-a,-(r-a)). Ese orden incluye todo el anillo,
+   no repite casillas y nunca depende de ids ocultos. Conservar todos los enlaces;
+   marcar como fuera de cuadrícula los que no coincidan con el desplazamiento de
+   su dirección, aunque accidentalmente terminen adyacentes en otra orientación.
+5. Ocupación: índice propio balanceado sobre arreglos contiguos de nodos, clave
+   (x,y), con búsqueda/inserción O(log K). Alternativa: ListaOrdenada propia, cuya
+   inserción desplaza O(K) elementos. Medir ambas sin introducir dict/set.
+
+### Complejidad y mediciones previstas
+
+K = exploradas + avistadas; E = salidas conocidas; C = posiciones candidatas
+examinadas al resolver colisiones; N = longitud de estado_salas. La revisión
+solicitada barre N estados escalares una vez por apertura, con tiempo O(N).
+Después de filtrar, solo se leen objetos de salas exploradas y sus salidas conocidas;
+el dominio de la foto compacta y del layout es proporcional a K+E. La BFS cuesta
+O(K+E), además del ordenamiento de niveles. Foto: O(N + (K+E) log K).
+Con índice balanceado, apertura: O(N + (K+E+C) log K) tiempo; layout puro:
+O((K+E+C) log K). Ambos usan O(K+E) espacio temporal. Los anillos
+pueden elevar C en criptas inconsistentes; no se promete O(K+E) estricto para esas
+colisiones ni se oculta el costo de ordenar. No hay enlaces persistentes adicionales.
+El cálculo nunca reserva arreglos nuevos de tamaño N ni lee objetos desconocidos.
+El barrido de estados no se repite por fotograma. Esta decisión conserva el aislamiento
+de información y las reglas de dibujo, pero retira la independencia temporal de N
+que proponía el directorio anterior; no se declara esa propiedad para la apertura.
+La spec no se cambia para ocultar esta limitación del barrido expresamente solicitado.
+
+Medir tiempo mediano sin trazador y pico de memoria en corridas separadas con
+10,100,1000,5000 salas conocidas sintéticas; comparar índice balanceado y
+ListaOrdenada con la misma entrada, función y salida. Registrar también candidatos
+para interpretar colisiones; distinguir layout puro de construcción de la foto.
+Comando: `venv\Scripts\python.exe main.py --bench mapa_conocido`.
+
+### Validación y constitución
+
+Primero crear `tests/test_mapa_dibujado_002.py` y ejecutar en rojo. Cubrir los 17
+escenarios US5, en especial ids ocultos distintos (incluido cambio de índices),
+entorno desconocido distinto, colisiones entre las tres combinaciones de estados,
+puertas sin observar/desactualizadas, antorcha, pergamino y ausencia de efectos.
+Comparar fotos completas y salidas ASCII; probar GUI con eventos y superficie real
+bajo SDL_VIDEODRIVER=dummy, sin importar la biblioteca gráfica fuera de las pruebas
+que la necesitan. Ejecutar las 43 suites con el mismo script de auditoría,
+cada módulo en un proceso independiente desde una carpeta temporal externa y con
+bytecode deshabilitado. No modificar spec, archivos de guardado ni log. Verificar
+que conocimiento.py tiene diff vacío contra HEAD y partida.py solo agrega su método.
+Checklist de requisitos existente: 16/16 marcados. Sin dependencias nuevas.
+Los hooks opcionales de commit se omiten por prohibición explícita del usuario.
+No se ejecutan scripts que reemplacen artefactos ni se crean ramas/commits.
+
+### Evidencia después de restaurar la lista simple (2026-11-17)
+
+`venv\Scripts\python.exe main.py --bench mapa_conocido`: código 0, 35,5 s.
+Python 3.13.18, Windows 11; cinco muestras, mediana sin trazador y pico separado.
+Son medidas del layout puro: excluyen la foto y no miden el nuevo filtrado O(N).
+La función pura y la entrada sintética del benchmark no cambian en esta revisión;
+las diferencias frente a la corrida anterior no se atribuyen al barrido de estados.
+
+| Conocidas | AVL, ms | ListaOrdenada, ms | AVL, pico KiB | ListaOrdenada, pico KiB |
+|---:|---:|---:|---:|---:|
+| 10 | 0,089 | 0,225 | 8,4 | 7,6 |
+| 100 | 1,264 | 1,097 | 78,5 | 70,5 |
+| 1000 | 22,125 | 46,742 | 865,1 | 758,6 |
+| 5000 | 123,594 | 759,674 | 4444,2 | 3872,0 |
+
+Las 43 suites, ejecutadas con el mismo script de auditoría y carpetas temporales
+externas, terminaron con código 0 (168,937 s acumulados). `conocimiento.py` es
+idéntico a f600fdd; `partida.py` solo agrega seis líneas para mapa_dibujado.
+La guarda de sprites se conserva como arreglo ajeno al mapa: el método original
+de f600fdd reproduce el AttributeError en la fixture parcial; la guarda lo evita.
+Detalles de reproducción y decisión en DECISIONES.md §17.7.

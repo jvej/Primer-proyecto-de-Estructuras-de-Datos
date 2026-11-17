@@ -268,3 +268,144 @@ pruebas completadas acreditan escenarios ejecutados, no que se haya verificado
 retrospectivamente el orden test-first. T028 completa instrumentacion, no la
 certificacion de SC-001. T030 y T031 permanecen abiertas. Los checkpoints y
 comandos del plan inicial son guias, no certificaciones de suite completa.
+
+## Phase 8: US5 - mapa dibujado (ampliación 2026-11-17)
+
+Dependencias estrictas: T032 antes de T033; T033 en rojo antes de T034-T038;
+T039 después de modelo/controlador/vistas; T040-T042 después de resultados reales.
+No se reabren ni se declaran completas T030/T031 por esta ampliación.
+
+- [x] T032 [US5] Guardar diseño y tareas en specs/002-niebla-ir-a/plan.md y tasks.md para FR-025..FR-038, sin tocar spec.md.
+- [x] T033 [US5] Crear tests/test_mapa_dibujado_002.py; cubrir los 17 escenarios FR-025..FR-038 e ids ocultos, y ejecutar antes de implementar para registrar el fallo inicial.
+- [x] T034 [US5] Conservar modelo/juego/conocimiento.py idéntico a f600fdd y construir la foto en modelo/juego/mapa_dibujado.py mediante un barrido de estado_salas por apertura, accediendo únicamente a objetos explorados; documentar el costo O(N) de filtrado: FR-026, FR-028, FR-031, FR-032, FR-033, FR-037, FR-038.
+- [x] T035 [US5] Crear modelo/juego/mapa_dibujado.py con entrada pura, BFS, casillas anónimas, conexiones recordadas, conteos e índice de ocupación propio; FR-025, FR-026, FR-027, FR-031, FR-034, FR-035, FR-037.
+- [x] T036 [US5] En controlador/controlador.py entregar mapa_dibujado a la vista conservando consultas históricas; FR-025, FR-032, FR-033, FR-038.
+- [x] T037 [US5] Dibujar ASCII por bloques, tabla de salidas y enlaces desplazados en vista/vista_consola.py; conservar compatibilidad en vista/vista_base.py: FR-025, FR-026, FR-027, FR-029, FR-032, FR-035, FR-038.
+- [x] T038 [US5] Sustituir lista por mapa gráfico en vista/vista_pygame.py; conservar apertura y actualizar ayuda en vista/controles_gui.py: FR-025, FR-026, FR-027, FR-030, FR-032, FR-035, FR-036, FR-037.
+- [x] T039 [US5] Ejecutar tests/test_mapa_dibujado_002.py y las nueve suites de regresión solicitadas con el venv y SDL dummy; verificar los 17 escenarios FR-025..FR-038 y documentar pasos manuales.
+- [x] T040 [US5] Ampliar bench/bench_mapa_conocido.py para FR-031, FR-035, FR-037 y SC-007: tiempo/memoria del layout con 10,100,1000,5000 conocidas y alternativa equivalente.
+- [x] T041 [US5] Registrar decisión, evidencia, complejidad, límites y correspondencia con plan en DECISIONES.md sección 17, con enlaces a spec/plan: FR-031, FR-034, FR-035, FR-037.
+- [x] T042 [US5] Documentar controles/leyenda en README.md y prompts en PROMPTS_LLM.md, incluyendo alcance y resultados sin inventar validación manual: FR-029, FR-030, FR-036, FR-038.
+
+Cierre de fase B: revisar formato y referencias de estas once tareas. Las fases C y
+D están autorizadas en la misma solicitud; no requieren otra confirmación.
+
+### Evidencia inicial de cierre US5, antes de restaurar la lista (2026-11-17)
+
+Comandos: `venv\Scripts\python.exe -m tests.<modulo>`, con
+`SDL_VIDEODRIVER=dummy`. La corrida final de todos los módulos de la tabla terminó
+con código 0: 190 pruebas. Los conteos de suites con ejecutor propio se toman de
+su salida, sin sumarlas nuevamente como descubrimiento unittest.
+
+| Módulo | Pruebas | Resultado |
+|---|---:|---|
+| test_mapa_dibujado_002 | 21 | OK |
+| test_mapa_consola | 7 | OK |
+| test_conocimiento_partida | 9 | OK |
+| test_historia_interfaces | 9 | OK |
+| test_gui | 18 | OK |
+| test_niebla_ir_a | 8 | OK |
+| test_ir_a_compuesto | 27 | OK |
+| test_ir_a_grafico_002 | 13 | OK |
+| test_linea_tiempo | 19 | OK |
+| test_historia_persistencia | 10 | OK |
+| test_conocimiento | 7 | OK |
+| test_guardado_v4_002 | 15 | OK |
+| test_carga_v4_002 | 11 | OK |
+| test_fr010_generaciones_002 | 12 | OK |
+| test_bench_mapa_conocido_002 | 4 | OK |
+
+Rojo inicial antes del código: `venv\Scripts\python.exe -m tests.test_mapa_dibujado_002`
+salió 1 por falta del módulo modelo/juego/mapa_dibujado.py. No se presenta ese
+fallo de importación como 17 fallos independientes. Hubo fallos intermedios por
+permisos de temporales; las suites afectadas se repitieron con permiso fuera del
+aislamiento. La protección del respaldo de sprites resolvió el fallo de vista
+parcial de historia. No se alteraron las pruebas anteriores para hacerlas pasar.
+
+Medición: `venv\Scripts\python.exe main.py --bench mapa_conocido`, código 0;
+layout con 10,100,1000,5000 conocidas y alternativa equivalente. Resultados,
+complejidad real y límites en DECISIONES.md §17.7. La comprobación humana de la
+ventana no fue ejecutada; los pasos solicitados se entregan en README.md.
+La spec permanece intacta respecto del inicio de esta ejecución; su estado
+modificado frente a HEAD ya estaba presente y no se corrigió ni se confirmó aquí.
+
+### Revisión posterior: almacenamiento original del conocimiento
+
+La versión con directorio derivado fue retirada por instrucción expresa del
+usuario. Se prioriza que el mapa no cambie el almacenamiento ni los inversos de
+conocimiento. La foto barre una vez N estados y accede solo a objetos explorados;
+el layout sigue usando exclusivamente esa foto. Esto añade O(N) a la apertura,
+sin cambiar posiciones, anonimato, prioridades de colisión ni estados recordados.
+
+- [x] T043 [US5] Restaurar modelo/juego/conocimiento.py byte por byte desde f600fdd, retirar sus dependencias en modelo/juego/mapa_dibujado.py y comprobar diff vacío; FR-031, FR-032, FR-033, FR-037, FR-038.
+- [x] T044 [US5] Repetir las 43 suites desde temporales externos y medir el layout de 10,100,1000,5000 conocidas; actualizar DECISIONES.md §17.7, plan.md y tasks.md con evidencia y costo de filtrado; FR-025..FR-038 y SC-006..SC-008.
+- [x] T045 [US5] Reproducir test_historia_interfaces con la selección de sprites de f600fdd cargada en memoria; identificar la causa y documentar por qué la protección de vista/vista_pygame.py es un cambio ajeno al mapa; FR-038.
+
+### Resultados de la revisión del almacenamiento (2026-11-17)
+
+El mismo script de auditoría descubrió 43 módulos y ejecutó cada uno con
+`venv\Scripts\python.exe -m tests.<modulo>`, SDL_VIDEODRIVER=dummy y bytecode
+deshabilitado, en un temporal externo independiente. Resultado: 43/43 con
+código 0, 168,937 s acumulados. No se cambiaron los tests para que pasaran.
+
+| Módulo | Código | Tiempo, s |
+|---|---:|---:|
+| test_almacen_cripta | 0 | 0,178 |
+| test_almacen_fichas | 0 | 0,419 |
+| test_almacen_local_cache | 0 | 0,177 |
+| test_bench_linea_tiempo | 0 | 137,982 |
+| test_bench_mapa_conocido_002 | 0 | 0,465 |
+| test_bench_resolubilidad | 0 | 0,848 |
+| test_cache | 0 | 0,147 |
+| test_carga_v4_002 | 0 | 6,837 |
+| test_cierre_instante_t | 0 | 0,187 |
+| test_comentarios_ir_a_002 | 0 | 0,326 |
+| test_conocimiento | 0 | 0,256 |
+| test_conocimiento_partida | 0 | 0,263 |
+| test_controlador | 0 | 0,248 |
+| test_esqueleto | 0 | 0,231 |
+| test_fr010_generaciones_002 | 0 | 0,287 |
+| test_generador_criptas | 0 | 0,236 |
+| test_guardado_binario | 0 | 0,166 |
+| test_guardado_v4_002 | 0 | 0,869 |
+| test_gui | 0 | 0,510 |
+| test_historia_interfaces | 0 | 0,454 |
+| test_historia_persistencia | 0 | 2,201 |
+| test_integracion_comentarios_002 | 0 | 1,584 |
+| test_inventario | 0 | 0,187 |
+| test_inventario_partida | 0 | 0,200 |
+| test_ir_a_compuesto | 0 | 0,276 |
+| test_ir_a_grafico_002 | 0 | 0,819 |
+| test_linea_tiempo | 0 | 0,311 |
+| test_lista_ordenada | 0 | 0,310 |
+| test_mapa_consola | 0 | 0,278 |
+| test_mapa_dibujado_002 | 0 | 0,686 |
+| test_motor_base | 0 | 0,206 |
+| test_niebla_ir_a | 0 | 0,199 |
+| test_ordenamiento | 0 | 0,285 |
+| test_partida | 0 | 0,264 |
+| test_persistencia_cazador | 0 | 0,256 |
+| test_planificador_rutas | 0 | 0,306 |
+| test_red | 0 | 1,556 |
+| test_replay_puntajes | 0 | 3,572 |
+| test_resolubilidad | 0 | 0,561 |
+| test_resolubilidad_integracion | 0 | 0,880 |
+| test_resolubilidad_unitaria | 0 | 0,397 |
+| test_revision | 0 | 2,218 |
+| test_terreno_cazador | 0 | 0,299 |
+
+`venv\Scripts\python.exe main.py --bench mapa_conocido`: código 0, 35,5 s.
+Medianas del layout puro, cinco muestras; preparación de la foto excluida:
+
+| Conocidas | AVL, ms | ListaOrdenada, ms |
+|---:|---:|---:|
+| 10 | 0,089 | 0,225 |
+| 100 | 1,264 | 1,097 |
+| 1000 | 22,125 | 46,742 |
+| 5000 | 123,594 | 759,674 |
+
+La foto ahora añade un barrido O(N) de estados por apertura; el benchmark puro
+no mide ese barrido. Las reglas del layout y las entradas medidas no cambian.
+Decisión, memoria, complejidad y evidencia del fallo previo de sprites:
+DECISIONES.md §17.7. La spec sigue intacta. Conocimiento tiene diff vacío contra
+HEAD; Partida solo tiene seis líneas agregadas, el método mapa_dibujado.
