@@ -33,21 +33,26 @@ Imágenes ("Poses personajes/"), PNG con fondo transparente, todos mirando a la 
     puerta_1.png ... puerta_4.png      la puerta de la pared de arriba: 1 cerrada ... 4 abierta.
                                        Se gira sola para las otras paredes y solo se dibuja en
                                        las salidas que la sala tiene; al usar la llave se anima
-    objeto_<id>.png / objeto_<clase>.png   icono de un objeto del suelo: primero el de su
-                                       id exacto (objeto_itm_daga.png), si no el de su clase
-                                       (objeto_arma.png); si no hay ninguno, una tarjeta de texto
+    objeto_<id>.png / objeto_<nombre>.png / objeto_<clase>.png   icono de un objeto del suelo:
+                                       primero el de su id exacto (objeto_itm_llave_plata.png),
+                                       luego el de su nombre (objeto_llave_de_plata.png) y si no
+                                       el de su clase (objeto_llave.png); si no hay ninguno, una
+                                       tarjeta de texto
 Personajes: jugador (manos vacías), jugador_espada (arma equipada), jugador_antorcha
 (antorcha encendida), jugador_armado (arma y antorcha), guardian, errante, rastreador,
-cazador y enemigo (respaldo para cualquier comportamiento desconocido).
-Se eligen por comportamiento, no por id de cripta ni de catálogo (sin importar tildes ni
+cazador, espectro_acechador, carcelero_errante y enemigo (respaldo para cualquier
+comportamiento desconocido).
+Un enemigo usa primero el sprite que se llame como su NOMBRE ("Espectro acechador" usa
+espectro_acechador.png) y, si no hay, el de su comportamiento (sin importar tildes ni
 mayúsculas: "Guardián" de la API usa guardian.png). Si falta un cuadro
 se usa la imagen estática; si falta todo, una figura simple. Nunca se cae el juego.
 
 Sonidos ("Sonidos/", junto a "Poses personajes/"), .ogg o .wav; el que falte no suena:
     ataque_espada / ataque_punos       el jugador ataca con arma / sin arma
     dano_jugador                       el jugador recibe daño (golpe o trampa)
-    dano_<comportamiento> / dano_enemigo       un enemigo recibe daño (dano_rastreador, dano_cazador...)
-    muerte_<comportamiento> / muerte_enemigo   muere un enemigo (muerte_cazador...)
+    dano_<sprite> / dano_<comportamiento> / dano_enemigo       un enemigo recibe daño
+                                       (dano_espectro_acechador, dano_rastreador...)
+    muerte_<sprite> / muerte_<comportamiento> / muerte_enemigo muere un enemigo
     pasos, puerta_abrir, trampa        corre a una puerta, abre CON LLAVE, salta una trampa
     recoger, equipar, beber, antorcha, pergamino   según el mensaje que deja la acción
     victoria, derrota                  final de la partida (los botones no suenan)
@@ -173,7 +178,8 @@ class Hoja:
 class Sprites:
 
     PERSONAJES = ("jugador", "jugador_espada", "jugador_antorcha", "jugador_armado",
-                  "guardian", "errante", "rastreador", "cazador", "enemigo")
+                  "guardian", "errante", "rastreador", "cazador",
+                  "espectro_acechador", "carcelero_errante", "enemigo")
     RESPALDO_JUGADOR = ("jugador", "jugador_espada", "jugador_antorcha", "jugador_armado")
     ANIMACIONES = (REPOSO, ATAQUE, DANO, MUERTE, CORRER)
     MAXIMO_CUADROS = 8
@@ -240,8 +246,18 @@ class Sprites:
                 return hoja
         return None
 
+    def tiene(self, nombre):
+        """True si ese personaje tiene al menos una imagen cargada."""
+        return self._buscar(nombre) is not None
+
     def icono(self, objeto):
+        """Primero el de su id exacto (objeto_itm_llave_plata.png), luego el de su nombre
+        (objeto_llave_de_plata.png) y por último el de su clase (objeto_llave.png)."""
         imagen = self._icono("objeto_%s.png" % objeto.id)
+        if imagen is None:
+            nombre = _nombre_de_archivo(getattr(objeto, "nombre", ""))
+            if nombre != "":
+                imagen = self._icono("objeto_%s.png" % nombre)
         if imagen is None:
             imagen = self._icono("objeto_%s.png" % objeto.clase)
         return imagen
@@ -342,7 +358,10 @@ class Sonidos:
             return
         sonido = self._buscar(nombre)
         if sonido is None and respaldo is not None:
-            sonido = self._buscar(respaldo)
+            respaldos = (respaldo,) if isinstance(respaldo, str) else respaldo
+            for otro in respaldos:
+                if sonido is None:
+                    sonido = self._buscar(otro)
         if sonido is not None:
             try:
                 if durante > 0:
@@ -1145,9 +1164,13 @@ class VistaPygame(Vista):
         elif animacion.tipo == DANO and actor is jugador:
             self.sonidos.tocar("dano_jugador")
         elif animacion.tipo == DANO:
-            self.sonidos.tocar("dano_" + _tipo_de_enemigo(actor.comportamiento), "dano_enemigo")
+            sprite = self._sprite_de(actor)
+            self.sonidos.tocar("dano_" + sprite,
+                               ("dano_" + _tipo_de_enemigo(actor.comportamiento), "dano_enemigo"))
         elif animacion.tipo == MUERTE and actor is not jugador:
-            self.sonidos.tocar("muerte_" + _tipo_de_enemigo(actor.comportamiento), "muerte_enemigo")
+            sprite = self._sprite_de(actor)
+            self.sonidos.tocar("muerte_" + sprite,
+                               ("muerte_" + _tipo_de_enemigo(actor.comportamiento), "muerte_enemigo"))
         elif animacion.tipo == TRAMPA:
             self.sonidos.tocar("trampa")
         elif animacion.tipo == CORRER and actor is jugador:
@@ -1359,7 +1382,7 @@ class VistaPygame(Vista):
             etiqueta = _acortar_ids(enemigo.etiqueta())
             if tipo == "cazador":
                 etiqueta += " [CAZADOR]"
-            rect = self._dibujar_actor(enemigo, tipo, color, centro,
+            rect = self._dibujar_actor(enemigo, self._sprite_de(enemigo), color, centro,
                                        etiqueta, i == self.enemigo_elegido, -1)
             self.zonas.append((rect, ("enemigo", i)))
         if len(enemigos) > MAX_ENEMIGOS_DIBUJADOS:
@@ -1382,7 +1405,7 @@ class VistaPygame(Vista):
         if elegido:
             pygame.draw.rect(self.pantalla, SELECCION, rect.inflate(12, 12), 3)
             self._texto(self.fuente_chica, "objetivo", SELECCION, rect.centerx, rect.y - 34, centro=True)
-        if nombre_sprite == "cazador":
+        if etiqueta.endswith(" [CAZADOR]"):
             # El distintivo tiene forma propia y texto sin el recorte de la etiqueta.
             x, y = rect.right + 10, rect.y + 6
             pygame.draw.polygon(self.pantalla, TEXTO,
@@ -1417,7 +1440,8 @@ class VistaPygame(Vista):
         ahora = pygame.time.get_ticks()
         for actor, centro, transcurrido in self.animador.fantasmas(ahora):
             tipo = _tipo_de_enemigo(actor.comportamiento)
-            self._dibujar_cuerpo(tipo, self._color_de(tipo), centro, MUERTE, transcurrido)
+            self._dibujar_cuerpo(self._sprite_de(actor), self._color_de(tipo), centro,
+                                 MUERTE, transcurrido)
 
     def _dibujar_numeros(self):
         """Daño recibido flotando hacia arriba sobre quien lo recibió."""
@@ -1703,6 +1727,15 @@ class VistaPygame(Vista):
     def _texto_objeto(self, objeto):
         return "%s (%s) p%s v%s" % (objeto.nombre, objeto.clase, objeto.peso, objeto.valor)
 
+    def _sprite_de(self, enemigo):
+        """Sprite de un enemigo: primero el que se llama como su nombre (espectro_acechador),
+        si no el de su comportamiento (guardian, errante, rastreador, cazador). Si ninguno
+        tiene imágenes, el nombre del comportamiento: Sprites.hoja usa 'enemigo' de respaldo."""
+        por_nombre = _nombre_de_archivo(getattr(enemigo, "nombre", ""))
+        if por_nombre != "" and self.sprites.tiene(por_nombre):
+            return por_nombre
+        return _tipo_de_enemigo(enemigo.comportamiento)
+
     def _color_de(self, comportamiento):
         if comportamiento == "guardian":
             return COLOR_GUARDIAN
@@ -1722,6 +1755,15 @@ def _tipo_de_enemigo(comportamiento):
         if unicodedata.category(letra) != "Mn":
             limpio += letra
     return limpio
+
+
+def _nombre_de_archivo(nombre):
+    """'Espectro acechador' -> 'espectro_acechador' (sin tildes, minúsculas, guiones bajos)."""
+    texto = _tipo_de_enemigo(nombre)
+    resultado = ""
+    for letra in texto:
+        resultado += "_" if letra in " -" else letra
+    return resultado
 
 
 def _acortar_ids(texto):
