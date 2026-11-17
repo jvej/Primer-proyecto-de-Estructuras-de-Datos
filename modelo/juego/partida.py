@@ -560,6 +560,12 @@ class Partida:
                 resultado.append((sala.id, sala.nombre, self._salidas_conocidas(sala)))
         return resultado
 
+    def mapa_dibujado(self):
+        """Consulta US5: no observa puertas ni altera reloj, registro o historia."""
+        from modelo.juego.mapa_dibujado import calcular_layout, fotografia_conocimiento
+        salas, actual = fotografia_conocimiento(self.conocimiento, self.jugador.sala)
+        return calcular_layout(salas, actual)
+
     def _salidas_conocidas(self, sala) -> list:
         if not self.conocimiento.es_explorada(sala):
             return []

@@ -172,7 +172,11 @@ Escribí `ayuda` dentro de la partida para ver esta lista. Los números se cuent
 | 1 / 2 / 3 | Vista por peso / valor / nombre (con Shift: descendente) |
 | I | Inventario |
 | P | Puntajes |
-| M | Mapa conocido (flechas o rueda para recorrer, Esc para cerrar) |
+| M o botón Mapa conocido | Abrir el mapa dibujado |
+| Flechas o arrastre, dentro del mapa | Desplazar el dibujo |
+| Rueda o + / -, dentro del mapa | Cambiar el zoom |
+| C, dentro del mapa | Recentrar en el jugador |
+| Esc o Enter, dentro del mapa | Cerrar el mapa y volver al juego |
 | V | Ir a una sala explorada (Esc cancela el viaje; R cancela y usa un pergamino al terminar) |
 | L | Historia: escribir `t` o `#k`, Enter consulta, Esc cierra |
 | H / F1 | Ayuda |
@@ -180,6 +184,49 @@ Escribí `ayuda` dentro de la partida para ver esta lista. Los números se cuent
 | Esc | Salir |
 
 ---
+
+### Mapa dibujado y niebla de guerra
+
+En consola, `mapa` sin argumentos dibuja las salas con caracteres ASCII:
+`[id]` explorada, `[@id]` jugador y `(?)` avistada. Las conexiones usan `-` o
+`|` para puerta recordada abierta, `X` para cerrada, `K` para cerrada con llave
+y `?` para puerta no observada. Debajo aparecen los nombres, salidas, costos,
+estados recordados, llaves ya conocidas y conteos. Los mapas anchos se dividen
+en bloques; las conexiones desplazadas se enumeran bajo
+`Conexiones fuera de la cuadricula`.
+
+En la ventana, las exploradas muestran id y nombre abreviado; las avistadas
+son recuadros de niebla con `?`. El jugador lleva borde resaltado y un círculo.
+Verde significa abierta; rojo, cerrada; dorado, cerrada con llave; gris, puerta
+no observada. Los rótulos muestran los costos. El mapa abre centrado en el
+jugador. Los controles de desplazamiento y zoom solo actúan dentro del mapa.
+
+La niebla radial con textura suave se cachea al abrir o cambiar el zoom; las avistadas conservan un «?» tenue y bordes difuminados, y lo desconocido no lleva formas para no revelar posiciones de salas.
+
+La posición de las casillas usa exclusivamente conexiones conocidas. Las
+avistadas nunca muestran su id o nombre, ni usan esos ids ocultos para ordenar
+o resolver colisiones. El mapa respeta la última observación de cada puerta,
+aunque esté desactualizada. Consultarlo no observa puertas, consume tiempo ni
+escribe en el log. Tras un pergamino refleja el conocimiento vigente.
+
+Prueba manual en Windows, con el paquete de prueba ya presente:
+
+```powershell
+venv\Scripts\python.exe main.py --offline paquete_prueba/ --gui
+```
+
+1. Introducir el nombre y elegir una cripta en los cuadros de inicio.
+2. En la sala inicial, pulsar **M** o el botón **Mapa conocido**. Comprobar
+   el recuadro del jugador centrado, su borde y círculo, y las vecinas con `?`.
+3. Probar flechas y arrastre, rueda y `+`/`-`; pulsar **C** para recentrar.
+4. Volver con **Esc** o **Enter**. Moverse por una salida abierta indicada
+   en la sala; si hace falta abrir una puerta, usar sus controles habituales.
+5. Abrir **M** de nuevo: la sala recién visitada debe mostrar id y nombre,
+   el jugador debe estar marcado allí y los destinos aún avistados seguir con `?`.
+6. Comprobar que abrir y cerrar el mapa no cambia el reloj ni ejecuta movimientos.
+
+Estas instrucciones permiten la revisión humana; las pruebas automatizadas
+del mapa gráfico usan `SDL_VIDEODRIVER=dummy`, sin abrir una ventana visible.
 
 ## Modo sin conexión (`--offline`)
 

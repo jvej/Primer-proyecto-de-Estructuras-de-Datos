@@ -35,13 +35,15 @@ BOTONES = (
     ("space", "Atacar"), ("x", "Esperar"), ("g", "Recoger"), ("u", "Usar"),
     ("q", "Equipar"), ("t", "Soltar"), ("r", "Retroceso"), ("f5", "Guardar"),
     ("f9", "Cargar"), ("p", "Puntajes"), ("h", "Ayuda"), ("escape", "Salir"),
-    ("l", "Historia"),
+    ("l", "Historia"), ("v", "Viajar"), ("m", "Mapa conocido"),
 )
 
 AYUDA_LINEAS = (
     "L: historia (escribe t o #k; Enter consulta; Esc cierra)",
     "H / F1: ayuda",
-    "M: mapa conocido (flechas/rueda para recorrer; Esc para cerrar)",
+    "M: mapa conocido (también botón; flechas/arrastre: desplazar)",
+    "Mapa: rueda o +/- zoom; C recentrar; Esc / Enter volver",
+    "Mapa: verde abierta; rojo cerrada; dorado con llave; ? avistada",
     "Flechas: moverse          Shift + flecha: abrir puerta",
     "Clic en una puerta: moverse (o abrirla si está cerrada)",
     "Tab o clic: elegir enemigo          Espacio: atacar",

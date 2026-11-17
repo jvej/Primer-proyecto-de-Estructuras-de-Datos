@@ -506,17 +506,20 @@ class VistaPygame(Vista):
                             return orden
                         break
                     if evento.key == pygame.K_v:
-                        orden = self._pedir_ir_a(partida)
-                        if orden is not None:
-                            return self._entregar(orden)
-                        # No reutilizar eventos del lote anterior al diálogo.
-                        break
-                    shift = bool(evento.mod & pygame.KMOD_SHIFT)
-                    resultado = orden_para_tecla(pygame.key.name(evento.key), shift,
-                                                 self.enemigo_elegido, self.objeto_elegido)
+                        resultado = Orden(IR_A)
+                    else:
+                        shift = bool(evento.mod & pygame.KMOD_SHIFT)
+                        resultado = orden_para_tecla(pygame.key.name(evento.key), shift,
+                                                     self.enemigo_elegido, self.objeto_elegido)
                 elif evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
                     resultado = self._clic_en_partida(evento.pos)
                 orden = self._aplicar_seleccion(resultado, partida)
+                if orden is not None and orden.tipo == IR_A:
+                    orden = self._pedir_ir_a(partida)
+                    if orden is not None:
+                        return self._entregar(orden)
+                    # No reutilizar eventos del lote anterior al diálogo.
+                    break
                 if orden is not None and orden.tipo == HISTORIA:
                     orden = self._pedir_historia(partida)
                     if orden is not None:
@@ -545,6 +548,8 @@ class VistaPygame(Vista):
         if accion is None:
             return None
         if accion[0] == "tecla":
+            if accion[1] == "v":
+                return Orden(IR_A)
             return orden_para_tecla(accion[1], False, self.enemigo_elegido, self.objeto_elegido)
         if accion[0] == "puerta":
             return Orden(ABRIR if accion[2] == "cerrada" else MOVER, accion[1])
@@ -758,7 +763,7 @@ class VistaPygame(Vista):
 
     def mostrar_ayuda(self):
         self._modal("Controles", list(AYUDA_LINEAS) + [
-            "V: ir a una sala explorada",
+            "V o botón Viajar: ir a una sala explorada",
             "Durante IR_A: Esc cancela; R cancela y usa un pergamino al terminar.",
         ])
 
@@ -887,7 +892,170 @@ class VistaPygame(Vista):
         return None
 
     def mostrar_mapa(self, mapa):
-        """El controlador suministra exclusivamente Partida.mapa_conocido()."""
+        """Dibuja una foto ya dispuesta: el encuadre nunca consulta la partida."""
+        from modelo.juego.mapa_dibujado import MapaDibujado
+        if not isinstance(mapa, MapaDibujado):
+            return self._mostrar_mapa_textual(mapa)
+        pantalla = getattr(self, 'pantalla', None)
+        if pantalla is None:
+            pantalla = pygame.Surface((ANCHO, ALTO))
+        zona = pygame.Rect(20, 70, ANCHO - 40, 540)
+        jugador = next(c for c in mapa.casillas if c.es_jugador)
+        zoom = 1.0
+        centro = (zona.centerx, zona.centery)
+        desplazamiento = [centro[0] - jugador.x * 190, centro[1] - jugador.y * 125]
+        arrastrando = False
+
+        def escalar(factor):
+            nonlocal zoom
+            nuevo = max(0.3, min(2.5, zoom * factor))
+            relacion = nuevo / zoom
+            desplazamiento[0] = centro[0] + (desplazamiento[0] - centro[0]) * relacion
+            desplazamiento[1] = centro[1] + (desplazamiento[1] - centro[1]) * relacion
+            zoom = nuevo
+
+        def punto(c):
+            return (round(desplazamiento[0] + c.x * 190 * zoom),
+                    round(desplazamiento[1] + c.y * 125 * zoom))
+
+        niebla = None
+        zoom_niebla = None
+        while not self.cerrada:
+            for evento in self._eventos():
+                if evento.type == pygame.QUIT:
+                    self.cerrada = True
+                    return
+                if evento.type == pygame.KEYDOWN:
+                    if evento.key in (pygame.K_ESCAPE, pygame.K_RETURN):
+                        return
+                    if evento.key in (pygame.K_PLUS, pygame.K_EQUALS, pygame.K_KP_PLUS):
+                        escalar(1.2)
+                    elif evento.key in (pygame.K_MINUS, pygame.K_KP_MINUS):
+                        escalar(1 / 1.2)
+                    elif evento.key == pygame.K_c:
+                        desplazamiento[:] = [centro[0] - jugador.x * 190 * zoom,
+                                             centro[1] - jugador.y * 125 * zoom]
+                    elif evento.key == pygame.K_LEFT:
+                        desplazamiento[0] += 60
+                    elif evento.key == pygame.K_RIGHT:
+                        desplazamiento[0] -= 60
+                    elif evento.key == pygame.K_UP:
+                        desplazamiento[1] += 60
+                    elif evento.key == pygame.K_DOWN:
+                        desplazamiento[1] -= 60
+                elif evento.type == pygame.MOUSEWHEEL:
+                    escalar(1.2 ** evento.y)
+                elif evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
+                    arrastrando = zona.collidepoint(evento.pos)
+                elif evento.type == pygame.MOUSEBUTTONUP and evento.button == 1:
+                    arrastrando = False
+                elif evento.type == pygame.MOUSEMOTION and arrastrando:
+                    desplazamiento[0] += evento.rel[0]
+                    desplazamiento[1] += evento.rel[1]
+            pantalla.fill(FONDO)
+            anterior_clip = pantalla.get_clip()
+            pantalla.set_clip(zona)
+            if niebla is None or zoom_niebla != zoom:
+                # Caché local a esta apertura: arrastrar solo traslada la Surface.
+                niebla = self._crear_niebla_mapa(zoom)
+                avistada = self._crear_avistada_mapa(zoom)
+                zoom_niebla = zoom
+            pantalla.fill((4, 6, 10), zona)
+            pantalla.blit(niebla, niebla.get_rect(center=punto(jugador)))
+            for conexion in mapa.conexiones:
+                a = punto(mapa.casillas[conexion.origen])
+                b = punto(mapa.casillas[conexion.destino])
+                color = (ABIERTA if conexion.estado == 'abierta' else
+                         DORADO if conexion.estado == 'cerrada' and conexion.llave is not None else
+                         CERRADA if conexion.estado == 'cerrada' else TEXTO_TENUE)
+                hacia_niebla = (mapa.casillas[conexion.origen].id is None or
+                               mapa.casillas[conexion.destino].id is None)
+                if hacia_niebla:
+                    # Orientar el desvanecimiento desde la explorada a la avistada.
+                    desde, hasta = (b, a) if mapa.casillas[conexion.origen].id is None else (a, b)
+                    for tramo in range(24):
+                        inicio = _entre(desde, hasta, tramo / 24)
+                        fin = _entre(desde, hasta, (tramo + 1) / 24)
+                        fondo = pantalla.get_at(inicio) if zona.collidepoint(inicio) else (4, 6, 10)
+                        alfa = 0.48 * (1 - tramo / 24) ** 1.3
+                        tenue = tuple(round(fondo[i] + (color[i] - fondo[i]) * alfa) for i in range(3))
+                        pygame.draw.line(pantalla, tenue, inicio, fin, 2)
+                    color = tuple(round(canal * 0.62) for canal in color)
+                else:
+                    pygame.draw.line(pantalla, color, a, b, 3)
+                rotulo = '%s costo %s, %s' % (conexion.direccion, conexion.costo,
+                          'no observada' if conexion.estado == 'desconocida' else conexion.estado)
+                if conexion.llave is not None:
+                    rotulo += ', llave %s' % conexion.llave
+                self._texto(self.fuente_chica, rotulo, color,
+                            (a[0] + b[0]) // 2 + 8, (a[1] + b[1]) // 2 - 12)
+            for c in mapa.casillas:
+                x, y = punto(c)
+                ancho, alto = max(56, round(145 * zoom)), max(40, round(66 * zoom))
+                rect = pygame.Rect(x - ancho // 2, y - alto // 2, ancho, alto)
+                if not zona.colliderect(rect):
+                    continue
+                if c.id is None:
+                    pantalla.blit(avistada, avistada.get_rect(center=(x, y)))
+                    self._texto(self.fuente_media, '?', (79, 86, 99), x, y - 10, centro=True)
+                else:
+                    # Relleno opaco: ninguna niebla queda encima de las exploradas.
+                    pygame.draw.rect(pantalla, (38, 45, 59), rect, border_radius=6)
+                    pygame.draw.rect(pantalla, SELECCION if c.es_jugador else (133, 149, 174),
+                                     rect, 3 if c.es_jugador else 1, border_radius=6)
+                    self._texto(self.fuente, str(c.id), TEXTO, x, y - 20, centro=True)
+                    nombre = c.nombre or 'sin nombre'
+                    self._texto(self.fuente_chica, nombre[:18], TEXTO,
+                                x, y + 3, centro=True, ancho_max=ancho - 12)
+                if c.es_jugador:
+                    pygame.draw.circle(pantalla, COLOR_JUGADOR, (rect.right - 12, rect.top + 12), 6)
+                    pygame.draw.circle(pantalla, SELECCION, (rect.right - 12, rect.top + 12), 6, 1)
+            pantalla.set_clip(anterior_clip)
+            self._texto(self.fuente_media, 'Mapa conocido - Sala actual: %s %s' %
+                        (jugador.id, jugador.nombre or ''), DORADO, 30, 20)
+            self._texto(self.fuente_chica,
+                        'Leyenda: verde abierta | roja cerrada | dorada con llave | gris no observada | ? avistada (niebla, sala desconocida)',
+                        TEXTO, 30, 620)
+            self._texto(self.fuente_chica, 'Exploradas (recuadro nítido): %s | Avistadas: %s | Borde e icono: jugador' %
+                        (mapa.exploradas, mapa.avistadas), TEXTO, 30, 647)
+            self._texto(self.fuente_chica,
+                        'Flechas / arrastre: desplazar | rueda / +/-: zoom | C: recentrar | Esc / Enter: volver',
+                        DORADO, 30, 677)
+            self._mostrar_cuadro()
+
+    def _crear_niebla_mapa(self, zoom):
+        """Campo radial suave, sin consultar salas ni usar el azar de la partida."""
+        radio = max(180, round(520 * zoom))
+        # Muestreo reducido y suavizado una vez; nunca se genera por fotograma.
+        lado = 160
+        campo = pygame.Surface((lado, lado))
+        for y in range(lado):
+            ny = (2 * y / (lado - 1) - 1)
+            for x in range(lado):
+                nx = (2 * x / (lado - 1) - 1)
+                luz = max(0.0, 1 - math.hypot(nx, ny)) ** 1.7
+                ondulacion = (math.sin(nx * 12 + math.sin(ny * 8)) +
+                              math.cos(ny * 15 - nx * 5)) * 0.5
+                intensidad = luz * (0.86 + ondulacion * 0.14)
+                campo.set_at((x, y), (4 + round(28 * intensidad),
+                                      6 + round(32 * intensidad),
+                                      10 + round(39 * intensidad)))
+        return pygame.transform.smoothscale(campo, (radio * 2, radio * 2))
+
+    def _crear_avistada_mapa(self, zoom):
+        """Recuadro translúcido con capas alfa que suavizan el contorno."""
+        ancho, alto = max(56, round(145 * zoom)), max(40, round(66 * zoom))
+        margen = max(5, round(9 * zoom))
+        superficie = pygame.Surface((ancho + margen * 2, alto + margen * 2), pygame.SRCALPHA)
+        for capa in range(margen + 1):
+            rect = superficie.get_rect().inflate(-2 * capa, -2 * capa)
+            alfa = round(110 * (capa / margen) ** 1.5)
+            pygame.draw.rect(superficie, (18, 23, 33, alfa), rect,
+                             border_radius=margen + 6 - capa)
+        return superficie
+
+    def _mostrar_mapa_textual(self, mapa):
+        """Compatibilidad con consumidores anteriores; MAPA usa el dibujo."""
         lineas = lineas_mapa_conocido(mapa)
         inicio = 0
         visibles = 20
@@ -923,7 +1091,7 @@ class VistaPygame(Vista):
             self._mostrar_cuadro()
 
     def _pedir_ir_a(self, partida):
-        """Entrada de V; devuelve una orden para el controlador normal.
+        """Entrada de V o del botón Viajar; devuelve una orden para el controlador normal.
 
         Solo devuelve Orden; no ejecuta el viaje ni enumera destinos precargados.
         Esc/QUIT cancelan este diálogo sin emitir ninguna orden de partida.
@@ -1634,17 +1802,18 @@ class VistaPygame(Vista):
                     caja.x + 14, caja.y + 54)
 
     def _dibujar_botonera(self):
-        x = SALA.x
-        y = BOTONERA_Y
         columnas = (len(BOTONES) + 1) // 2
-        ancho = (SALA.w - 8 * (columnas - 1)) // columnas
-        for i in range(len(BOTONES)):
-            tecla, etiqueta = BOTONES[i]
-            self._boton(pygame.Rect(x, y, ancho, 36), etiqueta, tecla)
-            x += ancho + 8
-            if i == columnas - 1:
-                x = SALA.x
-                y += 42
+        for fila in range(2):
+            botones = BOTONES[fila * columnas:(fila + 1) * columnas]
+            espacio = SALA.w - 8 * (len(botones) - 1)
+            ancho_total = sum(self.fuente.size(etiqueta)[0] + 20 for _, etiqueta in botones)
+            x = SALA.x
+            for i, (tecla, etiqueta) in enumerate(botones):
+                ancho = espacio * (self.fuente.size(etiqueta)[0] + 20) // ancho_total
+                if i == len(botones) - 1:
+                    ancho = SALA.right - x
+                self._boton(pygame.Rect(x, BOTONERA_Y + fila * 42, ancho, 36), etiqueta, tecla)
+                x += ancho + 8
 
     def _boton(self, rect, etiqueta, tecla):
         pygame.draw.rect(self.pantalla, PANEL, rect)
@@ -1732,7 +1901,8 @@ class VistaPygame(Vista):
         si no el de su comportamiento (guardian, errante, rastreador, cazador). Si ninguno
         tiene imágenes, el nombre del comportamiento: Sprites.hoja usa 'enemigo' de respaldo."""
         por_nombre = _nombre_de_archivo(getattr(enemigo, "nombre", ""))
-        if por_nombre != "" and self.sprites.tiene(por_nombre):
+        sprites = getattr(self, 'sprites', None)
+        if por_nombre != "" and sprites is not None and sprites.tiene(por_nombre):
             return por_nombre
         return _tipo_de_enemigo(enemigo.comportamiento)
 

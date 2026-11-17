@@ -3242,3 +3242,123 @@ credenciales ni información de otros proyectos.
 - Las mediciones sintéticas no acreditan SC-001 oficial.
 - La revisión de P1 §10.3 y la recuperación de los mensajes aún no localizados
   completarán la evidencia académica; el alcance disponible queda delimitado en 8.4.
+
+### 8.6 Mapa dibujado US5 — sesión de trabajo 2026-11-17
+
+**Herramienta:** Codex. Fuente: mensajes de usuario de esta conversación y
+salidas de herramientas de la misma sesión. No se atribuye el código generado
+al trabajo manual de un integrante. No se inventa una revisión humana ni una
+prueba manual de la ventana. Los saltos escapados del mensaje se normalizan
+como párrafos; los identificadores y las instrucciones se conservan.
+
+#### 8.6.1 Contexto anterior (resumen retrospectivo, no transcripción literal)
+
+- El usuario pidió primero una especificación del mapa dibujado, con detención
+  antes del plan. El agente añadió FR-025..FR-038, SC-006..SC-008 y 17 escenarios.
+- Al solicitar B/C/D, el usuario ordenó detenerse ante contradicciones. El agente
+  detectó que el desempate general por menor id podía usar ids ocultos de avistadas.
+- El usuario autorizó corregir solo la spec: exploradas por menor id, exploradas
+  antes que avistadas, avistadas por el orden de sus salidas reveladoras y anillos
+  con orden fijo. Se precisaron FR-026, FR-031, FR-034, FR-035, escenarios 5/9/14,
+  SC-008 y la prueba prevista de ids ocultos. El usuario informó después que la
+  spec estaba confirmada. No se hizo ningún commit desde el agente.
+
+#### 8.6.2 Solicitud vigente de B, C y D (texto del usuario)
+
+> La spec está confirmada en Git (FR-025..FR-038, SC-006..SC-008, con la corrección de FR-035). No la modifiques; si encuentras otra contradicción, detente y avísame antes de seguir.
+>
+> Ejecuta ahora las fases B, C y D en este orden, siguiendo AGENTS.md y la constitución (venv\Scripts\python.exe, sin dict/set/heapq/bisect/collections/sorted en lo evaluado, MVC, determinismo, sin commit/push).
+>
+> FASE B: actualiza specs/002-niebla-ir-a/plan.md y tasks.md: layout por BFS desde la sala actual con N=(0,-1), S=(0,+1), E=(+1,0), O=(-1,0), calculado solo con salas exploradas y avistadas; reglas de colisión de FR-035 (exploradas por menor id, exploradas antes que avistadas, avistadas por orden de descubrimiento; desplazada a casilla libre más cercana por anillos con orden fijo independiente de ids ocultos, documéntalo); estructuras sin dict/set (arreglos por Sala.indice y/o ListaOrdenada con clave (x,y)); complejidad proporcional a exploradas + avistadas + salidas conocidas; mediciones previstas. Cada tarea cita su FR. Termina esta fase antes de tocar código.
+>
+> FASE C:
+> 1. Crea tests/test_mapa_dibujado_002.py con pruebas test_FR0xx_... que fallen primero y cubran los 17 escenarios, incluida test_FR031_FR035_ids_ocultos_de_avistadas_no_cambian_layout, avistada sin id ni nombre, layout idéntico si solo cambian salas desconocidas, determinismo, mapa sin consumir tiempo ni escribir en partida.log ni tocar historial/línea de tiempo ni llamar _observar_puertas, pergamino que revierte lo mostrado, antorcha encendida y colisiones.
+> 2. Modelo: función pura en un módulo nuevo de modelo/juego/ (sin Pygame ni print) que reciba solo el conocimiento del jugador y devuelva casillas (x, y, estado, id y nombre solo si explorada, es_jugador), conexiones (casillas, dirección, costo, estado recordado, llave si ya se expone) y conteos. Método en Partida que la invoque sin efectos secundarios. Las avistadas deben salir como casillas "?" (hoy solo salen como "desconocida" dentro de las salidas).
+> 3. Controlador: la orden `mapa` entrega a la vista los datos nuevos; conserva mapa_conocido() y lineas_mapa_conocido para historia y compatibilidad.
+> 4. Consola: dibujo ASCII solo con caracteres ASCII: [id] explorada, [@id] jugador, (?) avistada, "-" o "|" abierta, X cerrada, K cerrada con llave, costos junto al conector o en tabla, leyenda, sala actual, conteos y línea "Conexiones fuera de la cuadrícula" para casillas desplazadas. No truncar.
+> 5. Pygame (mostrar_mapa): dibujo con primitivas: recuadro por sala explorada con id y nombre abreviado, recuadro de niebla con "?" para avistadas, fondo de niebla oscura, líneas de salida (verde abierta, roja cerrada, dorada con llave) con rótulo de costo, sala del jugador con borde resaltado e icono, abierto centrado en el jugador. Flechas o arrastre para desplazar, rueda o +/- para zoom, C recentra, Esc/Enter vuelve, leyenda visible. Layout calculado una vez al abrir. Mantén la forma actual de abrir el mapa; si no hay tecla, añade M sin chocar con H, F1, L ni controles_gui.py.
+> 6. Corre con venv\Scripts\python.exe (SDL_VIDEODRIVER=dummy para Pygame): tests.test_mapa_dibujado_002, test_mapa_consola, test_conocimiento_partida, test_historia_interfaces, test_gui, test_niebla_ir_a, test_ir_a_compuesto, test_ir_a_grafico_002, test_linea_tiempo, test_historia_persistencia. Corrige hasta que pasen.
+> 7. Dime los pasos para probar a mano: python main.py --offline paquete_prueba/ --gui.
+>
+> FASE D: agrega a bench/bench_mapa_conocido.py la medición del layout con 10, 100, 1000 y 5000 salas conocidas; documenta en DECISIONES.md sección 17 (problema, alternativas, decisión, complejidad, evidencia, límites; enlaces a spec y plan; si coincide con el plan); actualiza README.md (controles y leyenda del mapa) y registra tus prompts en PROMPTS_LLM.md.
+>
+> Reglas: no cambies el formato de guardado ni de partida.log; ningún dato de una cripta concreta en el código; no toques archivos ajenos; no hagas commit. Al final lista archivos tocados y comandos con su resultado.
+
+#### 8.6.3 Uso y evidencia de esta sesión
+
+Se aplicaron las habilidades speckit-plan, speckit-tasks y speckit-implement al
+alcance expresamente autorizado: ampliar plan/tareas existentes, conservar la
+spec y omitir los hooks de commits. El plan y las tareas se guardaron antes de
+crear código. El primer `venv\Scripts\python.exe -m tests.test_mapa_dibujado_002`
+falló por ModuleNotFoundError del módulo aún inexistente: evidencia del paso rojo,
+no evidencia de 17 fallos individuales. Después se implementaron foto conocida,
+layout puro, índice AVL sobre arreglos, consola y Pygame; se reforzaron las pruebas
+hasta 21 casos, incluidos log real, píxeles de jugador/niebla y compatibilidad.
+
+Las primeras regresiones con archivos temporales fallaron por PermissionError en
+el aislamiento. Se solicitaron permisos de ejecución y se repitieron. Un caso
+histórico construía una vista parcial sin `sprites`; se agregó una protección
+mínima al respaldo por comportamiento en el mismo archivo de vista.
+
+El benchmark `venv\Scripts\python.exe main.py --bench mapa_conocido` terminó con
+código 0. La comparación del layout con 5000 conocidas dio medianas de 90,174 ms
+(AVL) y 564,871 ms (ListaOrdenada), con picos de 4444,2 y 3872,0 KiB. La sección
+17.7 de DECISIONES.md conserva los cuatro tamaños, método y límites. No se usa
+esa evidencia para cerrar SC-001 oficial ni los pendientes históricos T030/T031.
+Los pasos de prueba manual se documentaron en README.md; no se afirma que un
+humano los haya ejecutado. La validación gráfica automatizada usa SDL dummy.
+
+Validación final: las diez suites solicitadas y cinco adicionales de
+conocimiento/codec/carga/generaciones/benchmark terminaron con código 0, con
+190 pruebas en total. `tests.test_mapa_dibujado_002` contiene 21 casos; la tabla
+de módulos y conteos queda en tasks.md, evidencia de cierre US5. El directorio
+derivado pasó las regresiones de guardado/carga y retroceso sin cambiar formatos.
+No se modificó spec.md durante esta ejecución ni se hicieron commits/push.
+
+### 8.7 Ajuste visual de niebla en Pygame (2026-11-17)
+
+#### Prompt del usuario
+
+> Tarea solo visual en Pygame: mejorar el aspecto de la niebla en vista/vista_pygame.py, en la función que dibuja el mapa (mostrar_mapa y sus auxiliares). No cambies lógica, datos, layout, modelo, controlador, consola, spec ni formatos.
+>
+> Antes de empezar, lee FR-025..FR-038 de specs/002-niebla-ir-a/spec.md. Si alguna exige un aspecto concreto para las avistadas (por ejemplo el símbolo "?") que choque con lo siguiente, mantén el requisito y dime qué no pudiste cambiar. No modifiques la spec.
+>
+> Cambios pedidos (solo con primitivas de Pygame, sin imágenes externas):
+> 1. Fondo de niebla continuo para lo desconocido: degradado radial centrado en el jugador (más claro cerca, casi negro lejos) con una textura suave de neblina que no dependa de ninguna posición de salas. NO dibujes casillas, siluetas ni formas en las posiciones desconocidas: eso revelaría información que el jugador no tiene.
+> 2. Salas avistadas: recuadro oscuro semitransparente con borde difuminado (varias capas de alfa), con un "?" muy tenue (conserva el símbolo). Sin id, sin nombre.
+> 3. Líneas de puerta hacia una avistada: más tenues, con desvanecimiento al acercarse a ella. Conserva el color por estado (verde abierta, roja cerrada, dorada con llave) en las puertas entre exploradas.
+> 4. Salas exploradas: nítidas y brillantes, sin niebla encima; la sala del jugador sigue con borde resaltado e icono.
+> 5. Rendimiento: genera el degradado y la textura UNA vez al abrir el mapa (o al cambiar de tamaño/zoom) en una Surface cacheada; no los recalcules por fotograma. El desplazamiento y el zoom deben seguir fluidos.
+> 6. La leyenda debe seguir explicando: explorada, avistada (niebla con "?"), puerta abierta/cerrada/con llave y jugador.
+>
+> Pruebas: corre tests.test_gui, tests.test_mapa_dibujado_002 y tests.test_historia_interfaces con SDL_VIDEODRIVER=dummy; deben seguir pasando. Si alguna prueba de dibujo depende de colores o primitivas exactas, actualízala solo si cambió por este motivo y dime cuál. Actualiza la sección del mapa del README y DECISIONES §17.7 con una línea sobre el cambio visual y por qué no se dibujan formas en lo desconocido. Registra tu prompt en PROMPTS_LLM.md. No hagas commit.
+>
+> Al final lista los archivos tocados y confirma con git diff que conocimiento.py, partida.py, modelo/juego/mapa_dibujado.py y el controlador no cambiaron en esta tarea.
+
+#### Resultado y validación
+
+Se leyeron FR-025..FR-038 antes de editar. FR-026 y FR-030 exigen el recuadro
+con «?» para avistadas; se conserva, sin conflicto con lo solicitado. El campo
+radial combina ondas suaves deterministas sin consultar posiciones de salas
+ni consumir azar. Se genera a resolución reducida y se suaviza en una Surface
+local por apertura/zoom; desplazar y recentrar solo la trasladan. Las avistadas
+usan capas alfa, las líneas hacia ellas se atenúan y las exploradas tienen
+relleno opaco y bordes luminosos. Se conserva el layout y los controles.
+
+Se actualizó únicamente la prueba gráfica
+`test_FR030_FR036_11_controles_graficos_y_marca`: el píxel antes exigido como
+MURO sólido ahora debe ser oscuro y distinto de MURO por la transparencia.
+También comprueba tres generaciones de niebla: apertura y dos cambios de zoom,
+sin regenerarla durante desplazamiento ni recentrado.
+
+Comandos: `venv\Scripts\python.exe -m tests.test_gui` (18 pruebas),
+`venv\Scripts\python.exe -m tests.test_mapa_dibujado_002` (21 pruebas) y
+`venv\Scripts\python.exe -m tests.test_historia_interfaces` (9 pruebas), todos
+con `SDL_VIDEODRIVER=dummy`, salida 0. Las dos últimas suites necesitaron
+ejecución autorizada fuera del aislamiento por PermissionError al escribir
+sus registros temporales. No se modificaron esas pruebas para evitar el error.
+
+El árbol ya contenía cambios previos. Se compararon el diff de Git y las huellas
+SHA-256 iniciales/finales de conocimiento.py, partida.py, mapa_dibujado.py y
+los archivos del controlador: sin cambios durante esta tarea. No se modificó
+la spec ni se hicieron commits.

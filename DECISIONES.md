@@ -1240,6 +1240,136 @@ No aparecieron archivos nuevos/eliminados dentro del repositorio.
 
 ---
 
+### 17.7 Mapa dibujado US5: disposición sin información oculta (2026-11-17)
+
+**Ajuste visual:** niebla radial texturada cacheada por apertura/zoom, avistadas con capas alfa y «?» tenue, conexiones que se desvanecen y exploradas nítidas; no se dibujan formas en lo desconocido porque revelarían posiciones de salas (FR-026, FR-030, FR-031).
+
+**Trazabilidad:** [especificación FR-025..FR-038, SC-006..SC-008](specs/002-niebla-ir-a/spec.md),
+[plan de la ampliación US5](specs/002-niebla-ir-a/plan.md#ampliacion-us5-mapa-dibujado-fr-025fr-038-sc-006sc-008)
+y [tareas T032..T042](specs/002-niebla-ir-a/tasks.md).
+
+**Problema.** El mapa anterior presentaba un listado de exploradas; las avistadas
+solo aparecían como destinos desconocidos. Había que dibujar ambas sin consultar
+topología desconocida, actualizar observaciones de puertas ni alterar la partida.
+La privacidad incluye posiciones y orden: cambiar ids ocultos de avistadas no
+puede modificar el dibujo ni los textos.
+
+**Alternativas.** Usar la disposición de la cripta completa violaría FR-031.
+Filtrar la lista de estados en cada apertura cuesta O(N), aunque haya pocas
+conocidas; se elige ese barrido para no modificar el almacenamiento compartido
+del conocimiento. Solo después de filtrar se accede a los objetos explorados.
+Reservar una matriz rectangular para la ocupación
+puede requerir espacio cuadrático en K. Una ListaOrdenada propia evita tablas
+hash pero desplaza O(K) elementos al insertar. Se comparó esta última con un
+índice AVL propio sobre arreglos contiguos, para el mismo layout y la misma entrada.
+No se añadieron dependencias ni estructuras prohibidas.
+
+**Decisión revisada.** Por instrucción expresa del usuario se restaura
+`modelo/juego/conocimiento.py` byte por byte desde f600fdd. `estado_salas` vuelve
+a ser una lista simple: se retiran la subclase, sus enlaces y el directorio de
+exploradas. Así el mapa no añade comportamiento a las escrituras, segmentos o
+inversos del conocimiento ni memoria persistente adicional. No cambian el formato
+v4, el log, las acciones, las puertas ni el retroceso. La foto recorre la lista
+de estados una vez por apertura; solo cuando una celda vale EXPLORADA accede
+al objeto correspondiente. Nunca consulta ids, nombres, topología o contenido
+de objetos desconocidos para filtrar o posicionar casillas. ListaOrdenada
+se construye en bloque para deduplicar extremos por índice. Esos índices solo
+identifican extremos; no deciden el orden público. Las avistadas salen con id y
+nombre None y sin salidas propias.
+
+El cálculo puro recibe esa foto y la posición del jugador. La BFS usa N,S,E,O y
+exploradas por menor id dentro de cada nivel. La asignación de casillas prioriza
+exploradas por menor id, luego avistadas por su primera salida reveladora al recorrer
+exploradas por id y direcciones N,S,E,O. Las avistadas se proponen desde la posición
+final de la explorada que las revela. Los anillos Manhattan prueban primero
+N,S,E,O y después, para a=1..r-1, (a,-(r-a)), (a,r-a), (-a,r-a), (-a,-(r-a)).
+El índice AVL almacena ocupación por (x,y); el orden nunca usa ids ocultos.
+Las conexiones desplazadas conservan dirección, costo y memoria. La consulta
+histórica y el contrato anterior de mapa conocido se conservan.
+
+Consola representa ASCII por bloques y tabla; la ventana usa primitivas y encuadre
+local para desplazamiento, zoom y recentrado, sin recalcular posiciones por cuadro.
+Se conserva M y el botón existentes. Una protección en la selección de sprites
+permite que la vista parcial usada por la regresión histórica funcione sin catálogo.
+
+**Cambio ajeno al mapa: guarda de sprites.** El test
+`tests/test_historia_interfaces.py:189` llama `_dibujar_enemigos` con una vista
+fabricada mediante `object.__new__` por `tests/test_gui.py:188`, sin ejecutar
+el constructor ni crear `sprites`. La selección original de sprites en
+`f600fdd:vista/vista_pygame.py:1735` evaluaba
+`if por_nombre != "" and self.sprites.tiene(por_nombre):` y lanzaba AttributeError.
+Se reprodujo el mismo test sustituyendo solo ese método por el de f600fdd cargado
+en memoria, sin editar archivos: un error por atributo `sprites` inexistente.
+Con la guarda actual, el mismo test pasa. Ambos archivos de pruebas tienen diff
+vacío contra f600fdd; `git blame` sitúa la línea causante en ese commit previo.
+Por tanto, se conserva la guarda como corrección de un fallo anterior del repositorio,
+expresamente ajena al mapa; no se atribuye el fallo al nuevo dibujante.
+
+**Complejidad.** K = exploradas + avistadas, E = salidas conocidas y C = posiciones
+candidatas examinadas; N es la longitud de la lista de estados de conocimiento.
+Filtrar esa lista cuesta O(N) una vez por apertura. La foto compacta y el layout
+solo contienen K casillas y E salidas conocidas. La BFS sin ordenar es O(K+E);
+el layout puro cuesta O((K+E+C) log K) y la apertura completa cuesta
+O(N + (K+E+C) log K), con O(K+E) espacio temporal adicional.
+No se afirma independencia temporal de N para la apertura ni linealidad estricta
+del layout completo. C puede crecer con las
+colisiones. La alternativa ListaOrdenada agrega hasta O(K²) por desplazamientos.
+Se eliminan los dos arreglos persistentes de enlaces por índice. El barrido no
+reserva otro arreglo de tamaño N ni se repite por fotograma. Mostrar ASCII depende
+además del área dibujada y sus bloques; repintar la GUI recorre las casillas y enlaces
+conocidos, sin reconstruir su disposición.
+
+**Evidencia de medición.** Comando:
+`venv\Scripts\python.exe main.py --bench mapa_conocido`, salida 0, 35,5 s en la
+corrida posterior a restaurar la lista simple. Python 3.13.18, Windows 11
+(10.0.26200). Entrada sintética determinista:
+cuadrícula de K exploradas, ancho floor(sqrt(K)), sala actual primera, costos
+generados de 1 a 7; E cuenta salidas dirigidas. Calentamiento y construcción de
+entrada excluidos. Mediana de cinco muestras con GC normal y sin trazador; pico
+de memoria de una llamada separada con tracemalloc, excluyendo la entrada.
+Cada alternativa se valida contra el mismo resultado antes de medir.
+
+| K | E | AVL, ms | ListaOrdenada, ms | AVL, pico KiB | ListaOrdenada, pico KiB | C |
+|---:|---:|---:|---:|---:|---:|---:|
+| 10 | 26 | 0,089 | 0,225 | 8,4 | 7,6 | 10 |
+| 100 | 360 | 1,264 | 1,097 | 78,5 | 70,5 | 100 |
+| 1000 | 3872 | 22,125 | 46,742 | 865,1 | 758,6 | 1000 |
+| 5000 | 19716 | 123,594 | 759,674 | 4444,2 | 3872,0 | 5000 |
+
+En 5000 conocidas, AVL fue aproximadamente 6,15 veces más rápido y usó un pico
+aproximadamente 14,8 % mayor. En tamaños pequeños no hay ventaja consistente.
+Esta evidencia respalda el intercambio entre tiempo y memoria, no una mejora
+universal. El benchmark previo de rutas continúa ejecutándose antes del layout;
+sus mediciones sintéticas no certifican SC-001 oficial.
+El layout puro no se modificó en esta revisión: estas diferencias respecto de la
+corrida anterior son nuevas mediciones, no una mejora o regresión atribuible al
+barrido de estados. El benchmark excluye la preparación de la foto y, por tanto,
+no mide el costo O(N) incorporado a la apertura.
+
+Se repitieron las 43 suites mediante el mismo script de auditoría: cada módulo
+se ejecutó con `venv\Scripts\python.exe -m tests.<modulo>` desde una carpeta
+temporal externa, SDL_VIDEODRIVER=dummy y bytecode deshabilitado. Las 43 salieron
+con código 0, con 168,937 s acumulados. La tabla completa está en tasks.md,
+revisión posterior del almacenamiento. Las 21 pruebas del mapa siguen pasando
+sin modificar el archivo de pruebas para aceptar la restauración.
+
+**Correspondencia con el plan y límites.** Revisa la ampliación US5 de fase B:
+se conserva foto compacta, BFS, prioridades, anillos, AVL y comparación con
+ListaOrdenada, pero se retira el directorio de exploradas para conservar intacto
+el almacenamiento original. Esta decisión y el costo O(N) del barrido solicitado
+están reflejados en plan.md y T034/T043/T044. Amplía el plan
+original de 002, que mostraba un listado O(N). La spec no se modifica; el barrido
+autorizado no permite acreditar independencia temporal de N para preparar la foto.
+La medición anterior es del layout puro; excluye la foto, la impresión y el dibujo
+gráfico. No es una prueba de estrés del peor caso de colisiones: aquí C=K. Las
+pruebas de aceptación cubren colisiones y cambios de ids ocultos e índices,
+desconocidas adicionales y ausencia de iteración de objetos de salas desconocidas.
+La validación gráfica se hace con SDL dummy; los pasos para una revisión humana
+de la ventana están en README.md. No se declara realizada esa revisión manual.
+Los pendientes anteriores SC-001, T030 y T031 no se cierran por esta ampliación.
+
+---
+
 # Parte de Axel — Inventario, retroceso, replay y puntajes
 
 ## 12. §4.5 Inventario

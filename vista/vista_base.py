@@ -95,8 +95,14 @@ class Vista(ABC):
         return None
 
     def mostrar_mapa(self, mapa):
-        """Presentación textual compatible; recibe datos ya filtrados por Partida."""
-        self.mostrar_aviso("\n".join(lineas_mapa_conocido(mapa)))
+        """Recibe el dibujo filtrado o el formato anterior para compatibilidad."""
+        from modelo.juego.mapa_dibujado import MapaDibujado
+        if isinstance(mapa, MapaDibujado):
+            from vista.vista_consola import lineas_mapa_dibujado
+            lineas = lineas_mapa_dibujado(mapa)
+        else:
+            lineas = lineas_mapa_conocido(mapa)
+        self.mostrar_aviso("\n".join(lineas))
 
     def elegir_repeticion(self, entradas):
         """entradas: bitacora_partida.EntradaLog, de la más nueva a la más vieja.

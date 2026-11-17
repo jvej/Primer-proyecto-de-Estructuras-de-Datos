@@ -288,7 +288,7 @@ class Controlador:
         tipo = orden.tipo
         if tipo == MAPA:
             if self.vista is not None:
-                self.vista.mostrar_mapa(self.partida.mapa_conocido())
+                self.vista.mostrar_mapa(self.partida.mapa_dibujado())
             return True
         inventario = self.partida.inventario if self.partida is not None else None
         if tipo == INVENTARIO:

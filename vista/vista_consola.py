@@ -25,6 +25,97 @@ from controlador.orden import (ABRIR, AYUDA, ATACAR, CARGAR, EQUIPAR, ESPERAR, G
                    INV_INICIO, INV_ORDENAR, INV_SIGUIENTE, INVENTARIO, MOVER, Orden,
                    PERGAMINO, PUNTAJES, RECOGER, SALIR, SOLTAR, USAR)
 from vista.vista_base import Vista
+
+
+def lineas_mapa_dibujado(mapa, ancho=None):
+    """ASCII por bloques completos de casillas; los costos quedan en la tabla."""
+    import shutil
+    import unicodedata
+
+    def ascii_texto(valor):
+        return unicodedata.normalize('NFKD', str(valor)).encode('ascii', 'ignore').decode('ascii')
+
+    def etiqueta(c):
+        return '(?)' if c.id is None else '[%s%s]' % ('@' if c.es_jugador else '', c.id)
+
+    def marca(conexion, horizontal):
+        if conexion.estado == 'abierta':
+            return '-' if horizontal else '|'
+        if conexion.estado == 'cerrada':
+            return 'K' if conexion.llave is not None else 'X'
+        return '?'
+
+    def estado(conexion):
+        texto = 'no observada' if conexion.estado == 'desconocida' else conexion.estado
+        if conexion.llave is not None:
+            texto += ', llave ' + str(conexion.llave)
+        return texto
+
+    if not mapa.casillas:
+        return ['Mapa conocido: vacio']
+    ancho = max(12, ancho or shutil.get_terminal_size((100, 24)).columns)
+    etiquetas = [etiqueta(c) for c in mapa.casillas]
+    celda = max(len(e) for e in etiquetas) + 6
+    minimo_x = min(c.x for c in mapa.casillas)
+    maximo_x = max(c.x for c in mapa.casillas)
+    minimo_y = min(c.y for c in mapa.casillas)
+    maximo_y = max(c.y for c in mapa.casillas)
+    columnas = max(1, ancho // celda)
+    lineas = ['Mapa conocido (dibujado):']
+    bloque = 0
+    for inicio in range(minimo_x, maximo_x + 1, columnas):
+        fin = min(inicio + columnas - 1, maximo_x)
+        bloque += 1
+        lineas.append('Bloque %s: columnas %s a %s' % (bloque, inicio, fin))
+        ancho_bloque = (fin - inicio + 1) * celda
+        lienzo = [[' '] * ancho_bloque for _ in range((maximo_y - minimo_y) * 4 + 1)]
+        # Primero las conexiones para que nunca tapen una etiqueta de sala.
+        for conexion in mapa.conexiones:
+            if conexion.fuera_cuadricula:
+                continue
+            a, b = mapa.casillas[conexion.origen], mapa.casillas[conexion.destino]
+            ax, bx = (a.x - inicio) * celda + celda // 2, (b.x - inicio) * celda + celda // 2
+            ay, by = (a.y - minimo_y) * 4, (b.y - minimo_y) * 4
+            if ay == by:
+                for x in range(max(0, min(ax, bx)), min(ancho_bloque - 1, max(ax, bx)) + 1):
+                    lienzo[ay][x] = marca(conexion, True)
+            elif inicio <= a.x <= fin:
+                for y in range(min(ay, by), max(ay, by) + 1):
+                    lienzo[y][ax] = marca(conexion, False)
+        for c, texto in zip(mapa.casillas, etiquetas):
+            if inicio <= c.x <= fin:
+                x = (c.x - inicio) * celda + (celda - len(texto)) // 2
+                y = (c.y - minimo_y) * 4
+                for i, caracter in enumerate(texto):
+                    lienzo[y][x + i] = caracter
+        lineas.extend(''.join(fila).rstrip() for fila in lienzo)
+    lineas.append('Leyenda: [id] explorada; [@id] jugador; (?) avistada; -/| abierta; X cerrada; K con llave; ? puerta no observada.')
+    for c in mapa.casillas:
+        if c.es_jugador:
+            lineas.append('Sala actual: %s - %s' % (c.id, c.nombre or 'sin nombre'))
+            break
+    lineas.append('Exploradas: %s | Avistadas: %s' % (mapa.exploradas, mapa.avistadas))
+    lineas.append('Salidas conocidas (destino ? = sala desconocida):')
+    cursor_salida = 0
+    for indice, c in enumerate(mapa.casillas):
+        if c.id is not None:
+            lineas.append('Sala %s: %s' % (c.id, c.nombre or 'sin nombre'))
+            while cursor_salida < len(mapa.conexiones) and mapa.conexiones[cursor_salida].origen == indice:
+                conexion = mapa.conexiones[cursor_salida]
+                destino = mapa.casillas[conexion.destino]
+                lineas.append('  %s -> %s (costo %s, %s)' % (
+                    conexion.direccion, '?' if destino.id is None else destino.id,
+                    conexion.costo, estado(conexion)))
+                cursor_salida += 1
+    fuera = [c for c in mapa.conexiones if c.fuera_cuadricula]
+    if fuera:
+        lineas.append('Conexiones fuera de la cuadricula:')
+        for conexion in fuera:
+            a, b = mapa.casillas[conexion.origen], mapa.casillas[conexion.destino]
+            lineas.append('  sala %s <-> sala %s (%s, costo %s, %s)' % (
+                '?' if a.id is None else a.id, '?' if b.id is None else b.id,
+                conexion.direccion, conexion.costo, estado(conexion)))
+    return [ascii_texto(linea) for linea in lineas]
 from controlador.orden import MAPA, interpretar_ir_a
 from controlador.orden import HISTORIA, interpretar_historia
 
@@ -142,7 +233,8 @@ def _con_posicion(tipo, argumentos, cantidad, que):
 AYUDA_TEXTO = """Comandos (los números se cuentan desde 1, como se ven en pantalla):
   historia <t> | historia #k   consultar por instante o antes de la acción k (también al final)
   ir a <sala>        viajar a una sala explorada, paso a paso
-  mapa               ver el mapa conocido y las puertas recordadas
+  mapa               dibujar el mapa conocido y las puertas recordadas
+                     [@id] jugador; (?) avistada; -/| abierta; X cerrada; K con llave
   n s e o            moverse (también: ir n)
   abrir n|s|e|o      abrir una puerta con la llave
   atacar [N]         atacar al enemigo N de la sala
