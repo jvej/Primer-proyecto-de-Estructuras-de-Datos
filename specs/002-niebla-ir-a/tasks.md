@@ -98,7 +98,7 @@ el ejemplo incompleto del constructor en T003.
 
 - [x] T009 Inicializacion de conocimiento en Partida.iniciar: inicio explorado, vecinas avistadas y puertas locales observadas. -> Evidencia: `test_conocimiento_partida`.
 - [x] T010 Exploracion al entrar, contadores sin duplicados y cambios mediante Partida.cambiar. -> Evidencia: `test_conocimiento_partida`.
-- [x] T011 Observacion antes/despues de acciones y suscripcion al despachador C2; los cambios remotos no revelan informacion. -> Evidencia: `test_conocimiento_partida, test_terreno_cazador`.
+- [x] T011 Observacion antes/despues de acciones y suscripcion al despachador C2; los cambios remotos no revelan informacion: FR-006. -> Evidencia: `test_conocimiento_partida, test_terreno_cazador`.
 - [x] T012 salidas_visibles devuelve cinco campos: direccion, memoria, ID o None, llave permitida y costo; no lee apertura fisica para presentar memoria. -> Evidencia: `test_mapa_consola`.
 - [x] T013 Consola: mapa, salidas anonimas con costos e ir a <id> antes de ir <direccion>. -> Evidencia: `test_mapa_consola`.
 - [x] T014 Pygame: etiquetas privadas, costos, mapa M, viaje V y cancelacion Escape/R con orden pendiente fuera del callback. -> Evidencia: `test_ir_a_grafico_002, test_bench_mapa_conocido_002; test_gui tiene un falso positivo ajeno a estos casos`.
@@ -115,14 +115,14 @@ el ejemplo incompleto del constructor en T003.
 
 ### Pruebas de Aceptación — US2
 
-- [x] T015 Aceptacion del planificador y viaje: validacion, ponderacion, empate, recalculo, interrupciones, log y pergamino. -> Evidencia: `test_planificador_rutas, test_ir_a_compuesto`.
+- [x] T015 Aceptacion del planificador y viaje: validacion, ponderacion, empate, recalculo, interrupciones, log y pergamino: FR-014, FR-018, FR-019, FR-023. -> Evidencia: `test_planificador_rutas, test_ir_a_compuesto`.
 
 ### Implementación — US2
 
 - [x] T016 IR_A e interpretar_ir_a en modelo/juego/orden.py, reexportados por controlador/orden.py; fuera de ORDENES_DE_PARTIDA. Sintaxis ir a <id>, sin alias ir <id>. -> Evidencia: `test_ir_a_compuesto, test_mapa_consola`.
 - [x] T017 BitacoraPartida.anotar_comentario; leer_log ordinario omite comentarios. El lector de reconstruccion 004 conserva y aplica marcas IR_A sin ejecutarlas como movimientos. -> Evidencia: `test_ir_a_compuesto, test_comentarios_ir_a_002, test_historia_persistencia (casos FR014 y FR010)`.
 - [x] T018 Aplicacion registra comentarios en el log activo y en lineas intercaladas; main conecta una suscripcion. -> Evidencia: `test_integracion_comentarios_002`.
-- [x] T019 Controlador ejecuta pasos ordinarios y recalcula mediante PlanificadorRutas; despues de callbacks/cancelacion emite una marca por cada observacion exterior efectiva, aun sin movimiento. -> Evidencia: `test_ir_a_compuesto, test_comentarios_ir_a_002`.
+- [x] T019 Controlador ejecuta pasos ordinarios y recalcula mediante PlanificadorRutas; despues de callbacks/cancelacion emite una marca por cada observacion exterior efectiva, aun sin movimiento: FR-018. -> Evidencia: `test_ir_a_compuesto, test_comentarios_ir_a_002`.
 - [x] T020 PlanificadorRutas posee distancias, marcas y token propios; se recrea al sustituir la partida, sin compartirlos con cazador. -> Evidencia: `test_planificador_rutas, test_ir_a_compuesto`.
 
 **Checkpoint US2**: Planificacion y viaje compuesto: ejecutar con el Python del venv tests.test_planificador_rutas, tests.test_ir_a_compuesto, tests.test_comentarios_ir_a_002, tests.test_integracion_comentarios_002 y tests.test_ir_a_grafico_002. Para replay usar un log real generado por la partida; no asumir que partida.log existe.
@@ -137,11 +137,11 @@ el ejemplo incompleto del constructor en T003.
 
 ### Pruebas de Aceptación — US3
 
-- [x] T021 Pruebas de antorcha: vecinas incluso por salida cerrada, ausencia de activacion remota y reversion. -> Evidencia: `test_conocimiento_partida`.
+- [x] T021 Pruebas de antorcha: vecinas incluso por salida cerrada, ausencia de activacion remota y reversion: FR-007, FR-008, FR-012. -> Evidencia: `test_conocimiento_partida`.
 
 ### Implementación — US3
 
-- [x] T022 Partida._entrar revela vecinas con antorcha usando _explorar_sala; no observa puertas remotas ni carga contenido por iluminarlas. -> Evidencia: `test_conocimiento_partida`.
+- [x] T022 Partida._entrar revela vecinas con antorcha usando _explorar_sala; no observa puertas remotas ni carga contenido por iluminarlas: FR-007, FR-008. -> Evidencia: `test_conocimiento_partida`.
 
 **Checkpoint US3**: Antorcha y reversion: ejecutar con el Python del venv tests.test_conocimiento_partida; cubre revelado de vecinas sin observar puertas remotas, ausencia de activacion de contenido y restauracion de estados/contadores.
 
@@ -155,11 +155,11 @@ el ejemplo incompleto del constructor en T003.
 
 ### Pruebas de Aceptación — US4
 
-- [x] T023 Aceptacion v4 y retroceso: fotografia independiente, rechazo v3, rollback, comentarios, pergaminos y referencias de inversos. -> Evidencia: `test_guardado_v4_002, test_carga_v4_002, test_fr010_generaciones_002`.
+- [x] T023 Aceptacion v4 y retroceso: fotografia independiente, rechazo v3, rollback, comentarios, pergaminos y referencias de inversos: FR-024. -> Evidencia: `test_guardado_v4_002, test_carga_v4_002, test_fr010_generaciones_002`.
 
 ### Implementación — US4
 
-- [x] T024 VERSION_FORMATO=4 y rechazo explicito de v3 mediante ErrorFormato convertido a ErrorCarga. -> Evidencia: `test_guardado_v4_002, test_carga_v4_002`.
+- [x] T024 VERSION_FORMATO=4 y rechazo explicito de v3 mediante ErrorFormato convertido a ErrorCarga: FR-024. -> Evidencia: `test_guardado_v4_002, test_carga_v4_002`.
 - [x] T025 Codec escribe N uint16, N estados, P uint16 y P entradas <HBB>; omite cero y cuenta posiciones de memoria, no puertas unicas. Bloque de enemigos intacto. -> Evidencia: `test_guardado_v4_002`.
 - [x] T026 Codec deserializa fotografia; persistencia reconstruye mediante T045 y compara arreglos/contadores dentro del contexto. No sustituye ConocimientoMapa, sus arreglos ni Registro. Contadores mantenidos por el replay y comprobados con recuento O(N). -> Evidencia: `test_carga_v4_002, test_historia_persistencia (casos FR014)`.
 - [x] T027 ErrorCarga y rechazo transaccional: conserva partida, log y recursos anteriores; no verifica resolubilidad al cargar. -> Evidencia: `test_carga_v4_002, test_resolubilidad_integracion`.
