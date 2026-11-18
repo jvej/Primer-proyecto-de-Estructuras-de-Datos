@@ -10,15 +10,17 @@ Una sección por cada problema de §4 resuelto, más las decisiones de rendimien
 |---|---|---|
 | 1, 2 (corrida principal), 5, 7, 12 y 13 (corrida principal) | 3.14.5 | Windows 11 |
 | 2, corrida anterior citada en 2.5 | 3.10.12 | Máquina virtual Linux de dos núcleos |
-| 13, comparación anterior citada en 13.6 | 3.10; versión exacta POR CONFIRMAR | POR CONFIRMAR; no se identifica el SO de esa corrida |
-| 4b | 3.13; versión exacta POR CONFIRMAR | Windows 11 |
-| 4c | POR CONFIRMAR; 4c.4 no indica versión | Windows 11 |
-| 8b | POR CONFIRMAR; 8b.5 no indica versión | POR CONFIRMAR; sin entorno propio declarado |
-| 8c | 3.13.18 del venv | Windows; edición/versión POR CONFIRMAR |
-| 8d | POR CONFIRMAR; sin entorno propio declarado | POR CONFIRMAR; no se hereda el entorno de 8c |
-| 9, 10 y 11 | POR CONFIRMAR | Windows, repositorio en OneDrive; edición/versión POR CONFIRMAR |
+| 13, comparación anterior citada en 13.6 | 3.10 (§13.6); versión exacta: no registrado en la medición original (equipo del grupo) | no registrado en la medición original (equipo del grupo) |
+| 4b | 3.13 (§4b.4); versión exacta: no registrado en la medición original (equipo del grupo) | Windows 11 |
+| 4c | no registrado en la medición original (equipo del grupo) | Windows 11 |
+| 8b | no registrado en la medición original (equipo del grupo) | no registrado en la medición original (equipo del grupo) |
+| 8c | 3.13.18 del venv | Windows (§8c.5); edición/versión: no registrado en la medición original (equipo del grupo) |
+| 8d | no registrado en la medición original (equipo del grupo) | no registrado en la medición original (equipo del grupo) |
+| 9, 10 y 11 | no registrado en la medición original (equipo del grupo) | Windows, repositorio en OneDrive (párrafo «Sobre las mediciones», §9.6 y §11.6); edición/versión: no registrado en la medición original (equipo del grupo) |
 | 16, mediciones de Parte II, incluidas las repeticiones de historial e inventario | 3.13.9 del venv | Windows 11 Pro de 64 bits, compilación 26300 |
 | 17, benchmark sintético inicial, verificación posterior y mapa dibujado de 17.7 | 3.13.18 | Windows 11; compilación 26200 en la verificación posterior y en 17.7 |
+
+**Fuentes de las celdas revisadas.** Se contrastaron DECISIONES.md y PROMPTS_LLM.md y se rastreó cada sección y sus mediciones con `git log -S`. Las mediciones de 4b y 4c se incorporaron en `bfa6eff` (autor: marnavov; 2026-11-14T19:05:23-06:00): §4b.4 registra Python 3.13 y Windows 11; §4c.4 solo Windows 11. Las de 8b, 8c y 8d se incorporaron en `18b9364` (autor: kimberlyangulo; 2026-11-14T23:04:53-06:00): solo §8c.5 declara Python 3.13.18 y Windows, sin edición ni compilación. Las de 9 a 11 y la comparación anterior de §13.6 constan en `d370e48` (autor: Jeferson_san102; 2026-11-06T12:03:38-06:00) y vuelven a incorporarse en `9458d74` (mismo autor; 2026-11-08T19:48:54-06:00); §13.6 solo identifica Python 3.10 para esa comparación. Estos autores y fechas acreditan la incorporación documental, no el equipo ni la fecha de ejecución. La línea `Entorno: Python 3.13.18 | Windows-11-10.0.26200-SP0` corresponde exclusivamente a §13.7, incorporada en `a0b7ab4` (autor: Jeferson_san102; 2026-11-17T19:51:59-06:00). PROMPTS_LLM.md no aporta las versiones faltantes para estas corridas; el entorno explícito de su registro de 004 corresponde a §16. No se trasladan entornos entre mediciones.
 
 Las secciones 3, 4, 6, 8, 14 y 15 no declaran un entorno independiente de medición; no se les asigna uno por proximidad. La comparación con los planes que sigue usa sus primeras versiones disponibles en Git (001: `43b8ce1`; 003: `8ddfd70`; 002: `db75930`; 004: `a7a764f`), además de los `plan.md` actuales y el código real. Las correcciones funcionales se distinguen de cambios motivados por mediciones.
 
@@ -622,7 +624,7 @@ Pruebas: `test_esqueleto` (4, FR-007: costo por defecto, costos válidos, rechaz
 
 Especificación: [`specs/003-resolubilidad/spec.md`](specs/003-resolubilidad/spec.md) · Plan: [`specs/003-resolubilidad/plan.md`](specs/003-resolubilidad/plan.md) · Investigación: [`specs/003-resolubilidad/research.md`](specs/003-resolubilidad/research.md) · Modelo de datos: [`specs/003-resolubilidad/data-model.md`](specs/003-resolubilidad/data-model.md)
 
-**Coincidencia con plan.md original:** Parcial. Se conserva el recorrido incremental por etapas con cola y listas de espera del plan 003 original (`8ddfd70`). `resolubilidad.py` usa `ordenar_merge()` en lugar de `ordenar()`: lo motivó la medición de 8c.5, donde 200 llaves dieron 19.503 ms antes y 4.732 ms después; el plan actual ya incorpora el cambio. `_menor_nodo_ciclico` añade Kosaraju antes del DFS de tres colores de `_detectar_ciclo`, aunque el plan actual aún describe solo ese DFS. El código justifica la adición por elegir el menor id cíclico sin enumerar ciclos; **POR CONFIRMAR:** no se encontró una medición comparativa que motivara ese cambio. El uso exclusivo del `abre` de `/llaves`, frente al catálogo local original, y `MOTIVO` obligatorio son correcciones funcionales documentadas al final de esta sección, ya recogidas en el plan actual, sin medición motivadora registrada.
+**Coincidencia con plan.md original:** Parcial. Se conserva el recorrido incremental por etapas con cola y listas de espera del plan 003 original (`8ddfd70`). `resolubilidad.py` usa `ordenar_merge()` en lugar de `ordenar()`: lo motivó la medición de 8c.5, donde 200 llaves dieron 19.503 ms antes y 4.732 ms después; el plan actual ya incorpora el cambio. `_menor_nodo_ciclico` añade Kosaraju antes del DFS de tres colores de `_detectar_ciclo`, aunque el plan actual aún describe solo ese DFS. No se registró una medición comparativa; se añadió para elegir de forma determinista el menor id cíclico sin enumerar ciclos (§5.4). El uso exclusivo del `abre` de `/llaves`, frente al catálogo local original, y `MOTIVO` obligatorio son correcciones funcionales documentadas al final de esta sección, ya recogidas en el plan actual, sin medición motivadora registrada.
 
 ### 8c.1 Problema
 
