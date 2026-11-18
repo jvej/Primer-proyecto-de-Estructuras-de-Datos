@@ -4,6 +4,24 @@ Una sección por cada problema de §4 resuelto, más las decisiones de rendimien
 
 **Sobre las mediciones.** Salen de los archivos `bench_*.py`, que se ejecutan con `python main.py --bench`. Las secciones de Kim (9 a 11) se midieron en su equipo, en Windows y con el repositorio dentro de OneDrive. Las demás (1, 2, 5, 7, 12 y 13) se midieron en una laptop con Intel Core i5-10310U (4 núcleos) y 15.6 GB de memoria, con Windows 11, Python 3.14.5 y fuera de OneDrive. Las de inventario (12) e historial (13) se tomaron con otros benchmarks corriendo en paralelo, así que sus tiempos pueden estar algo inflados. Los tiempos varían entre corridas y equipos, así que se cita la tendencia; los conteos (comparaciones, solicitudes de red) son exactos y repetibles.
 
+**Entorno documentado por sección.** La atribución a Python 3.14.5 del párrafo anterior se limita a las secciones enumeradas; Python 3.13 en un plan indica la versión prevista del proyecto, no acredita la versión de una medición histórica. Se conservan todos los valores originales:
+
+| Sección / medición | Python | Sistema operativo documentado |
+|---|---|---|
+| 1, 2 (corrida principal), 5, 7, 12 y 13 (corrida principal) | 3.14.5 | Windows 11 |
+| 2, corrida anterior citada en 2.5 | 3.10.12 | Máquina virtual Linux de dos núcleos |
+| 13, comparación anterior citada en 13.6 | 3.10; versión exacta POR CONFIRMAR | POR CONFIRMAR; no se identifica el SO de esa corrida |
+| 4b | 3.13; versión exacta POR CONFIRMAR | Windows 11 |
+| 4c | POR CONFIRMAR; 4c.4 no indica versión | Windows 11 |
+| 8b | POR CONFIRMAR; 8b.5 no indica versión | POR CONFIRMAR; sin entorno propio declarado |
+| 8c | 3.13.18 del venv | Windows; edición/versión POR CONFIRMAR |
+| 8d | POR CONFIRMAR; sin entorno propio declarado | POR CONFIRMAR; no se hereda el entorno de 8c |
+| 9, 10 y 11 | POR CONFIRMAR | Windows, repositorio en OneDrive; edición/versión POR CONFIRMAR |
+| 16, mediciones de Parte II, incluidas las repeticiones de historial e inventario | 3.13.9 del venv | Windows 11 Pro de 64 bits, compilación 26300 |
+| 17, benchmark sintético inicial, verificación posterior y mapa dibujado de 17.7 | 3.13.18 | Windows 11; compilación 26200 en la verificación posterior y en 17.7 |
+
+Las secciones 3, 4, 6, 8, 14 y 15 no declaran un entorno independiente de medición; no se les asigna uno por proximidad. La comparación con los planes que sigue usa sus primeras versiones disponibles en Git (001: `43b8ce1`; 003: `8ddfd70`; 002: `db75930`; 004: `a7a764f`), además de los `plan.md` actuales y el código real. Las correcciones funcionales se distinguen de cambios motivados por mediciones.
+
 ## Índice
 
 - **Mariano** (motor del juego)
@@ -249,6 +267,8 @@ Un efecto activo cuesta O(log n) solo cuando le toca (sacar y reagendar su event
 
 ## 4b. Revisión de §5.6: Motor con cazadores, costos de terreno y eventos empatados
 
+**Coincidencia con plan.md original:** Parcial. El plan 001 original (`43b8ce1`, bloques 1 y 4) ya proponía costos de terreno, conservar el heap y repetir `bench_motor` con cazadores; el código de `motor_enemigos.py` y `Partida._avanzar` conserva esas decisiones. El cierre de eventos empatados mediante `AgendaEventos.proximo_en_tiempo` y el segundo bucle de `_avanzar` amplía ese plan y figura en su bloque 5 actual. Lo motivó la coherencia funcional de historia `<t>` descrita en 4b.2, no una medición de velocidad documentada; la tabla 4b.4 evalúa el resultado y no demuestra el motivo del cambio.
+
 ### 4b.1 Problema y contexto de la Parte II
 En la Parte II se introducen costos variables por salida (FR-001, FR-002), el enemigo cazador con búsqueda acotada por Dijkstra (FR-003..FR-007) y la garantía estricta de cierre del instante $t$ requerida para la integración con historia `<t>` (Axel). El objetivo es comprobar si el motor continúa resolviendo el ciclo completo entre dos decisiones del jugador en menos de 20 ms (§5.2) ante estas nuevas cargas dinámicas y empates de tiempo.
 
@@ -279,11 +299,15 @@ Medición repetida con 50 ciclos de esperar en Windows 11 con Python 3.13 (`pyth
 
 ## 4c. Capacidad 001: Terreno, Cazador e Invalidación Reactiva de Rutas (§5.1, §5.2, SC-004..SC-006)
 
+Especificación: [`specs/001-terreno-cazador/spec.md`](specs/001-terreno-cazador/spec.md) · Plan: [`specs/001-terreno-cazador/plan.md`](specs/001-terreno-cazador/plan.md)
+
+**Coincidencia con plan.md original:** Sí en la decisión algorítmica: el plan 001 original (`43b8ce1`, bloques 3 y 4), el plan actual y `PlanificadorCazador` en `modelo/juego/cazador.py` usan Dijkstra compartido desde el jugador, rango máximo activo, arreglos con tokens, desempate por menor id e invalidación selectiva por puertas y global tras pergamino. Las precisiones posteriores sobre rango utilizado y `deshacer_ultimo()` concretan ese diseño. Las mediciones SC-005 y SC-006 de 4c.4 respaldan la elección original; no documentan una sustitución del algoritmo previsto.
+
 ### 4c.1 Problema
 El enemigo cazador conoce la topología del esqueleto y persigue al jugador por el camino de costo mínimo acumulado de terreno, respetando las puertas abiertas y acotado por su campo de visión/rango ($d \le rango$). Calcular Dijkstra individualmente para cada cazador desde su posición hacia el jugador en cada decisión de juego tiene un costo prohibitivo $O(K \cdot (E' \log V'))$ que incumple el presupuesto de 20 ms con decenas de cazadores (`SC-004`, `SC-005`). Además, ante cambios de puertas o desplazamientos, el cálculo debe invalidarse reactivamente manteniendo equivalencia observable estricta (`SC-006`).
 
 ### 4c.2 Alternativas consideradas
-1. **Dijkstra individual por cada cazador en cada paso**: Cada cazador ejecuta Dijkstra acotado hacia el jugador. Costo $O(K \cdot 	ext{Dijkstra})$. Descartado por no escalar con múltiples cazadores.
+1. **Dijkstra individual por cada cazador en cada paso**: Cada cazador ejecuta Dijkstra acotado hacia el jugador. Costo $O(K \cdot \text{Dijkstra})$. Descartado por no escalar con múltiples cazadores.
 2. **Cálculo compartido invertido desde el jugador**: Dado que el grafo de terreno es no dirigido y simétrico (`costo(u,v) = costo(v,u)`), un único Dijkstra acotado desde la sala del jugador calcula simultáneamente la distancia mínima hacia todas las salas dentro del rango máximo de interés.
 3. **Reinicio de marcas**:
    - *Reiniciar arreglos contiguos en cada búsqueda*: $O(N)$ por búsqueda. Descartado.
@@ -308,8 +332,8 @@ El enemigo cazador conoce la topología del esqueleto y persigue al jugador por 
    - Elegir la primera vecina: examina a lo sumo 4 salidas abiertas en $O(1)$, consultando `dist[vecino.indice]`.
    - Desempate determinista por menor `vecino.id` entero: $O(1)$.
 4. **Costo total para $K$ cazadores**:
-   - Con recálculo necesario: $O(E' \log V' + K \cdot 	ext{salidas})$.
-   - Con reutilización selectiva válida: $O(K \cdot 	ext{salidas}) = O(K)$, sin tocar Dijkstra.
+   - Con recálculo necesario: $O(E' \log V' + K \cdot \text{salidas})$.
+   - Con reutilización selectiva válida: $O(K \cdot \text{salidas}) = O(K)$, sin tocar Dijkstra.
 5. **Espacio**: $O(N)$ arreglos fijos de distancias y marcas contiguas de tamaño $N = |Salas|$, reutilizados persistentemente sin alocaciones dinámicas.
 
 ### 4c.4 Evidencia empírica (`bench/bench_cazador.py`)
@@ -319,7 +343,7 @@ Medido en Windows 11 con `python main.py --bench cazador`:
 - Configuración: 100 salas sintéticas, 30 cazadores activos simultáneos, rango = 600, 50 ciclos consecutivos de juego.
 - **Tiempo máximo por ciclo**: **0.075 ms**.
 - **Tiempo medio por ciclo**: **0.013 ms** (p50: 0.010 ms, p95: 0.021 ms, p99: 0.075 ms).
-- **Ciclos que exceden 20 ms**: **0 de 50 (0%)**. Cumple estrictamente con el requisito de $< 20	ext{ ms}$.
+- **Ciclos que exceden 20 ms**: **0 de 50 (0%)**. Cumple estrictamente con el requisito de $< 20\text{ ms}$.
 
 #### 2. SC-005: Comparación sistemática Individual vs. Compartido
 Tiempo en milisegundos para resolver las decisiones de todos los cazadores activos en un turno:
@@ -540,6 +564,8 @@ Registrar y reservar son O(1) con un cerrojo, porque el hilo de red y el princip
 
 Especificación: [`specs/003-resolubilidad/spec.md`](specs/003-resolubilidad/spec.md) · Plan: [`specs/003-resolubilidad/plan.md`](specs/003-resolubilidad/plan.md) · Contratos: [`specs/003-resolubilidad/contracts/`](specs/003-resolubilidad/contracts/)
 
+**Coincidencia con plan.md original:** Parcial. Se conservan `/llaves`, presupuesto y copia por versión previstos en el plan 003 original (`8ddfd70`), comprobables en `ClienteHTTP.llaves`, `AlmacenCripta` y `Aplicacion._verificar_cripta`. `Esqueleto.agregar_pagina` rechaza costos inválidos con `ErrorRed`, mientras el plan original proponía `max(1, int(...))`; el plan actual ya recoge el rechazo. El generador incorpora cuadrícula y rangos por intervalo. Son correcciones de validación y cobertura de escenarios documentadas en 8b.2 y al final de esta sección, sin medición motivadora registrada. Además, la verificación final usa solo `id`/`abre` de `/llaves` en `resolubilidad.py`, como exige el plan actual; la alternativa de fichas locales conservada en la tabla 8b.2 describe una decisión anterior, sustituida por la revisión de determinismo de 8c. No se atribuyen estos cambios a los tiempos de 8b.5.
+
 ### 8b.1 Problema
 
 La Parte II agrega datos al servicio web: cada salida puede traer `costo` (100 si falta), las fichas de enemigo pueden ser `cazador` con `rango` (en unidades de costo) y hay una consulta nueva, `GET /criptas/<id>/llaves`, que dice dónde está cada llave (en el suelo o en la `suelta` de un enemigo). Todo debe respetar `presupuesto_solicitudes`, la validación por versión y el modo `--offline`. Además, el equipo necesitaba criptas sintéticas reproducibles para medir (contrato C5).
@@ -595,6 +621,8 @@ Pruebas: `test_esqueleto` (4, FR-007: costo por defecto, costos válidos, rechaz
 ## 8c. Parte II — §5.4 Verificación de resolubilidad (003, FR-009..FR-018, SC-001..SC-005)
 
 Especificación: [`specs/003-resolubilidad/spec.md`](specs/003-resolubilidad/spec.md) · Plan: [`specs/003-resolubilidad/plan.md`](specs/003-resolubilidad/plan.md) · Investigación: [`specs/003-resolubilidad/research.md`](specs/003-resolubilidad/research.md) · Modelo de datos: [`specs/003-resolubilidad/data-model.md`](specs/003-resolubilidad/data-model.md)
+
+**Coincidencia con plan.md original:** Parcial. Se conserva el recorrido incremental por etapas con cola y listas de espera del plan 003 original (`8ddfd70`). `resolubilidad.py` usa `ordenar_merge()` en lugar de `ordenar()`: lo motivó la medición de 8c.5, donde 200 llaves dieron 19.503 ms antes y 4.732 ms después; el plan actual ya incorpora el cambio. `_menor_nodo_ciclico` añade Kosaraju antes del DFS de tres colores de `_detectar_ciclo`, aunque el plan actual aún describe solo ese DFS. El código justifica la adición por elegir el menor id cíclico sin enumerar ciclos; **POR CONFIRMAR:** no se encontró una medición comparativa que motivara ese cambio. El uso exclusivo del `abre` de `/llaves`, frente al catálogo local original, y `MOTIVO` obligatorio son correcciones funcionales documentadas al final de esta sección, ya recogidas en el plan actual, sin medición motivadora registrada.
 
 ### 8c.1 Problema
 
@@ -1002,6 +1030,8 @@ El estado se guarda en un archivo binario de formato propio. Al cargar debe pode
 ---
 
 ## 17. Niebla de guerra e IR_A (002, Parte II)
+
+**Coincidencia con plan.md original:** Parcial. El plan 002 original (`db75930`), el actual y el código conservan arreglos indexados en `ConocimientoMapa`, Dijkstra inverso con memoria de puertas en `controlador/planificador_rutas.py`, IR_A compuesto y guardado v4. Frente al comentario inicial único del plan original, `Controlador._ejecutar_ir_a` emite una marca antes de cada observación exterior, después de la cancelación; `Registro` protege las observaciones permanentes con generaciones. Son ajustes funcionales de reconstrucción y retroceso descritos en 17.3, no cambios motivados por tiempos documentados. La ampliación US5 de 17.7 agrega el mapa dibujado y un AVL de ocupación: con 5000 conocidas midió 123,594 ms frente a 759,674 ms de ListaOrdenada, con picos de 4444,2 frente a 3872,0 KiB. Esa comparación respalda el AVL; restaurar la lista simple y el barrido O(N) obedeció a la instrucción expresa del usuario, no a esa medición, que excluye la foto. El plan actual recoge esos ajustes. `Orden` pasó del controlador al modelo por MVC durante la integración con 004, sin medición motivadora registrada.
 
 Responsable: Kimberly. Base funcional publicada:
 `617f6665455e81a0ffe7311a4e60006aef1e8a2f`.
@@ -1612,6 +1642,8 @@ Registrar es O(1) (una línea al final). Mostrar es O(m) para leer más el costo
 ## 16. Línea de tiempo (004, Parte II)
 
 **Responsable:** Axel. **Referencias:** [especificación](specs/004-linea-de-tiempo/spec.md) y [plan](specs/004-linea-de-tiempo/plan.md). Decisiones de FR-001..014, FR-019/020 y evidencia de SC-001..005; T064.
+
+**Coincidencia con plan.md original:** Parcial: se conservan captura C1, deltas, proyección aislada, checkpoints periódicos, índices y recorte del plan 004 original (`a7a764f`), visibles en `Registro` y `LineaTiempo`. El plan proponía K=50 solo como candidato y exigía medir: el código fija `K_DEFECTO = 10`. Con D=1000, las dos corridas de 16.5 dieron máximos de 45.1258/36.0871 ms para K=10, 343.3691/355.1113 ms para K=50 y 242.3210/223.2240 ms para K=200; se eligió K=10 para cumplir los 50 ms en esos casos medidos, con el costo de memoria ya indicado en 16.3. Es la selección empírica prevista por el plan, no un cambio de estructura. La otra diferencia es sustituir el parser inyectado original por `modelo/juego/orden.py` y su reexportación desde `controlador/orden.py`; el plan actual lo recoge como corrección de MVC y compatibilidad, sin medición motivadora registrada.
 
 ### 16.1 Problema
 
