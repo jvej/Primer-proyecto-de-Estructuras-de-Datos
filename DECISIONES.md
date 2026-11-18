@@ -1546,6 +1546,50 @@ El costo del registro sigue a **lo que cambió**, no al tamaño de la cripta.
 - Funciona solo si **todo** cambio pasa por los puntos únicos. Un cambio hecho directamente sobre un atributo no se revertiría; las pruebas aleatorias de deshacer ayudan a detectarlo.
 - El historial no se guarda en disco (son funciones, no datos): al cargar una partida empieza vacío.
 
+### 13.7 Revisión §5.6 (Parte II)
+
+Medición del 2026-11-17 con `venv\Scripts\python.exe -B -X utf8 -u main.py --bench historial`, salida 0, 45.0 s. Línea de entorno impresa por el bench:
+
+```text
+Entorno: Python 3.13.18 | Windows-11-10.0.26200-SP0
+```
+
+**Antes y después en el mismo entorno.** La referencia «I original» repite las 30 esperas del escenario original, con trolls guardianes y regeneración, costo uniforme 100 y sin captura C1. Es la carga de Parte I ejecutada sobre el motor actual, no una ejecución del código histórico. La carga «II» reemplaza los trolls por cazadores, asigna costos simétricos variables entre 40 y 180 usando exclusivamente `partida.azar`, enciende una antorcha mediante una acción ordinaria y realiza 10 movimientos directos y 19 pasos reales de `ir a` hacia vecinas ya exploradas. Hubo 16 entradas mientras la antorcha seguía encendida; su apagado conserva la duración ordinaria. El viaje observa puertas y recalcula por el controlador real; se detiene ante enemigos según sus reglas, sin omitir el paso ya ejecutado.
+
+Ambas cargas usan **semilla 3**, el mismo corredor y número de salas, n−1 enemigos incorporados y **9 activos inicialmente**. La preparación carga todo el contenido y amplía la vida del jugador para sostener la carga sin curaciones durante la medición; agrega antorcha y pergamino al inventario mediante el punto único. Esa preparación queda fuera del tiempo. «II sin C1» ejecuta exactamente las mismas acciones que «II con C1», pero sin conectar la historia; permite observar el sobrecosto integrado de captura, deltas, proyección y checkpoints, conservando los inversos del pergamino. Con C1 se usa el K vigente, **10**, sin cambiar la decisión de 004.
+
+Una pasada de calentamiento precede a tres repeticiones independientes: **90 muestras de acciones y 3 retrocesos por fila**, con `perf_counter_ns` y sin `tracemalloc`. Cada muestra completa una sola acción aceptada; el tiempo incluye su ciclo de eventos y, cuando corresponde, planificación/observación de IR_A, captura C1 y creación de checkpoint. Los retrocesos usan `Partida.usar_pergamino`, no el deshacer directo del registro de la tabla histórica. Se comparan trazas por valor de todas las acciones y del retroceso entre repeticiones; con C1 también se comparan los deltas y se exige que la historia actual coincida con la partida. Las variantes II con/sin C1 deben dar el mismo estado final. La pasada de memoria debe producir el mismo estado que la cronometrada. No hay HTTP real ni vista.
+
+**Memoria:** otra partida y otra pasada, con recolección antes de empezar el trazador y al terminar las acciones. Se excluye la preparación del mapa, contenido e inventario; se incluye la inicialización C1 y su checkpoint cero cuando corresponde. Los KiB retenidos/pico abarcan **todas las asignaciones de la carga**: inversos de las últimas cinco acciones, agenda, bitácora y auxiliares, y con C1 además normalizador, proyección, deltas y checkpoints desde el inicio. No son la memoria exclusiva del historial de cinco acciones de 13.5 ni la memoria total del proceso. El pico incluye asignaciones temporales y la recolección final.
+
+| Salas | Carga | Acción media (ms) | Acción máxima (ms) | Pergamino medio (ms) | Pergamino máximo (ms) | Retenida (KiB) | Pico (KiB) |
+|---:|---|---:|---:|---:|---:|---:|---:|
+| 20 | I original (antes) | 0.0728 | 0.3861 | 0.0452 | 0.0530 | 110.0 | 125.8 |
+| 20 | II sin C1 (control) | 0.3154 | 0.6915 | 0.0402 | 0.0416 | 209.0 | 236.4 |
+| 20 | II con C1 (después) | 0.6652 | 1.1679 | 0.3989 | 0.4849 | 484.8 | 512.1 |
+| 200 | I original (antes) | 0.1196 | 2.0819 | 0.0608 | 0.0757 | 110.0 | 125.8 |
+| 200 | II sin C1 (control) | 1.2934 | 3.0340 | 0.0584 | 0.0901 | 209.1 | 236.4 |
+| 200 | II con C1 (después) | 1.3679 | 3.3707 | 0.2657 | 0.2842 | 1003.3 | 1018.2 |
+| 1000 | I original (antes) | 0.0715 | 0.0983 | 0.0490 | 0.0558 | 110.0 | 125.8 |
+| 1000 | II sin C1 (control) | 5.1033 | 6.2970 | 0.0430 | 0.0449 | 209.1 | 236.4 |
+| 1000 | II con C1 (después) | 5.5215 | 7.2751 | 0.3234 | 0.3323 | 3340.6 | 3355.5 |
+
+Conteos al completar las 30 acciones de la pasada de memoria, antes de usar el pergamino; fueron iguales en los tres tamaños:
+
+| Carga | Inversos en los últimos 5 grupos | Deltas desde el inicio | Deltas de conocimiento | Checkpoints | Pasos IR_A / entradas iluminadas |
+|---|---:|---:|---:|---:|---:|
+| I original | 246 | 0 | 0 | 0 | 0 / 0 |
+| II sin C1 | 343 | 0 | 0 | 0 | 19 / 16 |
+| II con C1 | 343 | 980 | 144 | 4 | 19 / 16 |
+
+Los deltas de conocimiento cuentan escrituras de `estado_salas`, `memoria_puertas` y contadores de exploradas/avistadas; no son 144 salas distintas. Los cuatro checkpoints son el inicial y los de las acciones 10, 20 y 30. El bench exige costos distintos, cantidad de activos prevista y cálculos reales del planificador cazador; no basta con añadir enemigos dormidos a la entrada.
+
+**Conclusión sobre la decisión.** El registro de inversos sigue siendo adecuado para esta carga: conserva los cinco grupos del pergamino, con **343 inversos** tanto con C1 como sin C1, y el retroceso integrado con 1000 salas dio **0.3234 ms de media y 0.3323 ms de máximo**. No se sustituyó por copias completas ni se modificó ninguna estructura del juego. El trabajo nuevo sí tiene costo: en 1000 salas la acción pasa de **0.0715 a 5.5215 ms de media**, y la memoria incremental retenida de **110.0 a 3340.6 KiB**. La comparación controlada dentro de II da **0.4182 ms adicionales de media** al activar C1 (5.5215 frente a 5.1033), con máximos de 7.2751 frente a 6.2970 ms. Todos los máximos de acciones de esta comparación estuvieron por debajo de 20 ms.
+
+Ese aumento no se atribuye íntegramente al registro de inversos: la carga II incorpora búsqueda y observación de rutas, y C1 conserva la historia completa y copias periódicas de proyección. El código del cazador recorre los enemigos incorporados para obtener el rango activo; los checkpoints copian la proyección cuyo tamaño también crece con el mapa. Esta medición no separa sus tiempos por función. Que los conteos de inversos y deltas sean iguales al crecer n no implica tiempo ni memoria constantes para el conjunto de Parte II.
+
+**Comparabilidad y límites.** Se mantienen intactas las cifras históricas de 13.5, medidas con otro Python y con una extracción distinta de memoria. La primera tabla del bench sigue ofreciendo la alternativa B descartada, pero se retiró su `dict` de memoización y se usa el AVL propio mediante `MemoCopias`; sus tiempos incluyen ese índice y **no equivalen a los de B históricos**, ni se usan aquí para atribuir una aceleración al registro. La copia de referencia conserva el mismo límite de objetos compartidos; no constituye una implementación de retroceso ni una nueva decisión del juego. La comparación §5.6 anterior no utiliza esa referencia B. Las trazas y conteos son reproducibles por semilla; los tiempos y picos varían con GC y carga del sistema. Son 30 acciones sintéticas con 9 activos, no una certificación con miles de acciones, todos los enemigos activos, la cripta oficial o consultas históricas de menos de 50 ms.
+
 ---
 
 ## 14. §4.11 Bitácora de partida y reproducción
