@@ -1,8 +1,10 @@
 <!--
 Sync Impact Report:
-- Version change: 1.0.0 (simplificación de redacción y tono para defensa de curso)
-- Modificaciones: Títulos simplificados y lenguaje directo de estudiantes; eliminados términos grandilocuentes.
-- Reglas y principios: Exactamente los 7 principios y las reglas del mensaje original, sin agregar ni quitar ninguno.
+- Version change: 1.0.0 → 1.1.0 (versión solicitada por el equipo).
+- Modificaciones: Aclaración del alcance del Principio III, sin cambiar su título ni su regla de separación MVC; actualización del rol del agente.
+- Principios: Se conservan los 7 principios; I, II y IV a VII sin cambios.
+- Secciones agregadas o eliminadas: Ninguna.
+- Pendientes: Ninguno.
 -->
 
 # Proyecto CRIPTA - Constitución
@@ -20,9 +22,9 @@ Sync Impact Report:
 - **Cómo se comprueba**: Con pruebas automatizadas que corren la misma partida dos veces con la misma semilla y comparan que el resultado y los eventos sean idénticos.
 
 ### III. Separación MVC
-- **Qué dice**: El Modelo (`modelo/`) no sabe de HTTP, archivos, consola ni Pygame, y no importa `controlador/` ni `vista/`. Los modos `--replay`, `--bench` y `--verificar` no crean la vista.
+- **Qué dice**: El Modelo puro (`modelo/juego` y `modelo/estructuras`) no sabe de HTTP, archivos, consola ni Pygame. `modelo/datos` contiene adaptadores de E/S (red y disco) que el modelo de juego no importa. Ningún módulo de `modelo/` importa `controlador/` ni `vista/`. Los modos `--replay`, `--bench` y `--verificar` no crean la vista.
 - **Por qué lo tenemos**: Para mantener las responsabilidades separadas y permitir que las pruebas y los análisis de rendimiento corran rápido en consola sin depender de gráficos.
-- **Cómo se comprueba**: Revisando que `modelo/` no importe nada de controlador ni vista, y verificando que `--bench` y `--verificar` corran sin inicializar Pygame.
+- **Cómo se comprueba**: Revisando que `modelo/juego` no importe `os`, `json`, `requests` ni `modelo/datos`, que `modelo/` no importe nada de controlador ni vista, y verificando que `--bench` y `--verificar` corran sin inicializar Pygame.
 
 ### IV. Ningún dato de una cripta concreta en el código
 - **Qué dice**: Ningún dato de una cripta concreta va en el código: ni ids de salas, ni llaves, ni presupuestos, ni nombres.
@@ -49,7 +51,7 @@ Sync Impact Report:
 - **Puntos únicos de cambio de estado**: Todo cambio de estado del juego pasa por los métodos únicos de `Partida` (`cambiar`, `_lista_*`, `_inv_*`, y el método único de puertas), para que el pergamino lo pueda revertir y la línea de tiempo lo pueda registrar.
 - **Identificadores estables y pruebas de aceptación**: Cada requisito tiene un id estable (`FR-###` para funcionales, `SC-###` para rendimiento) y cada escenario de aceptación tiene una prueba automatizada que cita ese id en su nombre (por ejemplo, `test_FR007_...`).
 - **Dependencias**: No se agregan dependencias fuera de `requests` y `pygame`. Todo el código corre en Python 3.13.
-- **Rol del agente**: El agente de programación es Google Antigravity con spec-kit v1.0.10. El agente no hace commits ni push; los hacemos nosotros.
+- **Rol del agente**: Google Antigravity hasta 2026-11-08 y OpenAI Codex desde esa fecha, con spec-kit v1.0.10; el agente no hace commits.
 - **Registro de decisiones**: `DECISIONES.md` enlaza el `spec.md` y el `plan.md` de cada decisión.
 
 ## Flujo de trabajo y validación
@@ -68,4 +70,4 @@ Sync Impact Report:
   - **PATCH (1.0.X)**: Aclaraciones de redacción o formato.
 - **Cumplimiento**: Antes de avanzar en cada fase de spec-kit (`/speckit-plan`, `/speckit-tasks`, `/speckit-implement`), revisamos que se cumpla esta constitución.
 
-**Version**: 1.0.0 | **Ratified**: 2026-11-06 | **Last Amended**: 2026-11-06
+**Version**: 1.1.0 | **Ratified**: 2026-11-06 | **Last Amended**: 2026-11-18

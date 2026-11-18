@@ -314,6 +314,91 @@ Las criptas sintéticas de las mediciones salen de `bench/generador_criptas.py` 
 
 ---
 
+## Pruebas de aceptación por capacidad
+
+Ejecutar desde la raíz del repositorio. Estos comandos usan explícitamente el
+Python 3.13 del entorno virtual del proyecto; equivalen a `python -m tests.<modulo>`
+con ese entorno activado. Cada módulo ejecuta sus casos de aceptación y las
+regresiones relacionadas; los ids FR/SC corresponden a la spec de su capacidad.
+
+### 001 — Terreno, cazador e invalidación de rutas
+
+Costos de movimiento, puertas, alcance y desempates del cazador, reutilización
+e invalidación de rutas, persistencia de rango/comportamiento y cierre de todos
+los eventos empatados antes de devolver el control al jugador:
+
+```powershell
+venv\Scripts\python.exe -m tests.test_terreno_cazador
+venv\Scripts\python.exe -m tests.test_persistencia_cazador
+venv\Scripts\python.exe -m tests.test_cierre_instante_t
+```
+
+### 002 — Niebla de guerra, antorcha, mapa e IR_A
+
+Conocimiento y privacidad del mapa, observación con antorcha, efectos del
+pergamino, rutas conocidas de costo mínimo, viaje compuesto y cancelación,
+comentarios del replay, guardado/carga v4 y mapa dibujado:
+
+```powershell
+venv\Scripts\python.exe -m tests.test_niebla_ir_a
+venv\Scripts\python.exe -m tests.test_conocimiento
+venv\Scripts\python.exe -m tests.test_conocimiento_partida
+venv\Scripts\python.exe -m tests.test_fr010_generaciones_002
+venv\Scripts\python.exe -m tests.test_mapa_consola
+venv\Scripts\python.exe -m tests.test_planificador_rutas
+venv\Scripts\python.exe -m tests.test_ir_a_compuesto
+venv\Scripts\python.exe -m tests.test_comentarios_ir_a_002
+venv\Scripts\python.exe -m tests.test_integracion_comentarios_002
+venv\Scripts\python.exe -m tests.test_guardado_v4_002
+venv\Scripts\python.exe -m tests.test_carga_v4_002
+venv\Scripts\python.exe -m tests.test_bench_mapa_conocido_002
+venv\Scripts\python.exe -m tests.test_ir_a_grafico_002
+venv\Scripts\python.exe -m tests.test_mapa_dibujado_002
+```
+
+### 003 — Servicio web y verificación de resolubilidad
+
+Contrato de `/llaves` y presupuesto de solicitudes, validación de costos,
+generador sintético, obtención de llaves por etapas, ciclos y motivos del
+reporte, inicio de partida, `--verificar` y `--forzar`:
+
+```powershell
+venv\Scripts\python.exe -m tests.test_red
+venv\Scripts\python.exe -m tests.test_almacen_cripta
+venv\Scripts\python.exe -m tests.test_esqueleto
+venv\Scripts\python.exe -m tests.test_generador_criptas
+venv\Scripts\python.exe -m tests.test_resolubilidad
+venv\Scripts\python.exe -m tests.test_resolubilidad_unitaria
+venv\Scripts\python.exe -m tests.test_resolubilidad_integracion
+venv\Scripts\python.exe -m tests.test_bench_resolubilidad
+```
+
+### 004 — Línea de tiempo e interfaz
+
+Consultas por instante y número de acción, resúmenes sin mutación, retroceso,
+checkpoints y deltas, replay con `--hasta`, persistencia de la historia y
+presentación en consola y ventana:
+
+```powershell
+venv\Scripts\python.exe -m tests.test_linea_tiempo
+venv\Scripts\python.exe -m tests.test_historia_persistencia
+venv\Scripts\python.exe -m tests.test_bench_linea_tiempo
+venv\Scripts\python.exe -m tests.test_historia_interfaces
+venv\Scripts\python.exe -m tests.test_gui
+```
+
+**Pygame:** se necesita instalado para ejecutar completas las suites
+`test_ir_a_grafico_002`, `test_mapa_dibujado_002`, `test_historia_interfaces` y
+`test_gui`, porque contienen casos gráficos. Para ejecutarlas sin ventana
+visible, establecer antes en PowerShell:
+
+```powershell
+$env:SDL_VIDEODRIVER = 'dummy'
+```
+
+Los módulos `test_bench_*` verifican el contrato de los benchmarks; las
+mediciones de rendimiento se ejecutan aparte con `main.py --bench`.
+
 ## Pruebas
 
 Cada archivo `test_*.py` de la carpeta `tests` se ejecuta como módulo desde la raíz, por ejemplo:
@@ -354,6 +439,7 @@ python -m tests.test_ir_a_grafico_002
 python -m tests.test_linea_tiempo
 python -m tests.test_lista_ordenada
 python -m tests.test_mapa_consola
+python -m tests.test_mapa_dibujado_002
 python -m tests.test_motor_base
 python -m tests.test_niebla_ir_a
 python -m tests.test_ordenamiento
@@ -375,7 +461,7 @@ Todos juntos (PowerShell), con un resumen de fallos al final:
 $fallos = 0; Get-ChildItem tests -Filter 'test_*.py' | ForEach-Object { python -m ("tests." + $_.BaseName); if ($LASTEXITCODE -ne 0) { $fallos++ } }; "Módulos con fallos: $fallos"
 ```
 
-Las pruebas de interfaz gráfica (`test_gui`, `test_historia_interfaces`, `test_ir_a_grafico_002`) necesitan Pygame instalado.
+Las pruebas de interfaz gráfica (`test_gui`, `test_historia_interfaces`, `test_ir_a_grafico_002`, `test_mapa_dibujado_002`) necesitan Pygame instalado.
 
 ---
 
