@@ -899,7 +899,7 @@ class VistaPygame(Vista):
         pantalla = getattr(self, 'pantalla', None)
         if pantalla is None:
             pantalla = pygame.Surface((ANCHO, ALTO))
-        zona = pygame.Rect(20, 70, ANCHO - 40, 540)
+        zona = pygame.Rect(20, 82, ANCHO - 40, 516)
         jugador = next(c for c in mapa.casillas if c.es_jugador)
         zoom = 1.0
         centro = (zona.centerx, zona.centery)
@@ -915,11 +915,12 @@ class VistaPygame(Vista):
             zoom = nuevo
 
         def punto(c):
-            return (round(desplazamiento[0] + c.x * 190 * zoom),
-                    round(desplazamiento[1] + c.y * 125 * zoom))
+            return (round(desplazamiento[0]) + round(c.x * 190 * zoom),
+                    round(desplazamiento[1]) + round(c.y * 125 * zoom))
 
         niebla = None
         zoom_niebla = None
+        puertas = ()
         while not self.cerrada:
             for evento in self._eventos():
                 if evento.type == pygame.QUIT:
@@ -959,43 +960,37 @@ class VistaPygame(Vista):
                 # Caché local a esta apertura: arrastrar solo traslada la Surface.
                 niebla = self._crear_niebla_mapa(zoom)
                 avistada = self._crear_avistada_mapa(zoom)
+                puertas = self._preparar_puertas_mapa(mapa, zoom)
                 zoom_niebla = zoom
             pantalla.fill((4, 6, 10), zona)
             pantalla.blit(niebla, niebla.get_rect(center=punto(jugador)))
-            for conexion in mapa.conexiones:
-                a = punto(mapa.casillas[conexion.origen])
-                b = punto(mapa.casillas[conexion.destino])
-                color = (ABIERTA if conexion.estado == 'abierta' else
-                         DORADO if conexion.estado == 'cerrada' and conexion.llave is not None else
-                         CERRADA if conexion.estado == 'cerrada' else TEXTO_TENUE)
-                hacia_niebla = (mapa.casillas[conexion.origen].id is None or
-                               mapa.casillas[conexion.destino].id is None)
-                if hacia_niebla:
-                    # Orientar el desvanecimiento desde la explorada a la avistada.
-                    desde, hasta = (b, a) if mapa.casillas[conexion.origen].id is None else (a, b)
-                    for tramo in range(24):
-                        inicio = _entre(desde, hasta, tramo / 24)
-                        fin = _entre(desde, hasta, (tramo + 1) / 24)
-                        fondo = pantalla.get_at(inicio) if zona.collidepoint(inicio) else (4, 6, 10)
-                        alfa = 0.48 * (1 - tramo / 24) ** 1.3
-                        tenue = tuple(round(fondo[i] + (color[i] - fondo[i]) * alfa) for i in range(3))
-                        pygame.draw.line(pantalla, tenue, inicio, fin, 2)
-                    color = tuple(round(canal * 0.62) for canal in color)
-                else:
-                    pygame.draw.line(pantalla, color, a, b, 3)
-                rotulo = '%s costo %s, %s' % (conexion.direccion, conexion.costo,
-                          'no observada' if conexion.estado == 'desconocida' else conexion.estado)
-                if conexion.llave is not None:
-                    rotulo += ', llave %s' % conexion.llave
-                self._texto(self.fuente_chica, rotulo, color,
-                            (a[0] + b[0]) // 2 + 8, (a[1] + b[1]) // 2 - 12)
+            offset = (round(desplazamiento[0]), round(desplazamiento[1]))
+            rotulos = self._encuadrar_rotulos_mapa(mapa, puertas, zoom, offset, zona)
+            for conexion, _, puntos, _, _ in puertas:
+                # La inversa conserva su marcador, pero comparte línea y rótulo.
+                if not conexion.rotular:
+                    continue
+                ruta = tuple((x + offset[0], y + offset[1]) for x, y in puntos)
+                self._dibujar_ruta_mapa(pantalla, zona, ruta, self._color_puerta_mapa(conexion),
+                                        conexion.fuera_cuadricula or conexion.repetida,
+                                        mapa.casillas[conexion.destino].id is None)
+            # Las guías solo aparecen si hubo un choque y nunca recorren el mapa.
+            for (conexion, marcador, puntos, _, rotulo), caja in zip(puertas, rotulos):
+                if caja is None:
+                    continue
+                habitual = self._posicion_rotulo_mapa(marcador, conexion.direccion, rotulo.size, zoom)
+                if rotulo != habitual:
+                    ruta = tuple((x + offset[0], y + offset[1]) for x, y in puntos)
+                    self._dibujar_guia_mapa(pantalla, ruta, caja, self._color_puerta_mapa(conexion))
             for c in mapa.casillas:
                 x, y = punto(c)
-                ancho, alto = max(56, round(145 * zoom)), max(40, round(66 * zoom))
+                ancho, alto = self._medidas_casilla_mapa(zoom)
                 rect = pygame.Rect(x - ancho // 2, y - alto // 2, ancho, alto)
                 if not zona.colliderect(rect):
                     continue
                 if c.id is None:
+                    # Las capas alfa no deben transparentar conexiones anteriores.
+                    pygame.draw.rect(pantalla, (4, 6, 10), rect, border_radius=6)
                     pantalla.blit(avistada, avistada.get_rect(center=(x, y)))
                     self._texto(self.fuente_media, '?', (79, 86, 99), x, y - 10, centro=True)
                 else:
@@ -1010,18 +1005,239 @@ class VistaPygame(Vista):
                 if c.es_jugador:
                     pygame.draw.circle(pantalla, COLOR_JUGADOR, (rect.right - 12, rect.top + 12), 6)
                     pygame.draw.circle(pantalla, SELECCION, (rect.right - 12, rect.top + 12), 6, 1)
+            # Marcadores y después todos los fondos/textos: ninguna línea los tapa.
+            for conexion, marcador, _, texto, rotulo in puertas:
+                pygame.draw.rect(pantalla, self._color_puerta_mapa(conexion),
+                                 marcador.move(offset), border_radius=2)
+            for (conexion, _, _, texto, _), caja in zip(puertas, rotulos):
+                if caja is not None and zona.colliderect(caja):
+                    color = self._color_puerta_mapa(conexion)
+                    pygame.draw.rect(pantalla, (12, 15, 21), caja, border_radius=3)
+                    pygame.draw.rect(pantalla, color, caja, 1, border_radius=3)
+                    if zoom >= 1:
+                        self._texto(self.fuente_chica, texto, color, caja.x + 5, caja.y + 3)
+                    elif getattr(self, 'fuente_chica', None) is not None:
+                        letras = self.fuente_chica.render(texto, True, color)
+                        mx, my = max(2, round(5 * zoom)), max(1, round(3 * zoom))
+                        pantalla.blit(pygame.transform.smoothscale(letras, (caja.w - 2 * mx, caja.h - 2 * my)),
+                                      (caja.x + mx, caja.y + my))
             pantalla.set_clip(anterior_clip)
             self._texto(self.fuente_media, 'Mapa conocido - Sala actual: %s %s' %
                         (jugador.id, jugador.nombre or ''), DORADO, 30, 20)
             self._texto(self.fuente_chica,
-                        'Leyenda: verde abierta | roja cerrada | dorada con llave | gris no observada | ? avistada (niebla, sala desconocida)',
-                        TEXTO, 30, 620)
-            self._texto(self.fuente_chica, 'Exploradas (recuadro nítido): %s | Avistadas: %s | Borde e icono: jugador' %
-                        (mapa.exploradas, mapa.avistadas), TEXTO, 30, 647)
+                        'A verde: abierta | C roja: cerrada | K dorada: con llave | ? gris en puerta: no observada',
+                        TEXTO, 30, 43)
+            self._texto(self.fuente_chica,
+                        '? en recuadro: avistada (sala desconocida) | c: costo | >: destino | discontinua: conexion separada | borde e icono: jugador',
+                        TEXTO, 30, 62)
+            self._texto(self.fuente_chica, 'Sala actual %s: todas sus salidas | Exploradas: %s | Avistadas: %s | Borde e icono: jugador' %
+                        (jugador.id, mapa.exploradas, mapa.avistadas), TEXTO, 30, 615)
+            salidas_actuales = [c for c in mapa.conexiones if mapa.casillas[c.origen].es_jugador]
+            for i, conexion in enumerate(salidas_actuales):
+                destino = mapa.casillas[conexion.destino]
+                estado = 'no observada' if conexion.estado == 'desconocida' else conexion.estado
+                if conexion.llave is not None:
+                    estado += ' llave ' + str(conexion.llave)
+                fila = '%s -> %s | costo %s | %s' % (conexion.direccion,
+                        '?' if destino.id is None else destino.id, conexion.costo, estado)
+                self._texto(self.fuente_chica, fila, self._color_puerta_mapa(conexion),
+                            30 + (i % 2) * 620, 638 + (i // 2) * 20, ancho_max=600)
+            if not salidas_actuales:
+                self._texto(self.fuente_chica, 'Sin salidas conocidas.', TEXTO_TENUE, 30, 638)
             self._texto(self.fuente_chica,
                         'Flechas / arrastre: desplazar | rueda / +/-: zoom | C: recentrar | Esc / Enter: volver',
-                        DORADO, 30, 677)
+                        DORADO, 30, 697)
             self._mostrar_cuadro()
+
+    @staticmethod
+    def _color_puerta_mapa(conexion):
+        return (ABIERTA if conexion.estado == 'abierta' else
+                DORADO if conexion.estado == 'cerrada' and conexion.llave is not None else
+                CERRADA if conexion.estado == 'cerrada' else TEXTO_TENUE)
+
+    @staticmethod
+    def _medidas_casilla_mapa(zoom):
+        # Conservar huecos entre casillas también al alejar el zoom.
+        return max(40, round(145 * zoom)), max(20, round(66 * zoom))
+
+    @staticmethod
+    def _posicion_rotulo_mapa(marcador, direccion, tamano, zoom):
+        """Rótulo local: junto a N/S o en el hueco cercano a E/O."""
+        ancho, alto = VistaPygame._medidas_casilla_mapa(zoom)
+        rect = pygame.Rect((0, 0), tamano)
+        x, y = marcador.center
+        if direccion in ('N', 'S'):
+            rect.center = (x, y + (-1 if direccion == 'N' else 1) *
+                           (rect.h // 2 + max(5, round(8 * min(1.0, zoom)))))
+        else:
+            rect.center = (x + round((190 * zoom - ancho) / 2) * (1 if direccion == 'E' else -1),
+                           y + (-1 if direccion == 'E' else 1) * (alto // 2 + rect.h // 2 + 4))
+        return rect
+
+    def _preparar_puertas_mapa(self, mapa, zoom):
+        """Geometría de presentación local al zoom; no cambia las casillas.
+
+        Una entrada por salida, un rótulo por puerta física. Las posiciones se
+        trasladan juntas al arrastrar: los rótulos no cambian de sitio al repintar.
+        """
+        from modelo.juego.sala import DIRECCIONES
+        from modelo.juego.mapa_dibujado import DESPLAZAMIENTOS
+
+        ancho, alto = self._medidas_casilla_mapa(zoom)
+        salas = [pygame.Rect(round(c.x * 190 * zoom) - ancho // 2,
+                             round(c.y * 125 * zoom) - alto // 2, ancho, alto)
+                 for c in mapa.casillas]
+
+        def extremo(indice, direccion):
+            rect = salas[indice]
+            dx, dy = DESPLAZAMIENTOS[direccion]
+            return rect.centerx + dx * (ancho // 2), rect.centery + dy * (alto // 2)
+
+        lado = max(8, round(10 * zoom))
+        marcadores = []
+        for conexion in mapa.conexiones:
+            x, y = extremo(conexion.origen, DIRECCIONES.index(conexion.direccion))
+            marcadores.append(pygame.Rect(x - lado // 2, y - lado // 2, lado, lado))
+        ocupados = [rect.inflate(2, 2) for rect in salas] + [m.inflate(2, 2) for m in marcadores]
+        entradas = [0] * (len(salas) * 4)
+        puertas = []
+        for conexion, marcador in zip(mapa.conexiones, marcadores):
+            direccion = DIRECCIONES.index(conexion.direccion)
+            dx, dy = DESPLAZAMIENTOS[direccion]
+            a = extremo(conexion.origen, direccion)
+            destino = mapa.casillas[conexion.destino]
+            entrada = direccion ^ 1
+            if destino.id is None:
+                # Preferir el borde próximo y repartir las llegadas entre lados.
+                entrada = min(range(4), key=lambda lado: (
+                    entradas[conexion.destino * 4 + lado],
+                    abs(a[0] - extremo(conexion.destino, lado)[0]) +
+                    abs(a[1] - extremo(conexion.destino, lado)[1]), lado))
+                entradas[conexion.destino * 4 + entrada] += 1
+            b = extremo(conexion.destino, entrada)
+            puntos = (a, b)
+            if conexion.fuera_cuadricula or conexion.repetida or entrada != (direccion ^ 1):
+                puntos = self._ruta_ortogonal_mapa(mapa.casillas[conexion.origen], destino,
+                                                   direccion, entrada, a, b, zoom)
+            texto = rotulo = None
+            if conexion.rotular:
+                estado = ('A' if conexion.estado == 'abierta' else
+                          'K' if conexion.estado == 'cerrada' and conexion.llave is not None else
+                          'C' if conexion.estado == 'cerrada' else '?')
+                texto = '%s c%s %s' % (conexion.direccion, conexion.costo, estado)
+                if conexion.fuera_cuadricula or conexion.repetida:
+                    texto += ' >' + ('?' if destino.id is None else str(destino.id))
+                if conexion.llave is not None:
+                    texto += ' llave:' + str(conexion.llave)
+                texto = unicodedata.normalize('NFKD', texto).encode('ascii', 'replace').decode('ascii')
+                # Clientes de prueba con _texto sustituido no crean fuentes.
+                fuente = getattr(self, 'fuente_chica', None)
+                w, h = fuente.size(texto) if fuente is not None else (len(texto) * 8, 16)
+                escala = min(1.0, zoom)
+                tamano = (max(1, round(w * escala)) + 2 * max(2, round(5 * escala)),
+                          max(1, round(h * escala)) + 2 * max(1, round(3 * escala)))
+                habitual = self._posicion_rotulo_mapa(marcador, conexion.direccion, tamano, zoom)
+                rotulo = habitual.copy()
+                # Buscar a ambos lados en perpendicular, de pocos píxeles en pocos.
+                paso = max(4, round(6 * zoom))
+                intento = 0
+                while any(rotulo.colliderect(otro) for otro in ocupados):
+                    intento += 1
+                    distancia = ((intento + 1) // 2) * paso * (1 if intento % 2 else -1)
+                    rotulo = habitual.move(dy * distancia, dx * distancia)
+                margen = 2 * max(1, round(2 * escala))
+                ocupados.append(rotulo.inflate(margen, margen))
+            puertas.append((conexion, marcador, puntos, texto, rotulo))
+        return tuple(puertas)
+
+    @staticmethod
+    def _ruta_ortogonal_mapa(origen, destino, direccion, entrada, a, b, zoom):
+        """Codos por las fronteras de las celdas, siempre fuera de las salas."""
+        from modelo.juego.mapa_dibujado import DESPLAZAMIENTOS
+
+        dx, dy = DESPLAZAMIENTOS[direccion]
+        ex, ey = DESPLAZAMIENTOS[entrada]
+        # Carriles cercanos distinguen puertas repetidas sin entrar en casillas.
+        carril = (direccion - 1.5) * max(1, 2 * zoom)
+        salida = (round((origen.x + dx / 2) * 190 * zoom + (carril if dx else 0)),
+                  round((origen.y + dy / 2) * 125 * zoom + (carril if dy else 0)))
+        llegada = (round((destino.x + ex / 2) * 190 * zoom + (carril if ex else 0)),
+                   round((destino.y + ey / 2) * 125 * zoom + (carril if ey else 0)))
+        if dy and ey:
+            x = round((origen.x + (0.5 if destino.x >= origen.x else -0.5)) * 190 * zoom)
+            codos = ((x, salida[1]), (x, llegada[1]))
+        elif dx and ex:
+            y = round((origen.y + (0.5 if destino.y >= origen.y else -0.5)) * 125 * zoom)
+            codos = ((salida[0], y), (llegada[0], y))
+        else:
+            codos = ((llegada[0], salida[1]) if dy else (salida[0], llegada[1]),)
+        return (a, salida) + codos + (llegada, b)
+
+    def _encuadrar_rotulos_mapa(self, mapa, puertas, zoom, offset, zona):
+        """Evitar cortes parciales en los bordes sin limitar arrastre ni zoom."""
+        ancho, alto = self._medidas_casilla_mapa(zoom)
+        ocupados = [pygame.Rect(round(c.x * 190 * zoom) + offset[0] - ancho // 2,
+                               round(c.y * 125 * zoom) + offset[1] - alto // 2, ancho, alto)
+                    for c in mapa.casillas]
+        ocupados.extend(m.move(offset).inflate(2, 2) for _, m, _, _, _ in puertas)
+        originales = [r.move(offset) if r is not None else None for _, _, _, _, r in puertas]
+        resultado = []
+        for i, rect in enumerate(originales):
+            if rect is not None and zona.colliderect(rect) and not zona.contains(rect):
+                candidato = rect.clamp(zona.inflate(-4, -4))
+                otros = ocupados + [r for j, r in enumerate(originales) if j != i and r is not None]
+                rect = None
+                for distancia in range(0, 33, 4):
+                    for dx, dy in ((0, -distancia), (0, distancia), (-distancia, 0), (distancia, 0)):
+                        prueba = candidato.move(dx, dy)
+                        if zona.contains(prueba) and not any(prueba.colliderect(otro) for otro in otros):
+                            rect = prueba
+                            break
+                    if rect is not None:
+                        break
+                # Si no cabe entero cerca de su puerta, se recupera al desplazar
+                # o alejar el mapa; nunca se presenta una etiqueta cortada.
+            resultado.append(rect)
+            if rect is not None:
+                ocupados.append(rect)
+        return resultado
+
+    @staticmethod
+    def _dibujar_guia_mapa(pantalla, puntos, caja, color):
+        """Unir al tramo más cercano únicamente si basta una guía corta."""
+        mejor = None
+        for a, b in zip(puntos, puntos[1:]):
+            x = max(min(a[0], b[0]), min(caja.centerx, max(a[0], b[0])))
+            y = max(min(a[1], b[1]), min(caja.centery, max(a[1], b[1])))
+            borde = (max(caja.left, min(x, caja.right - 1)),
+                     max(caja.top, min(y, caja.bottom - 1)))
+            distancia = math.hypot(x - borde[0], y - borde[1])
+            if mejor is None or distancia < mejor[0]:
+                mejor = (distancia, (x, y), borde)
+        if mejor is not None and 0 < mejor[0] <= 24:
+            pygame.draw.line(pantalla, color, mejor[1], mejor[2], 1)
+
+    @staticmethod
+    def _dibujar_ruta_mapa(pantalla, zona, puntos, color, separada, hacia_niebla):
+        """Línea discontinua para rutas separadas; atenuación solo hacia niebla."""
+        for i in range(len(puntos) - 1):
+            recorte = zona.clipline(puntos[i], puntos[i + 1])
+            if not recorte:
+                continue
+            a, b = recorte
+            largo = math.hypot(b[0] - a[0], b[1] - a[1])
+            tramos = max(1, math.ceil(largo / 8))
+            for tramo in range(tramos):
+                if separada and tramo % 2:
+                    continue
+                inicio, fin = _entre(a, b, tramo / tramos), _entre(a, b, (tramo + 1) / tramos)
+                tono = color
+                if hacia_niebla:
+                    avance = (i + (tramo + 0.5) / tramos) / (len(puntos) - 1)
+                    alfa = 0.65 - 0.30 * avance
+                    fondo = pantalla.get_at(inicio) if zona.collidepoint(inicio) else (4, 6, 10)
+                    tono = tuple(round(fondo[j] + (color[j] - fondo[j]) * alfa) for j in range(3))
+                pygame.draw.line(pantalla, tono, inicio, fin, 2 if hacia_niebla else 3)
 
     def _crear_niebla_mapa(self, zoom):
         """Campo radial suave, sin consultar salas ni usar el azar de la partida."""
@@ -1044,7 +1260,7 @@ class VistaPygame(Vista):
 
     def _crear_avistada_mapa(self, zoom):
         """Recuadro translúcido con capas alfa que suavizan el contorno."""
-        ancho, alto = max(56, round(145 * zoom)), max(40, round(66 * zoom))
+        ancho, alto = self._medidas_casilla_mapa(zoom)
         margen = max(5, round(9 * zoom))
         superficie = pygame.Surface((ancho + margen * 2, alto + margen * 2), pygame.SRCALPHA)
         for capa in range(margen + 1):

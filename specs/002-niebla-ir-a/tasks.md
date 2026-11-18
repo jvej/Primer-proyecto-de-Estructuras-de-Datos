@@ -409,3 +409,59 @@ no mide ese barrido. Las reglas del layout y las entradas medidas no cambian.
 Decisión, memoria, complejidad y evidencia del fallo previo de sprites:
 DECISIONES.md §17.7. La spec sigue intacta. Conocimiento tiene diff vacío contra
 HEAD; Partida solo tiene seis líneas agregadas, el método mapa_dibujado.
+
+### Corrección US5: origen estable y puertas individuales (2026-11-18)
+
+Orden estricto: T046 → T047 → T048 en rojo → T049/T050/T051 → T052 → T053.
+No se alteran las mecánicas, conocimiento, controlador ni formatos. El usuario
+autoriza exclusivamente pasar `self.sala_inicial_id` en la llamada ya existente
+dentro de `Partida.mapa_dibujado()`; ningún otro cambio en partida.py.
+
+- [x] T046 [US5] Corregir spec.md antes de los demás archivos: origen inicial independiente de posición, todas las puertas, rótulos únicos, tabla completa y escenarios Given/When/Then; FR-026, FR-027, FR-029..FR-035, SC-006, SC-008.
+- [x] T047 [US5] Actualizar plan.md y esta ampliación con contrato, pares recíprocos, rutas diferenciadas y correspondencia de pruebas; FR-025..FR-038.
+- [x] T048 [US5] Ampliar tests/test_mapa_dibujado_002.py a más de 21 pruebas y comprobar fallo antes del código: origen real no mínimo, estabilidad en todas las exploradas y colisiones, cada salida y repetidas, no adyacentes, rótulos únicos sin choques/ASCII, avistadas anónimas e ids ocultos, tiempo/log intactos; FR-026, FR-027, FR-029..FR-035, FR-037.
+- [x] T049 [US5] Anclar calcular_layout al id inicial; conservar una Conexion por salida, marcar repetidas/fuera de dirección y rótulo único por pareja recíproca; pasar sala_inicial_id solo en la llamada de Partida.mapa_dibujado; FR-026, FR-027, FR-031, FR-032, FR-034, FR-035.
+- [x] T050 [US5] Dibujar marcadores N/S/E/O, rutas diferenciadas y rótulos ASCII con fondo y desplazamiento ante choques; centrar vista en jugador, lista actual completa y controles/niebla intactos; FR-025..FR-028, FR-030, FR-032, FR-034..FR-037.
+- [x] T051 [US5] Conservar todas las filas de consola, incluidas salidas al mismo destino y desplazadas, con puertas individuales en el dibujo; FR-026, FR-027, FR-029, FR-035, FR-038.
+- [x] T052 [US5] Ejecutar todos los módulos test_*.py en subprocesos del venv con SDL dummy, bytecode deshabilitado y temporales fuera del repo; revisar imports y diff protegido y verificar más de 21 pruebas del mapa; FR-025..FR-038, SC-006, SC-008.
+- [x] T053 [US5] Sustituir origen/puertas en DECISIONES.md §17.7, registrar limitación por nuevos descubrimientos y prompts/resultados en PROMPTS_LLM.md; FR-027, FR-030..FR-035, FR-037.
+
+#### Evidencia de la corrección (2026-11-18)
+
+Orden real de escrituras: spec → plan/tareas → pruebas → código → documentación.
+`venv\Scripts\python.exe -B -m tests.test_mapa_dibujado_002` se ejecutó antes
+del código con SDL dummy: **33 pruebas, 4 fallos y 7 errores** por contrato aún
+ausente; las 21 anteriores pasaron sin alteraciones. Se agregaron 12 casos; no
+hubo pruebas anteriores que ajustar por el nuevo origen. El error inicial de
+una prueba nueva al consultar AzarReversible se corrigió y se repitió el rojo
+antes de implementar; no se contó como evidencia del comportamiento faltante.
+
+Después del código: las 33 pruebas pasan. La corrida de todos los `test_*.py`
+ejecutó 43 módulos, cada uno en un subproceso del Python del venv, carpeta
+externa propia, `SDL_VIDEODRIVER=dummy`, `SDL_AUDIODRIVER=dummy` y bytecode
+deshabilitado: 42 aprobados y un fallo en test_gui por una vista parcial sin
+fuentes. Se corrigió la medición de texto sin modificar ese test y se repitieron
+los módulos afectados: test_gui (18), test_mapa_dibujado_002 (33),
+test_historia_interfaces (9) y test_ir_a_grafico_002 (13), todos con código 0.
+Resultado final: **43/43 suites aprobadas**, combinando la corrida completa y
+la repetición tras esa corrección. No se afirma una segunda corrida completa.
+
+Registros externos: `cripta_mapa_revision_lu8ku0wl/resumen.txt` y
+`cripta_mapa_final_86yrhb70/*/resultado.txt`, bajo el temporal de Windows.
+Se renderizó y examinó `mapa_cuatro_puertas.png`: cuatro marcadores, conexiones
+separadas, rótulos ASCII legibles sin colisión y tabla actual completa. Las
+pruebas verifican métricas de fuente y ausencia de superposición a zoom
+0.3/1.0/2.5. No se afirma una sesión humana de juego.
+
+`rg` confirma imports puros en mapa_dibujado.py: sin os, json, pygame,
+controlador ni vista; sin estructuras u ordenamientos prohibidos nuevos.
+`git diff` deja conocimiento.py, controlador y formatos sin cambios; partida.py
+solo modifica el argumento de la llamada a calcular_layout en mapa_dibujado.
+`git diff --check` sin errores. Sin commits, push ni archivos borrados.
+
+Revisión manual: `venv\Scripts\python.exe main.py --offline paquete_prueba/ --gui`.
+Para reproducir el caso de cripta-04/sala 45 se necesita un paquete que incluya
+esa cripta: el paquete_prueba presente solo incluye cripta-prueba, cripta-ciclo
+y cripta-cazadores. Al disponer de ella, explorar 45 y vecinas, abrir M, verificar
+N/E hacia el mismo destino como puertas distintas, cerrar y moverse entre salas
+ya exploradas sin nuevos descubrimientos: las casillas conservan posiciones.

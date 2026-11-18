@@ -68,14 +68,15 @@ def lineas_mapa_dibujado(mapa, ancho=None):
         bloque += 1
         lineas.append('Bloque %s: columnas %s a %s' % (bloque, inicio, fin))
         ancho_bloque = (fin - inicio + 1) * celda
-        lienzo = [[' '] * ancho_bloque for _ in range((maximo_y - minimo_y) * 4 + 1)]
+        # Margen vertical para las puertas N/S incluso en las filas extremas.
+        lienzo = [[' '] * ancho_bloque for _ in range((maximo_y - minimo_y) * 4 + 5)]
         # Primero las conexiones para que nunca tapen una etiqueta de sala.
         for conexion in mapa.conexiones:
             if conexion.fuera_cuadricula:
                 continue
             a, b = mapa.casillas[conexion.origen], mapa.casillas[conexion.destino]
             ax, bx = (a.x - inicio) * celda + celda // 2, (b.x - inicio) * celda + celda // 2
-            ay, by = (a.y - minimo_y) * 4, (b.y - minimo_y) * 4
+            ay, by = (a.y - minimo_y) * 4 + 2, (b.y - minimo_y) * 4 + 2
             if ay == by:
                 for x in range(max(0, min(ax, bx)), min(ancho_bloque - 1, max(ax, bx)) + 1):
                     lienzo[ay][x] = marca(conexion, True)
@@ -85,9 +86,27 @@ def lineas_mapa_dibujado(mapa, ancho=None):
         for c, texto in zip(mapa.casillas, etiquetas):
             if inicio <= c.x <= fin:
                 x = (c.x - inicio) * celda + (celda - len(texto)) // 2
-                y = (c.y - minimo_y) * 4
+                y = (c.y - minimo_y) * 4 + 2
                 for i, caracter in enumerate(texto):
                     lienzo[y][x + i] = caracter
+        # Una marca por salida en su lado; la tabla conserva todas sus etiquetas.
+        for conexion in mapa.conexiones:
+            c = mapa.casillas[conexion.origen]
+            if not inicio <= c.x <= fin:
+                continue
+            texto = etiquetas[conexion.origen]
+            izquierda = (c.x - inicio) * celda + (celda - len(texto)) // 2
+            x = (c.x - inicio) * celda + celda // 2
+            y = (c.y - minimo_y) * 4 + 2
+            if conexion.direccion == 'N':
+                y -= 1
+            elif conexion.direccion == 'S':
+                y += 1
+            elif conexion.direccion == 'E':
+                x = izquierda + len(texto)
+            else:
+                x = izquierda - 1
+            lienzo[y][x] = marca(conexion, conexion.direccion in ('E', 'O'))
         lineas.extend(''.join(fila).rstrip() for fila in lienzo)
     lineas.append('Leyenda: [id] explorada; [@id] jugador; (?) avistada; -/| abierta; X cerrada; K con llave; ? puerta no observada.')
     for c in mapa.casillas:

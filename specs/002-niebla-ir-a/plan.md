@@ -366,14 +366,14 @@ DECISIONES.md y tasks.md identifica los modulos realmente ejecutados.
 
 ## Ampliacion US5: mapa dibujado (FR-025..FR-038, SC-006..SC-008)
 
-Fecha: 2026-11-17. La spec confirmada es la fuente normativa; no se modifica.
+Fecha inicial: 2026-11-17; corrección autorizada: 2026-11-18. La spec actualizada es la fuente normativa.
 Se conserva el diseño anterior para historia, persistencia y rutas. Esta sección
 planifica únicamente el mapa dibujado y sus pruebas/documentos.
 
 ### Contrato y separación MVC
 
 - `modelo/juego/mapa_dibujado.py`: registros de entrada de conocimiento, casillas,
-  conexiones y resultado; función pura `calcular_layout(conocidas, actual)`.
+  conexiones y resultado; función pura `calcular_layout(conocidas, actual, ..., id_inicial=...)`.
   No recibe Partida, mapa completo, actores ni puertas vivas. No imprime.
 - `ConocimientoMapa` conserva exactamente el almacenamiento de f600fdd: lista simple
   de estados, sin subclase, enlaces ni directorio derivado. Esta revisión autorizada
@@ -384,11 +384,17 @@ planifica únicamente el mapa dibujado y sus pruebas/documentos.
   solo accede al objeto de sala cuando el estado es EXPLORADA. No consulta topología,
   ids, nombres o contenido de salas desconocidas para filtrar o ubicar casillas.
   Deduplica destinos por identidad/índice, sin consultar ids ni nombres de avistadas.
-  Usa ListaOrdenada propia construida en bloque para traducir índices a referencias
+  La única modificación autorizada en `Partida.mapa_dibujado()` pasa el atributo
+  existente `self.sala_inicial_id` a `calcular_layout`; no agrega estado ni cambia
+  ningún otro método. Usa ListaOrdenada propia construida en bloque para traducir índices a referencias
   compactas. El índice solo identifica extremos: nunca decide el orden visible.
 - Salidas públicas: casillas `(x,y,estado,id,nombre,es_jugador)`; avistadas con id y
   nombre None. Conexiones con referencias compactas a casillas, dirección, costo,
-  memoria de puerta y llave ya expuesta. Conteos de exploradas y avistadas.
+  memoria de puerta y llave ya expuesta. Una `Conexion` por salida de explorada,
+  sin fusionar destinos repetidos; marcas `fuera_cuadricula`, `repetida` y `rotular`.
+  Una pareja recíproca con direcciones opuestas conserva ambos marcadores y un solo
+  rótulo, elegido desde el menor id explorado. Dos salidas N/E hacia el mismo
+  destino son puertas distintas y conservan sus propios rótulos. Conteos de exploradas y avistadas.
 - Controlador MAPA suministra esta foto a la vista. `mapa_conocido()` y
   `lineas_mapa_conocido()` conservan su contrato para historia y clientes anteriores.
 - Consola dibuja ASCII por bloques horizontales y tabla de salidas, sin truncamiento.
@@ -400,7 +406,10 @@ planifica únicamente el mapa dibujado y sus pruebas/documentos.
 1. Ordenar únicamente las exploradas por id con el ordenamiento propio. Preparar
    el orden de avistadas recorriendo esas exploradas y sus salidas N,S,E,O; la primera
    salida conocida que revele una avistada fija su referencia anónima y origen.
-2. BFS desde la actual solo por exploradas. Desplazamientos N=(0,-1), S=(0,1),
+2. BFS desde la sala inicial explícita, nunca desde la actual, solo por exploradas.
+   Las entradas sintéticas sin id_inicial usan su primera sala como origen documentado.
+   La posición actual solo modifica `es_jugador`, encuadre y resumen de salidas.
+   Desplazamientos N=(0,-1), S=(0,1),
    E=(1,0), O=(-1,0). Cada nivel procesa exploradas por menor id y cada sala sus
    salidas N,S,E,O. Una cola es almacenamiento contiguo con cursor, sin quitar al
    principio. Para componentes desconectadas, comenzar por la menor id pendiente,
@@ -419,6 +428,26 @@ planifica únicamente el mapa dibujado y sus pruebas/documentos.
 5. Ocupación: índice propio balanceado sobre arreglos contiguos de nodos, clave
    (x,y), con búsqueda/inserción O(log K). Alternativa: ListaOrdenada propia, cuya
    inserción desplaza O(K) elementos. Medir ambas sin introducir dict/set.
+
+### Puertas y presentación corregidas (FR-027, FR-029, FR-030, FR-034)
+
+- No deduplicar conexiones por par de salas: recorrer todas las salidas N,S,E,O.
+  Comparar como máximo las cuatro salidas de cada extremo para marcar repetidas
+  y parejas recíprocas por dirección opuesta. Mantener costo/estado recordados.
+- Pygame dibuja cada marcador en el lado correspondiente del recuadro. Las líneas
+  adyacentes unen puertas; las repetidas o fuera de su dirección usan rutas con
+  codo, separadas y discontinuas, y destino en la puerta (id explorado o `?`).
+- Un rótulo por puerta física, nunca dos por los dos extremos recíprocos. Texto
+  ASCII: dirección, costo, estado corto A/C/K/?, destino si hace falta y llave
+  solo cuando la puerta la requiere y la información es conocida. Rectángulos
+  con fondo opaco; si chocan con otros rótulos o salas se desplazan de manera
+  determinista y se enlazan a su marcador. Conservar niebla y controles.
+- Bajo el dibujo, lista completa de salidas de la sala actual en dos columnas.
+  La consola conserva una fila por salida, también repetidas y fuera de cuadrícula,
+  y muestra sus marcadores individuales junto a cada lado sin alterar historia.
+- Limitación: nuevas exploradas pueden alterar prioridades de colisión y mover
+  casillas; moverse con el mismo conocimiento nunca las reubica. La colocación
+  de rótulos muy densos puede exigir desplazar o ampliar el mapa.
 
 ### Complejidad y mediciones previstas
 
@@ -454,11 +483,30 @@ Comparar fotos completas y salidas ASCII; probar GUI con eventos y superficie re
 bajo SDL_VIDEODRIVER=dummy, sin importar la biblioteca gráfica fuera de las pruebas
 que la necesitan. Ejecutar las 43 suites con el mismo script de auditoría,
 cada módulo en un proceso independiente desde una carpeta temporal externa y con
-bytecode deshabilitado. No modificar spec, archivos de guardado ni log. Verificar
-que conocimiento.py tiene diff vacío contra HEAD y partida.py solo agrega su método.
+bytecode deshabilitado. No modificar archivos de guardado ni log. Verificar
+que conocimiento.py y controlador tienen diff vacío contra HEAD y partida.py solo
+cambia la llamada dentro de mapa_dibujado para pasar sala_inicial_id.
 Checklist de requisitos existente: 16/16 marcados. Sin dependencias nuevas.
 Los hooks opcionales de commit se omiten por prohibición explícita del usuario.
 No se ejecutan scripts que reemplacen artefactos ni se crean ramas/commits.
+
+### Pruebas de la corrección, antes del código (2026-11-18)
+
+Todas en `tests/test_mapa_dibujado_002.py`, con ids FR en sus nombres:
+
+| Requisitos | Casos que deben acreditarlos |
+|---|---|
+| FR-031, FR-034, FR-035; SC-008 | Id inicial distinto del menor id; posiciones idénticas desde cualquier explorada, incluidas colisiones y componentes separadas. |
+| FR-026, FR-031, FR-035 | Avistadas sin id/nombre; renombrar ids ocultos no cambia ni layout ni puertas. |
+| FR-027, FR-029, FR-030 | Cuatro salidas, dos a un destino; una conexión y marcador por salida, dirección correcta, repetidas/no adyacentes diferenciadas y tabla completa. |
+| FR-027, FR-030 | Rótulos físicos únicos, costo/estado corto/llave condicional, ASCII soportado por la fuente; rectángulos sin colisión a distintas escalas. |
+| FR-030, FR-036, FR-037 | Centrado en jugador desplazado, lista actual completa, controles y layout una sola vez. |
+| FR-031, FR-032, FR-033, FR-038; SC-006 | Sin tiempo/log/observación ni cambios en historia, pergamino y modos sin GUI; todas las suites en subprocesos con SDL dummy y temporales externos. |
+
+No se cambian las 21 pruebas anteriores salvo que una asuma el origen actual;
+se registra explícitamente cualquier ajuste y el fallo de las nuevas antes del
+código. Las mediciones de 2026-11-17 son evidencia histórica, no una nueva medición
+de esta corrección.
 
 ### Evidencia después de restaurar la lista simple (2026-11-17)
 

@@ -49,6 +49,8 @@ class Conexion:
     estado: str
     llave: str | None
     fuera_cuadricula: bool
+    repetida: bool = False
+    rotular: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,25 +186,31 @@ def _anillo(r):
         yield -a, -b
 
 
-def calcular_layout(conocidas, actual, tipo_indice=IndiceOcupacion):
+def calcular_layout(conocidas, actual, tipo_indice=IndiceOcupacion, *, id_inicial=None):
     """Función pura sobre una foto compacta, sin ids ni salidas de avistadas.
 
     BFS O(K+E) más ordenación; índice O(log K) por candidato. Anillos: ver plan.
     tipo_indice permite medir la alternativa con exactamente la misma entrada.
+    id_inicial identifica el origen conocido real, independiente del jugador.
+    Las fotos sintéticas que lo omiten toman su primera sala como origen.
     """
     n = len(conocidas)
     if not 0 <= actual < n or conocidas[actual].id is None:
         raise ValueError('Se requiere una sala actual explorada')
     exploradas = ordenar_merge([i for i in range(n) if conocidas[i].id is not None],
                                 clave=lambda i: conocidas[i].id)
+    inicial = 0 if id_inicial is None else next(
+        (i for i in exploradas if conocidas[i].id == id_inicial), -1)
+    if inicial == -1 or conocidas[inicial].id is None:
+        raise ValueError('Se requiere una sala inicial explorada')
     salidas = [ordenar_merge(s.salidas, clave=lambda s: DIRECCIONES.index(s.direccion))
                if s.id is not None else () for s in conocidas]
     propuestas = [None] * n
-    propuestas[actual] = (0, 0)
-    raices = [actual] + [i for i in exploradas if i != actual]
+    propuestas[inicial] = (0, 0)
+    raices = [inicial] + [i for i in exploradas if i != inicial]
     max_x = 0
     for raiz in raices:
-        if raiz != actual:
+        if raiz != inicial:
             if propuestas[raiz] is not None:
                 continue
             propuestas[raiz] = (max_x + 3, 0)
@@ -267,9 +275,21 @@ def calcular_layout(conocidas, actual, tipo_indice=IndiceOcupacion):
     for origen in exploradas:
         x, y = posiciones[origen]
         for salida in salidas[origen]:
-            dx, dy = DESPLAZAMIENTOS[DIRECCIONES.index(salida.direccion)]
+            direccion = DIRECCIONES.index(salida.direccion)
+            dx, dy = DESPLAZAMIENTOS[direccion]
             fuera = posiciones[salida.destino] != (x + dx, y + dy)
+            repetida = any(otra is not salida and otra.destino == salida.destino
+                           for otra in salidas[origen])
+            # Una puerta física conserva sus dos salidas. Solo su rótulo se
+            # comparte con la inversa exacta; jamás se fusiona por par de salas.
+            inversa = next((otra for otra in salidas[salida.destino]
+                            if otra.destino == origen
+                            and otra.direccion == DIRECCIONES[direccion ^ 1]
+                            and otra.costo == salida.costo), None)
+            anterior = (publicos[salida.destino] < publicos[origen] or
+                        (salida.destino == origen and (direccion ^ 1) < direccion))
+            rotular = inversa is None or not anterior
             conexiones.append(Conexion(publicos[origen], publicos[salida.destino],
                                         salida.direccion, salida.costo, salida.estado,
-                                        salida.llave, fuera))
+                                        salida.llave, fuera, repetida, rotular))
     return MapaDibujado(tuple(casillas), tuple(conexiones), len(exploradas), len(avistadas), candidatos)

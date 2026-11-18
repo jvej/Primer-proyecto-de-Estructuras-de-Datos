@@ -1,4 +1,4 @@
-"""Aceptación US5: 17 escenarios, privacidad y presentación del mapa."""
+"""Aceptación US5: mapa estable, puertas individuales, privacidad y presentación."""
 
 import importlib
 import os
@@ -300,6 +300,184 @@ class PruebasMapaDibujado(unittest.TestCase):
         with patch.object(p, 'mapa_dibujado', wraps=p.mapa_dibujado) as construir:
             Controlador(p, v).ejecutar(Orden(MAPA))
         self.assertEqual(construir.call_count, 1)
+
+    def cuatro_salidas(self):
+        # Dos puertas físicas diferentes comparten destino, con sus inversas.
+        return (
+            SalaMapa(70, 'Inicio', (
+                SalidaMapa(1, 'N', 7, 'abierta'), SalidaMapa(2, 'S', 8, 'cerrada'),
+                SalidaMapa(1, 'E', 9, 'cerrada', 'llave'), SalidaMapa(3, 'O', 5, 'desconocida'))),
+            SalaMapa(20, 'Doble destino', (
+                SalidaMapa(0, 'S', 7, 'abierta'), SalidaMapa(0, 'O', 9, 'cerrada', 'llave'))),
+            SalaMapa(30, 'Sur', (SalidaMapa(0, 'N', 8, 'cerrada'),)),
+            SalaMapa(None, None, ()))
+
+    def posiciones(self, mapa):
+        return tuple((c.id, c.nombre, c.estado, c.x, c.y) for c in mapa.casillas)
+
+    def test_FR034_origen_inicial_real_distinto_del_menor_id(self):
+        esc = armar(esqueleto_linea(5), datos={'sala_inicial': 3, 'sala_salida': 5})
+        self.addCleanup(esc.cerrar)
+        p = esc.partida
+        for sala in p.mapa.salas:
+            p._explorar_sala(sala)
+        for sala in p.mapa.salas:
+            p.cambiar(p.jugador, 'sala', sala)
+            inicio = next(c for c in p.mapa_dibujado().casillas if c.id == p.sala_inicial_id)
+            self.assertEqual((inicio.x, inicio.y), (0, 0))
+
+    def test_FR031_FR034_todas_las_posiciones_estables_en_cada_explorada(self):
+        p = self.escenario().partida
+        for sala in p.mapa.salas:
+            p._explorar_sala(sala)
+        referencia = self.posiciones(p.mapa_dibujado())
+        for sala in p.mapa.salas:
+            p.cambiar(p.jugador, 'sala', sala)
+            mapa = p.mapa_dibujado()
+            self.assertEqual(self.posiciones(mapa), referencia)
+            self.assertEqual([c.id for c in mapa.casillas if c.es_jugador], [sala.id])
+
+    def test_FR034_FR035_colisiones_no_cambian_al_mover_jugador(self):
+        salas = self.cuatro_salidas() + (SalaMapa(1, 'Componente aislado', ()),)
+        mapas = [calcular_layout(salas, actual, id_inicial=70) for actual in (0, 1, 2, 4)]
+        for mapa in mapas[1:]:
+            self.assertEqual(self.posiciones(mapa), self.posiciones(mapas[0]))
+            self.assertEqual(mapa.conexiones, mapas[0].conexiones)
+
+    def test_FR027_cada_salida_produce_una_puerta_sin_fusionar_destinos(self):
+        salas = self.cuatro_salidas()
+        mapa = calcular_layout(salas, 0)
+        self.assertEqual(len(mapa.conexiones), sum(len(s.salidas) for s in salas))
+        for sala in salas:
+            if sala.id is None:
+                continue
+            puertas = [c for c in mapa.conexiones if mapa.casillas[c.origen].id == sala.id]
+            self.assertEqual(tuple(c.direccion for c in puertas), tuple(s.direccion for s in sala.salidas))
+        dobles = [c for c in mapa.conexiones if mapa.casillas[c.origen].id == 70
+                  and mapa.casillas[c.destino].id == 20]
+        self.assertEqual(len(dobles), 2)
+        self.assertTrue(all(c.repetida for c in dobles))
+        self.assertTrue(any(c.fuera_cuadricula for c in dobles))
+
+    def test_FR027_FR030_rotulo_unico_por_puerta_reciproca(self):
+        mapa = calcular_layout(self.cuatro_salidas(), 0)
+        self.assertEqual(sum(c.rotular for c in mapa.conexiones), 4)
+        _, v = self.grafica()
+        puertas = v._preparar_puertas_mapa(mapa, 1.0)
+        rotulos = [texto for _, _, _, texto, _ in puertas if texto is not None]
+        self.assertEqual(len(rotulos), 4)
+        self.assertEqual(len(rotulos), len(tuple(texto for i, texto in enumerate(rotulos)
+                                              if texto not in rotulos[:i])))
+
+    def test_FR027_FR030_marcador_en_cada_lado_y_lineas_separadas(self):
+        mapa = calcular_layout(self.cuatro_salidas(), 0)
+        _, v = self.grafica()
+        puertas = v._preparar_puertas_mapa(mapa, 1.0)
+        self.assertEqual(len(puertas), len(mapa.conexiones))
+        rutas = []
+        for conexion, marcador, puntos, _, _ in puertas:
+            sala = mapa.casillas[conexion.origen]
+            x, y = sala.x * 190, sala.y * 125
+            if conexion.direccion == 'N':
+                self.assertLess(marcador.centery, y)
+                self.assertEqual(marcador.centerx, x)
+            elif conexion.direccion == 'S':
+                self.assertGreater(marcador.centery, y)
+                self.assertEqual(marcador.centerx, x)
+            elif conexion.direccion == 'E':
+                self.assertGreater(marcador.centerx, x)
+                self.assertEqual(marcador.centery, y)
+            else:
+                self.assertLess(marcador.centerx, x)
+                self.assertEqual(marcador.centery, y)
+            if sala.id == 70 and mapa.casillas[conexion.destino].id == 20:
+                rutas.append(puntos)
+                self.assertGreater(len(puntos), 2)
+        self.assertEqual(len(rutas), 2)
+        self.assertNotEqual(rutas[0], rutas[1])
+
+    def test_FR027_FR030_rotulos_ascii_sin_superposicion_con_destino(self):
+        mapa = calcular_layout(self.cuatro_salidas(), 0)
+        _, v = self.grafica()
+        for zoom in (0.3, 1.0, 2.5):
+            ocupados = []
+            for conexion, _, _, texto, rect in v._preparar_puertas_mapa(mapa, zoom):
+                if texto is None:
+                    continue
+                self.assertTrue(texto.isascii(), texto)
+                self.assertTrue(all(m is not None for m in v.fuente_chica.metrics(texto)), texto)
+                self.assertIn(str(conexion.costo), texto)
+                self.assertFalse(any(rect.colliderect(otro) for otro in ocupados))
+                ocupados.append(rect)
+                if conexion.repetida or conexion.fuera_cuadricula:
+                    destino = mapa.casillas[conexion.destino]
+                    self.assertIn('>' + ('?' if destino.id is None else str(destino.id)), texto)
+                if conexion.llave is not None:
+                    self.assertIn(conexion.llave, texto)
+
+    def test_FR026_FR030_puerta_a_avistada_termina_en_niebla(self):
+        mapa = calcular_layout(self.cuatro_salidas(), 0)
+        _, v = self.grafica()
+        for conexion, _, puntos, texto, _ in v._preparar_puertas_mapa(mapa, 1.0):
+            destino = mapa.casillas[conexion.destino]
+            if destino.estado == 'avistada':
+                self.assertIsNone(destino.id)
+                self.assertIsNone(destino.nombre)
+                x, y = puntos[-1]
+                dx, dy = abs(x - destino.x * 190), abs(y - destino.y * 125)
+                self.assertTrue((dx == 72 and dy <= 33) or (dy == 33 and dx <= 72))
+                self.assertNotIn('None', texto)
+
+    def test_FR027_FR029_tabla_incluye_cuatro_salidas_y_fuera(self):
+        mapa = calcular_layout(self.cuatro_salidas(), 0)
+        texto = self.texto(mapa)
+        for fila in ('N -> 20 (costo 7', 'S -> 30 (costo 8',
+                     'E -> 20 (costo 9', 'O -> ? (costo 5'):
+            self.assertEqual(texto.count(fila), 1)
+        self.assertIn('Conexiones fuera de la cuadricula:', texto)
+
+    def test_FR030_resumen_actual_y_apertura_centrada_fuera_del_origen(self):
+        pg, v = self.grafica()
+        mapa = calcular_layout(self.cuatro_salidas(), 1)
+        lotes = [[], [pg.event.Event(pg.KEYDOWN, key=pg.K_ESCAPE)]]
+        v._eventos = lambda: lotes.pop(0)
+        v._mostrar_cuadro = lambda: None
+        with patch.object(v, '_texto', wraps=v._texto) as escribir:
+            v.mostrar_mapa(mapa)
+        textos = [str(llamada.args[1]) for llamada in escribir.call_args_list]
+        self.assertTrue(any('S -> 70' in t and '7' in t for t in textos))
+        self.assertTrue(any('O -> 70' in t and '9' in t for t in textos))
+        colores = sys.modules['vista.vista_pygame']
+        # El centro del lado O tiene puerta; comprobar el borde más abajo.
+        self.assertEqual(v.pantalla.get_at((568, 355))[:3], colores.SELECCION)
+
+    def test_FR032_consultas_con_puertas_repetidas_sin_efectos(self):
+        p = self.escenario().partida
+        inicializar_historia(p, 2)
+        for sala in p.mapa.salas:
+            p._explorar_sala(sala)
+        antes = self.foto(p)
+        azar = p.azar._rng.getstate()
+        with patch.object(p, '_observar_puertas', side_effect=AssertionError('observar')):
+            for _ in range(3):
+                mapa = p.mapa_dibujado()
+                self.texto(mapa)
+                _, v = self.grafica()
+                v._preparar_puertas_mapa(mapa, 1.0)
+        self.assertEqual(self.foto(p), antes)
+        self.assertEqual(p.azar._rng.getstate(), azar)
+
+    def test_FR030_cuatro_marcadores_de_colores_visibles(self):
+        pg, v = self.grafica()
+        mapa = calcular_layout(self.cuatro_salidas(), 0)
+        lotes = [[], [pg.event.Event(pg.KEYDOWN, key=pg.K_ESCAPE)]]
+        v._eventos = lambda: lotes.pop(0)
+        v._mostrar_cuadro = lambda: None
+        v.mostrar_mapa(mapa)
+        colores = sys.modules['vista.vista_pygame']
+        for punto, color in (((640, 307), colores.ABIERTA), ((640, 373), colores.CERRADA),
+                             ((712, 340), colores.DORADO), ((568, 340), colores.TEXTO_TENUE)):
+            self.assertEqual(v.pantalla.get_at(punto)[:3], color)
 
     def test_FR038_17_consola_no_carga_grafica(self):
         codigo = ('import sys; from tests.cripta_de_prueba import armar, esqueleto_linea; '

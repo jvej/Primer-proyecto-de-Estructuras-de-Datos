@@ -3362,3 +3362,83 @@ El árbol ya contenía cambios previos. Se compararon el diff de Git y las huell
 SHA-256 iniciales/finales de conocimiento.py, partida.py, mapa_dibujado.py y
 los archivos del controlador: sin cambios durante esta tarea. No se modificó
 la spec ni se hicieron commits.
+
+### 8.8 Corrección del mapa: origen inicial y todas las puertas (2026-11-18)
+
+#### Solicitud del usuario (registro resumido)
+
+> Lee y respeta AGENTS.md y .specify/memory/constitution.md: español, Python
+> del venv, estructuras propias, MVC y determinismo, sin commit ni push.
+> El mapa salta de casillas al cambiar la sala actual; en cripta-04/sala 45
+> se pierden salidas, incluidas dos hacia la misma sala; los rótulos se duplican,
+> se superponen y muestran una flecha incompatible con la fuente.
+> Aplica de verdad y en este orden: spec.md → plan.md y tasks.md → pruebas
+> con fallo comprobado → código → documentación mínima. FR-034 comienza en la
+> sala inicial, con posiciones independientes del jugador y encuadre centrado
+> en él. FR-027/FR-030 muestran cada puerta N/S/E/O, incluso repetidas y no
+> adyacentes, con destino y memoria; un rótulo corto por puerta, costo/estado,
+> llave solo si corresponde, fondo, desplazamiento ante choques y texto soportado.
+> Bajo el mapa, todas las salidas actuales. FR-029 conserva todas las filas de
+> consola. Agrega escenarios Given/When/Then, actualiza SC-006..SC-008 si procede
+> y tareas con sus FR. Agrega pruebas de estabilidad, colisiones, cada salida,
+> rótulos únicos, privacidad de avistadas/ids ocultos y ausencia de tiempo/log.
+> Al final debe haber más de 21 pruebas en test_mapa_dibujado_002.py.
+> Cambia solo mapa_dibujado.py y vistas necesarias; no cambies conocimiento,
+> Partida, controlador, formatos ni logs. Conserva niebla y controles. Ejecuta
+> todas las suites en subprocesos, con SDL dummy y temporales fuera del repo.
+> Actualiza únicamente DECISIONES.md §17.7 y este registro. Entrega pasos manuales
+> para cripta-04/sala 45, comprueba el diff protegido y pega git status --short.
+> Un intento anterior dejó el árbol limpio: no terminar sin cambios reales.
+
+#### Aclaración e instrucción posterior
+
+La consulta recibía solo conocimiento y sala actual; no tenía acceso al origen
+real. Se solicitó permiso exclusivamente para pasar el dato existente desde
+`Partida.mapa_dibujado()`, mientras se avanzaba en especificación y diseño.
+Respuesta del usuario:
+
+> Autorizado únicamente pasar self.sala_inicial_id desde Partida.mapa_dibujado()
+> a la función del mapa. No agregues atributos, no modifiques ningún otro método
+> de partida.py ni conocimiento.py, y confirma al final con git diff que en
+> partida.py solo cambió esa llamada. Sigue con el resto del plan y no intentes
+> hacer commit ni push.
+
+Se usó ese atributo exacto, ya existente. La única línea cambiada en partida.py
+agrega `id_inicial=self.sala_inicial_id` a la llamada a `calcular_layout`.
+
+#### Ejecución y evidencia
+
+Se guardó primero la especificación, luego plan/tareas T046..T053 y después
+12 pruebas nuevas, conservando las 21 originales. El rojo reproducible anterior
+al código fue de 33 pruebas, 4 fallos de comportamiento y 7 errores por contrato
+todavía ausente. Una referencia inicial incorrecta al generador reversible de
+azar en una prueba nueva se corrigió antes de repetir ese rojo; no se atribuye
+ese error al mapa. No hubo pruebas anteriores que adaptar por el nuevo origen.
+
+Se implementó origen explícito, una conexión por salida, marcas de repetida y
+fuera de cuadrícula y un rótulo por pareja recíproca de direcciones opuestas,
+sin fusionar puertas distintas al mismo destino. Las vistas dibujan marcadores
+individuales; Pygame usa rutas diferenciadas, rótulos ASCII con fondo y resolución
+de choques, lista actual y encuadre independiente del layout. Se conservan niebla
+y controles, y no se observa ni muta la partida al consultar.
+
+Validación: `venv\Scripts\python.exe -B -m tests.test_mapa_dibujado_002`,
+33 pruebas OK. La corrida completa de 43 módulos con ese intérprete, cada uno en
+un subproceso/carpeta temporal externa, SDL_VIDEODRIVER=dummy y bytecode
+deshabilitado, dio 42 OK y un fallo en test_gui por una vista parcial sin fuente.
+Se corrigió el cálculo de medidas en ese caso y se repitieron test_gui (18),
+test_mapa_dibujado_002 (33), test_historia_interfaces (9) y test_ir_a_grafico_002
+(13): todos OK. Las 43 suites quedan aprobadas; no se afirma una segunda corrida
+completa. Un ejecutor auxiliar tropezó con la codificación de su salida y se
+repitió con salida compatible; no se alteraron pruebas para evitar fallos.
+
+Se generó y examinó una captura SDL dummy con las cuatro puertas, incluidos
+destinos repetidos y avistada: textos legibles, sin flecha incompatible ni
+rótulos superpuestos. Las pruebas comprueban métricas de fuente y choques a
+zoom 0.3/1.0/2.5. No se afirma una sesión humana de juego: el paquete_prueba
+actual solo contiene cripta-prueba, cripta-ciclo y cripta-cazadores; reproducir
+cripta-04/sala 45 requiere el paquete correspondiente.
+
+Se actualizan únicamente los archivos solicitados y la llamada autorizada en
+Partida. Conocimiento, controlador, guardados y logs tienen diff vacío. No se
+instalaron paquetes ni se hicieron commits/push ni se borraron archivos.

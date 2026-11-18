@@ -564,7 +564,7 @@ class Partida:
         """Consulta US5: no observa puertas ni altera reloj, registro o historia."""
         from modelo.juego.mapa_dibujado import calcular_layout, fotografia_conocimiento
         salas, actual = fotografia_conocimiento(self.conocimiento, self.jugador.sala)
-        return calcular_layout(salas, actual)
+        return calcular_layout(salas, actual, id_inicial=self.sala_inicial_id)
 
     def _salidas_conocidas(self, sala) -> list:
         if not self.conocimiento.es_explorada(sala):

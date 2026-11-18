@@ -1278,7 +1278,7 @@ No aparecieron archivos nuevos/eliminados dentro del repositorio.
 
 **Trazabilidad:** [especificación FR-025..FR-038, SC-006..SC-008](specs/002-niebla-ir-a/spec.md),
 [plan de la ampliación US5](specs/002-niebla-ir-a/plan.md#ampliacion-us5-mapa-dibujado-fr-025fr-038-sc-006sc-008)
-y [tareas T032..T042](specs/002-niebla-ir-a/tasks.md).
+y [tareas T032..T053](specs/002-niebla-ir-a/tasks.md).
 
 **Problema.** El mapa anterior presentaba un listado de exploradas; las avistadas
 solo aparecían como destinos desconocidos. Había que dibujar ambas sin consultar
@@ -1309,19 +1309,38 @@ se construye en bloque para deduplicar extremos por índice. Esos índices solo
 identifican extremos; no deciden el orden público. Las avistadas salen con id y
 nombre None y sin salidas propias.
 
-El cálculo puro recibe esa foto y la posición del jugador. La BFS usa N,S,E,O y
-exploradas por menor id dentro de cada nivel. La asignación de casillas prioriza
+El cálculo puro recibe esa foto, la posición del jugador y el identificador de
+la sala inicial ya conocido por la partida. Desde la corrección del 2026-11-18,
+la BFS comienza en la sala inicial, nunca en la actual; usa N,S,E,O y exploradas
+por menor id dentro de cada nivel. Mover al jugador con el mismo conocimiento
+solo cambia su marca, el encuadre y el resumen de salidas: todas las casillas,
+incluidas las desplazadas por colisiones, conservan sus posiciones. La llamada
+en `Partida.mapa_dibujado()` únicamente pasa `self.sala_inicial_id`, excepción
+autorizada expresamente por el usuario; ningún otro método cambia.
+La asignación de casillas prioriza
 exploradas por menor id, luego avistadas por su primera salida reveladora al recorrer
 exploradas por id y direcciones N,S,E,O. Las avistadas se proponen desde la posición
 final de la explorada que las revela. Los anillos Manhattan prueban primero
 N,S,E,O y después, para a=1..r-1, (a,-(r-a)), (a,r-a), (-a,r-a), (-a,-(r-a)).
 El índice AVL almacena ocupación por (x,y); el orden nunca usa ids ocultos.
-Las conexiones desplazadas conservan dirección, costo y memoria. La consulta
-histórica y el contrato anterior de mapa conocido se conservan.
+Cada salida de cada explorada produce una conexión individual con dirección,
+destino, costo, memoria y llave ya conocida, sin fusionar salidas al mismo destino.
+Se marcan las repetidas y las que no terminan en la casilla vecina de su dirección.
+La consulta histórica y el contrato anterior de mapa conocido se conservan.
 
-Consola representa ASCII por bloques y tabla; la ventana usa primitivas y encuadre
-local para desplazamiento, zoom y recentrado, sin recalcular posiciones por cuadro.
-Se conserva M y el botón existentes. Una protección en la selección de sprites
+Consola representa ASCII por bloques, marcadores en cada lado y una fila por cada
+salida, incluidas repetidas y fuera de cuadrícula. La ventana usa un marcador por
+salida N/S/E/O, color por estado recordado y líneas entre puertas; las repetidas o
+desplazadas usan rutas discontinuas con codos y destino rotulado (`?` si avistada).
+Dos salidas recíprocas de direcciones opuestas comparten una línea y un solo
+rótulo desde el menor id explorado; dos puertas distintas con igual destino no
+comparten rótulo. Los textos cortos ASCII (`c` costo, A/C/K/? estado, `>` destino,
+llave solo si corresponde) tienen fondo y se desplazan deterministamente para
+evitar otras etiquetas y salas. Bajo el mapa se listan todas las salidas actuales.
+La geometría de presentación se prepara por zoom; el encuadre local traslada todo
+al desplazar o recentrar, sin recalcular casillas por cuadro. La apertura se centra
+en la sala del jugador. Se conservan M, flechas, arrastre, zoom, C, Esc/Enter y niebla.
+Una protección previa en la selección de sprites
 permite que la vista parcial usada por la regresión histórica funcione sin catálogo.
 
 **Cambio ajeno al mapa: guarda de sprites.** El test
@@ -1349,7 +1368,10 @@ colisiones. La alternativa ListaOrdenada agrega hasta O(K²) por desplazamientos
 Se eliminan los dos arreglos persistentes de enlaces por índice. El barrido no
 reserva otro arreglo de tamaño N ni se repite por fotograma. Mostrar ASCII depende
 además del área dibujada y sus bloques; repintar la GUI recorre las casillas y enlaces
-conocidos, sin reconstruir su disposición.
+conocidos, sin reconstruir su disposición. Las marcas nuevas comparan como máximo
+cuatro salidas por extremo: O(E). La presentación añade O(K+E) espacio y la
+colocación de rótulos cuesta O(R(K+E)), siendo R el número de posiciones de rótulo
+probadas; se calcula por apertura/zoom, no al arrastrar ni por fotograma.
 
 **Evidencia de medición.** Comando:
 `venv\Scripts\python.exe main.py --bench mapa_conocido`, salida 0, 35,5 s en la
@@ -1373,10 +1395,12 @@ aproximadamente 14,8 % mayor. En tamaños pequeños no hay ventaja consistente.
 Esta evidencia respalda el intercambio entre tiempo y memoria, no una mejora
 universal. El benchmark previo de rutas continúa ejecutándose antes del layout;
 sus mediciones sintéticas no certifican SC-001 oficial.
-El layout puro no se modificó en esta revisión: estas diferencias respecto de la
-corrida anterior son nuevas mediciones, no una mejora o regresión atribuible al
-barrido de estados. El benchmark excluye la preparación de la foto y, por tanto,
-no mide el costo O(N) incorporado a la apertura.
+El layout puro no se modificó en la revisión del almacenamiento del 2026-11-17:
+esas diferencias respecto de la corrida anterior eran nuevas mediciones, no una
+mejora o regresión atribuible al barrido de estados. La corrección del 2026-11-18
+sí cambia el origen y agrega marcas de puertas: las cifras anteriores se conservan
+como evidencia histórica y no se presentan como medición de esta corrección.
+El benchmark excluye la foto y el dibujo, y no mide el barrido O(N) ni los rótulos.
 
 Se repitieron las 43 suites mediante el mismo script de auditoría: cada módulo
 se ejecutó con `venv\Scripts\python.exe -m tests.<modulo>` desde una carpeta
@@ -1390,7 +1414,8 @@ se conserva foto compacta, BFS, prioridades, anillos, AVL y comparación con
 ListaOrdenada, pero se retira el directorio de exploradas para conservar intacto
 el almacenamiento original. Esta decisión y el costo O(N) del barrido solicitado
 están reflejados en plan.md y T034/T043/T044. Amplía el plan
-original de 002, que mostraba un listado O(N). La spec no se modifica; el barrido
+original de 002, que mostraba un listado O(N). En 2026-11-18 se actualizan primero
+la spec y luego plan/tareas (T046..T053) para el origen y las puertas; el barrido
 autorizado no permite acreditar independencia temporal de N para preparar la foto.
 La medición anterior es del layout puro; excluye la foto, la impresión y el dibujo
 gráfico. No es una prueba de estrés del peor caso de colisiones: aquí C=K. Las
@@ -1399,6 +1424,26 @@ desconocidas adicionales y ausencia de iteración de objetos de salas desconocid
 La validación gráfica se hace con SDL dummy; los pasos para una revisión humana
 de la ventana están en README.md. No se declara realizada esa revisión manual.
 Los pendientes anteriores SC-001, T030 y T031 no se cierran por esta ampliación.
+
+Limitación de la corrección: explorar salas nuevas puede cambiar las prioridades
+de una colisión y mover casillas ya dibujadas; moverse entre exploradas con el
+mismo conocimiento no las mueve. En mapas muy densos algunos rótulos pueden
+quedar fuera del encuadre y requerir desplazamiento o zoom.
+
+**Validación de la corrección (2026-11-18).** Primero se actualizaron spec, plan y
+tareas; luego se ejecutaron 33 pruebas del mapa antes del código: 4 fallos y 7
+errores por funciones/campos ausentes. Las 21 pruebas anteriores se conservan,
+sin cambios por el origen; las 12 nuevas cubren origen inicial distinto del menor
+id, estabilidad desde todas las exploradas con colisiones, puertas repetidas,
+rótulos físicos únicos, métricas ASCII y ausencia de superposición a tres zooms,
+destinos anónimos y efectos nulos. Después pasan las 33. La corrida completa de
+43 suites en subprocesos y temporales externos con SDL dummy tuvo un fallo de
+vista parcial sin fuente: corregido sin cambiar pruebas existentes. Se repitieron
+las cuatro suites gráficas afectadas (18/33/9/13 pruebas), todas con salida 0;
+43/43 suites quedan aprobadas. La captura sintética de cuatro puertas se examinó
+visualmente; no se afirma una sesión interactiva ni una medición nueva de bench.
+`git diff` confirma conocimiento y controlador intactos y solo la llamada
+autorizada en Partida; no cambian guardados ni registros. Detalles en T048..T053.
 
 ---
 
